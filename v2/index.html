@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPAC · Sales Dashboard</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --card:#ffffff; --ink:#1a2233; --mut:#68738a; --line:#e3e8f2;
+    --plan:#2a78d6; --show:#eda100; --sign:#008300; --pay:#b052c7;
+    --plan-bg:#e8f1fc; --show-bg:#fdf3dd; --sign-bg:#e6f4e6; --pay-bg:#f6e9fa;
+    --red:#c92f2f; --red-bg:#fdeaea; --radius:14px;
+    font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-size:14px}
+  a{color:inherit}
+  .top{background:linear-gradient(120deg,#15346b,#2a78d6 55%,#7db4ef);color:#fff;padding:18px 26px 14px;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .top h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.2px}
+  .top .sub{opacity:.85;font-size:12px;margin-top:2px}
+  .spacer{flex:1}
+  /* datumkiezer */
+  .dp{position:relative}
+  .dp-field{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:10px;padding:8px 14px;font-size:13.5px;cursor:pointer;display:flex;gap:8px;align-items:center;user-select:none}
+  .dp-field:hover{background:rgba(255,255,255,.24)}
+  .dp-pop{position:absolute;right:0;top:calc(100% + 8px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:var(--radius);box-shadow:0 12px 40px rgba(20,35,70,.25);padding:14px;z-index:50;display:none}
+  .dp-pop.open{display:block}
+  .dp-hint{font-size:11.5px;color:var(--mut);margin:0 2px 8px;text-align:center}
+  .dp-months{display:flex;gap:18px}
+  .dp-m{width:224px}
+  .dp-mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .dp-mh b{font-size:13px}
+  .dp-nav{border:none;background:var(--bg);border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:13px;color:var(--ink)}
+  .dp-grid{display:grid;grid-template-columns:repeat(7,30px);gap:2px}
+  .dp-dow{font-size:10px;color:var(--mut);text-align:center;padding:3px 0}
+  .dp-d{border:none;background:none;width:30px;height:29px;border-radius:8px;cursor:pointer;font-size:12px;color:var(--ink)}
+  .dp-d:hover{background:var(--plan-bg)}
+  .dp-d.out{color:#c3cad8;cursor:default;background:none}
+  .dp-d.inR{background:var(--plan-bg);border-radius:0}
+  .dp-d.prev{background:#d5e6fa;border-radius:0}
+  .dp-d.cap{background:var(--plan);color:#fff;font-weight:700;border-radius:8px}
+  .dp-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+  .chip{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:5px 12px;font-size:12px;cursor:pointer;user-select:none}
+  .chip:hover{border-color:var(--plan);color:var(--plan)}
+  /* tabs */
+  .tabs{display:flex;gap:8px;padding:14px 26px 0;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 18px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;gap:8px;align-items:center}
+  .tab .dot{width:9px;height:9px;border-radius:50%}
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  main{padding:18px 26px 40px;max-width:1600px;margin:0 auto}
+  /* kpi's */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px}
+  .kpi b{font-size:22px;display:block}
+  .kpi span{font-size:11.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+  /* funnels — altijd naast elkaar; inklapbaar tot alleen de letter */
+  .cols{display:flex;gap:10px;align-items:stretch}
+  .fcol{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;flex:1 1 0;min-width:0}
+  .fcol.tot{border:2px solid var(--ink)}
+  .fcol.mini{flex:0 0 54px;min-width:54px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 6px;cursor:pointer}
+  .fcol.mini:hover{border-color:var(--plan)}
+  .fcol.mini .vname{writing-mode:vertical-rl;font-size:12px;font-weight:700;color:var(--mut);letter-spacing:.5px}
+  .fcol.mini .vnum{font-size:13px;font-weight:800}
+  .fhead{display:flex;gap:9px;align-items:center;margin:-4px -6px 2px;padding:4px 6px;border-radius:10px;cursor:pointer}
+  .fhead:hover{background:var(--bg);outline:1px solid var(--line)}
+  .ava{width:30px;height:30px;border-radius:50%;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none}
+  .fhead b{font-size:15px}
+  .bigN{margin-left:auto;background:var(--ink);color:#fff;border-radius:10px;padding:3px 12px;font-size:18px;font-weight:800}
+  .fsub{font-size:11.5px;color:var(--mut);margin:0 0 12px 39px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .frow{display:flex;gap:8px;align-items:stretch;margin-bottom:8px}
+  .blk{flex:1;min-width:0;border-radius:11px;padding:8px 12px 10px;cursor:pointer;position:relative;overflow:hidden;border:2px solid transparent}
+  .blk:hover{filter:brightness(.97)}
+  .blk.sel{border-color:var(--ink)}
+  .blk .lab{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;display:flex;justify-content:space-between;gap:6px}
+  .blk .lab .uit{text-transform:none;letter-spacing:0;font-weight:600;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .blk .pct{font-size:21px;font-weight:800;line-height:1.2}
+  .blk .bar{position:absolute;left:0;bottom:0;height:4px;border-radius:0 3px 3px 0}
+  .outN{width:clamp(38px,3.2vw,54px);flex:none;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;cursor:pointer;border:2px solid transparent}
+  .outN:hover{filter:brightness(.96)}
+  .blk.p,.outN.p{background:var(--plan-bg)} .blk.p .pct,.outN.p{color:var(--plan)} .blk.p .bar{background:var(--plan)} .blk.p .lab{color:var(--plan)}
+  .blk.h,.outN.h{background:var(--show-bg)} .blk.h .pct,.outN.h{color:#b57d00} .blk.h .bar{background:var(--show)} .blk.h .lab{color:#b57d00}
+  .blk.s,.outN.s{background:var(--sign-bg)} .blk.s .pct,.outN.s{color:var(--sign)} .blk.s .bar{background:var(--sign)} .blk.s .lab{color:var(--sign)}
+  .blk.b,.outN.b{background:var(--pay-bg)} .blk.b .pct,.outN.b{color:var(--pay)} .blk.b .bar{background:var(--pay)} .blk.b .lab{color:var(--pay)}
+  /* gewonnen */
+  .wonchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .wchip{border:1.5px solid var(--line);background:var(--card);border-radius:99px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;display:flex;gap:8px;align-items:center}
+  .wchip .n{background:var(--sign-bg);color:var(--sign);border-radius:99px;padding:1px 9px;font-size:12px}
+  .wchip.on{background:var(--sign);color:#fff;border-color:var(--sign)}
+  .wchip.on .n{background:rgba(255,255,255,.25);color:#fff}
+  .wontbl{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;overflow-x:auto}
+  .wontot{margin-top:10px;font-size:13px;font-weight:700;color:var(--sign)}
+  /* advies */
+  .advgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .advcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .advcard .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-weight:800;font-size:13px;margin-right:9px}
+  .advcard h3{display:flex;align-items:center;margin:0 0 8px;font-size:14.5px}
+  .advcard p{margin:0 0 8px;font-size:13px;line-height:1.55;color:#333c50}
+  .advcard .doen{font-size:12.5px;font-weight:700;color:var(--plan)}
+  .advcard .imp{float:right;font-size:11px;font-weight:800;border-radius:99px;padding:3px 10px}
+  .imp.hi{background:var(--red-bg);color:var(--red)} .imp.mid{background:var(--show-bg);color:#b57d00} .imp.lo{background:var(--plan-bg);color:var(--plan)}
+  .cmp{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;overflow-x:auto}
+  .cmp table{font-size:12.5px} .cmp th{cursor:default} .cmp td{max-width:none}
+  .cmp .best{color:var(--sign);font-weight:800} .cmp .worst{color:var(--red);font-weight:800}
+  /* detail */
+  .detail{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);margin-top:20px;overflow:hidden}
+  .dhead{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .dhead b{font-size:15px}
+  .dhead span{color:var(--mut);font-size:12.5px}
+  .dcols{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  @media(max-width:900px){.dcols{grid-template-columns:1fr}}
+  .dcol{padding:12px 18px 16px;min-width:0}
+  .dcol + .dcol{border-left:1px solid var(--line)}
+  .dcol h3{font-size:12.5px;margin:2px 0 10px;display:flex;gap:8px;align-items:center}
+  .pill{border-radius:99px;padding:2px 10px;font-size:11px;font-weight:700}
+  .pill.ok{background:var(--sign-bg);color:var(--sign)} .pill.bad{background:var(--red-bg);color:var(--red)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{color:var(--mut);font-weight:600;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:4px 8px 6px;border-bottom:1px solid var(--line);user-select:none;white-space:nowrap}
+  th .sortl{cursor:pointer} th .sortl:hover{color:var(--plan)}
+  th .arr{font-size:9px}
+  .fbtn{cursor:pointer;color:#68738a;margin-left:6px;font-size:13px;padding:3px 9px;border-radius:8px;border:1.5px solid var(--line);background:var(--card);display:inline-block;line-height:1.2}
+  .fbtn:hover{color:var(--plan);background:var(--plan-bg);border-color:var(--plan)}
+  .fbtn.on{color:#fff;background:var(--plan);border-color:var(--plan)}
+  .fsum{border-top:2px solid var(--line);margin-top:4px;padding:8px 9px;font-size:12.5px;font-weight:800;color:var(--plan);position:sticky;bottom:0;background:var(--card)}
+  .fdrop{position:fixed;z-index:99;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(20,35,70,.2);padding:6px;min-width:190px;max-height:290px;overflow-y:auto}
+  .fdrop .fi{display:flex;justify-content:space-between;gap:12px;padding:5px 9px;border-radius:7px;cursor:pointer;font-size:12.5px;white-space:nowrap}
+  .fdrop .fi:hover{background:var(--bg)}
+  .fdrop .fi.on{background:var(--plan-bg);color:var(--plan);font-weight:700}
+  .fdrop .fi b{color:var(--mut);font-weight:600}
+  .fdrop .fi.on b{color:var(--plan)}
+  .fdrop .fall{border-bottom:1px solid var(--line);margin-bottom:4px;font-weight:700}
+  td{padding:6px 8px;border-bottom:1px solid #f0f3f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+  td a{color:var(--plan);text-decoration:none;font-weight:600}
+  td a:hover{text-decoration:underline}
+  .stg{display:inline-block;background:var(--bg);border-radius:6px;padding:1.5px 7px;font-size:11px}
+  .stg.win{background:var(--sign-bg);color:var(--sign)} .stg.lost{background:var(--red-bg);color:var(--red)}
+  .more{color:var(--mut);font-size:12px;padding:8px;text-align:center;cursor:pointer}
+  .note{color:var(--mut);font-size:11.5px;margin-top:14px;line-height:1.5}
+  .empty{color:var(--mut);padding:14px 8px;font-size:12.5px}
+  /* toegangscode */
+  #gate{position:fixed;inset:0;background:linear-gradient(120deg,#15346b,#2a78d6 55%,#7db4ef);z-index:999;display:flex;align-items:center;justify-content:center}
+  .gatebox{background:var(--card);border-radius:18px;padding:34px 38px;box-shadow:0 20px 60px rgba(10,25,60,.45);text-align:center;width:320px}
+  .gatebox h2{margin:0 0 4px;font-size:18px}
+  .gatebox p{margin:0 0 18px;color:var(--mut);font-size:12.5px}
+  .gatebox input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 14px;font-size:16px;text-align:center;letter-spacing:3px;outline:none}
+  .gatebox input:focus{border-color:var(--plan)}
+  .gatebox button{width:100%;margin-top:12px;border:none;background:var(--plan);color:#fff;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer}
+  .gatebox button:hover{filter:brightness(1.08)}
+  .gatefout{color:var(--red);font-size:12px;height:16px;margin-top:8px}
+  .rfw{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-right:14px}
+  .rbtn{border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .rbtn:hover{border-color:var(--plan);color:var(--plan)}
+  .rbtn:disabled{opacity:.55;cursor:wait}
+  .rtxt{font-size:11px;color:var(--mut);max-width:260px;text-align:right}
+  /* ---- 📅 Dag-tab ---- */
+  :root{--dgset:#2a78d6;--dgsetbg:#eaf2fd;--dgshow:#d98a00;--dgshowbg:#fdf3e0;--dgclose:#008300;--dgclosebg:#e9f6e9}
+  .dgkies{display:flex;align-items:center;gap:10px;margin:2px 0 14px}
+  .dgkies button{border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:7px 13px;font-size:14px;cursor:pointer;font-weight:700;font-family:inherit}
+  .dgkies button:disabled{opacity:.4;cursor:default}
+  .dgkies .dgdag{font-size:16px;font-weight:800}
+  .dgkies .dgvand{font-size:12px;color:var(--dgset);cursor:pointer;font-weight:700}
+  .dgcard{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(20,40,80,.06);overflow:hidden}
+  .dghead{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}
+  .dghead:hover{background:#f6f9fd}
+  .dghead .ava{width:30px;height:30px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:none}
+  .dghead b{font-size:15px}
+  .dghead .dgsum{font-size:11.5px;color:var(--mut)}
+  .dghead .dgcaret{margin-left:auto;color:var(--mut);font-size:12px}
+  .dgbalk{display:flex;height:7px;border-radius:5px;overflow:hidden;flex:1;max-width:220px}
+  .dgbalk i{display:block;height:100%}
+  .dgregels{padding:2px 16px 12px;font-size:12.5px;color:var(--mut)}
+  .dgregel{display:flex;align-items:baseline;gap:7px;margin:3px 0}
+  .dgregel b{color:var(--ink)}
+  .dgtag{font-size:10px;font-weight:800;border-radius:6px;padding:1px 7px;color:#fff;min-width:44px;text-align:center;flex:none}
+  .dg-set{background:var(--dgset)}.dg-show{background:var(--dgshow)}.dg-close{background:var(--dgclose)}
+  .dguren{border-top:1px solid var(--line)}
+  .dguur{display:flex;gap:10px;padding:7px 16px;border-bottom:1px solid var(--line);cursor:pointer;align-items:flex-start}
+  .dguur:hover{background:#f2f7ff}
+  .dguur.sel{background:#eef5ff;outline:2px solid var(--dgset);outline-offset:-2px}
+  .dguur .dgu{width:46px;text-align:right;color:var(--mut);font-weight:700;font-size:12px;padding-top:3px;flex:none}
+  .dgblok{border-radius:7px;padding:2px 8px;font-size:11.5px;font-weight:700;display:inline-flex;gap:6px;align-items:center;white-space:nowrap;margin:1px 4px 1px 0}
+  .dgb-set{background:var(--dgsetbg);color:var(--dgset)}
+  .dgb-show{background:var(--dgshowbg);color:var(--dgshow)}
+  .dgb-close{background:var(--dgclosebg);color:var(--dgclose)}
+  .dgblok .rood{color:var(--red)}
+  .dgblok .lbl{font-size:9px;letter-spacing:.5px;opacity:.75}
+  .dgdet{background:#fbfcfe;border-bottom:1px solid var(--line);padding:8px 16px 12px}
+  .dgdet table{border-collapse:collapse;width:100%}
+  .dgdet th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);padding:4px 8px;border-bottom:1px solid var(--line)}
+  .dgdet td{font-size:12.5px;padding:5px 8px;border-bottom:1px solid #eef2f8}
+  .dgdet a{color:var(--dgset);font-weight:700;text-decoration:none}
+  .dgdet a:hover{text-decoration:underline}
+  .dgleeg{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;text-align:center;color:var(--mut);font-size:13.5px}
+  .dgcrm{padding:8px 16px 10px;border-top:1px dashed var(--line)}
+  .dgcrm .dgcrmkop{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);font-weight:700;margin-bottom:6px}
+  .dgchip{display:inline-block;border:1.5px solid var(--line);border-radius:9px;padding:4px 10px;font-size:12px;font-weight:700;margin:0 6px 6px 0;cursor:pointer;background:#fff}
+  .dgchip:hover{border-color:var(--dgset);color:var(--dgset)}
+  .dgchip.on{border-color:var(--dgset);background:var(--dgsetbg);color:var(--dgset)}
+  .dgcrmlist{margin:4px 0 6px}
+  .dgcrmlist table{border-collapse:collapse;width:100%}
+  .dgcrmlist td{font-size:12.5px;padding:4px 8px;border-bottom:1px solid #eef2f8}
+  .dgcrmlist a{color:var(--dgset);font-weight:700;text-decoration:none}
+  .dgcrmlist a:hover{text-decoration:underline}
+</style><style>
+  .v2tag{font-size:10px;font-weight:800;background:rgba(255,255,255,.22);border-radius:99px;padding:2px 8px;vertical-align:middle;margin-left:6px;letter-spacing:.5px}
+  .blk .lab .rol{font-style:normal;font-weight:600;opacity:.7;text-transform:none;letter-spacing:0;font-size:10px;margin-left:4px}
+  .blk.c,.outN.c{background:#e6f0f1} .blk.c .pct,.outN.c{color:#0e7a86} .blk.c .bar{background:#0e9aa7} .blk.c .lab{color:#0e7a86}
+  .cmp th i{font-style:normal;font-weight:400;text-transform:none;letter-spacing:0;color:#9aa4b8}
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  code{background:var(--bg);border-radius:4px;padding:0 4px;font-size:11px}
+</style>
+</head>
+<body>
+<div id="gate">
+  <div class="gatebox">
+    <h2>DPAC · Sales Dashboard</h2>
+    <p>Voer de toegangscode in</p>
+    <input id="gcode" type="password" inputmode="text" autocomplete="off" placeholder="••••••" onkeydown="if(event.key==='Enter')gCheck()">
+    <button onclick="gCheck()">Openen</button>
+    <div class="gatefout" id="gfout"></div>
+  </div>
+</div>
+<div class="top">
+  <div>
+    <h1>DPAC · Sales Dashboard <span class="v2tag">v2</span></h1>
+    <div class="sub">Sales pijplijn · uit de DPAC-datalaag (Supabase) · stand <span id="gen"></span></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="rfw">
+    <button class="rbtn" id="rbtn" onclick="ververs()" title="Haalt de nieuwste stand op uit de datalaag (paar seconden)">⟳ Ververs</button>
+    <div class="rtxt" id="rtxt"></div>
+  </div>
+  <div class="dp">
+    <div class="dp-field" id="dpField" onclick="dpToggle()">📅 <span id="dpLabel"></span></div>
+    <div class="dp-pop" id="dpPop">
+      <p class="dp-hint" id="dpHint">Klik een <b>startdatum</b>, klik daarna een <b>einddatum</b></p>
+      <div class="dp-months" id="dpMonths"></div>
+      <div class="dp-presets" id="dpPresets"></div>
+    </div>
+  </div>
+</div>
+<div class="tabs" id="tabs"></div>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div id="advwrap" style="display:none"></div>
+  <div id="wonwrap" style="display:none"></div>
+  <div id="dagwrap" style="display:none"></div>
+  <div id="aptwrap" style="display:none"></div>
+  <div class="cols" id="cols"></div>
+  <div class="detail" id="detail" style="display:none">
+    <div class="dhead" id="dhead"></div>
+    <div class="dcols" id="dcols"></div>
+  </div>
+  <p class="note" id="note"></p>
+</main>
+<div class="fdrop" id="fdrop" style="display:none"></div>
+<script>
+// ============================================================
+//  DPAC · Sales Dashboard v2
+//  Voorkant: het bewezen dashboard uit droenoeboy/salesdash.
+//  Databron: de DPAC-datalaag in Supabase (laag 2: views), via n8n.
+//  Alle definities staan in dpac.definitions + de views; dit bestand telt alleen op per periode.
+// ============================================================
+const DATA_URL = "https://dpac.app.n8n.cloud/webhook/dpac-dashboard-data";
+const DASH_VERSIE = "v2-2026-08-19";
+const LOC = "TdkRfY76R77enqlUSRHi";
+const EPOCH = new Date(2026,0,1);
+const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const MNDF=["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+const PAL=["#2a78d6","#e87ba4","#008300","#eda100","#b052c7","#0e9aa7","#8a5a44","#4c5b7a"];
+
+let D=null, GCODE="", L=[], AP=[], EV=[], DEFS={}, STAGES=[], P=[], REPS=[], RCOL={}, PAY_MIN=1000;
+let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false;
+
+// ---- datums ----
+const d2s = d => { const t=new Date(EPOCH); t.setDate(t.getDate()+d); return t; };
+const s2d = t => Math.round((t - EPOCH)/864e5);
+const dOf = s => { if(!s) return -1; const t=new Date(String(s).slice(0,10)+"T00:00:00"); return isNaN(t)?-1:s2d(t); };   // 'YYYY-MM-DD' -> dagnummer
+const tsLocal = iso => { if(!iso) return null; const d=new Date(iso); if(isNaN(d)) return null; return d.toLocaleString("sv-SE",{timeZone:"Europe/Amsterdam"}); };
+const tsDay = iso => { const s=tsLocal(iso); return s? dOf(s.slice(0,10)) : -1; };
+const tsHM  = iso => { const s=tsLocal(iso); return s? s.slice(11,16) : ""; };
+const fmt = d => { const t=d2s(d); return t.getDate()+" "+MND[t.getMonth()]; };
+const fmtY = d => { const t=d2s(d); return t.getDate()+" "+MND[t.getMonth()]+" "+t.getFullYear(); };
+const inR = (v,a,b) => v>=0 && v>=a && v<=b;
+const pct = (n,d) => d? Math.round(n/d*1000)/10 : 0;
+const fpct = (n,d) => d? (pct(n,d)+"").replace(".",",")+"%" : "—";
+const eur = v => "€ "+Math.round(v).toLocaleString("nl-NL");
+const esc = s => String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const cap = s => String(s||"").replace(/\b\p{L}/gu, c=>c.toUpperCase());
+const ghl = (cid,name) => cid? `<a href="https://app.gohighlevel.com/v2/location/${LOC}/contacts/detail/${cid}" target="_blank">${esc(name||"(naam onbekend)")}</a>` : esc(name||"—");
+
+// ---- toegang + data ----
+async function laad(code){
+  const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code, days:240})});
+  if(!resp.ok) throw new Error("server gaf "+resp.status);
+  const data=await resp.json();
+  if(!data || data.error) throw new Error(data&&data.error==="unauthorized"?"code":"onbruikbaar antwoord");
+  if(!Array.isArray(data.leads)) throw new Error("onbruikbaar antwoord");
+  return data;
+}
+async function gTry(code, stil){
+  try{
+    let data;
+    if(location.search.indexOf("local=1")>=0){ data=await (await fetch("dashboard_data.json")).json(); }
+    else data=await laad(code);
+    GCODE=code; try{sessionStorage.dpacSalesCode=code;}catch(e){}
+    document.getElementById("gate").style.display="none";
+    D=data; initApp(); return true;
+  }catch(e){
+    if(!stil){ document.getElementById("gfout").textContent = e.message==="code"?"Onjuiste code":"Laden mislukt ("+e.message+")"; document.getElementById("gcode").value=""; }
+    return false;
+  }
+}
+function gCheck(){ gTry(document.getElementById("gcode").value.trim(), false); }
+async function ververs(){
+  if(VBEZIG||!GCODE) return;
+  const btn=document.getElementById("rbtn"), tx=document.getElementById("rtxt");
+  VBEZIG=true; btn.disabled=true; btn.textContent="⟳ Bezig…"; tx.textContent="nieuwste stand ophalen…";
+  try{
+    const data=await laad(GCODE);
+    const oA=A,oB=B,oTab=tab; D=data; sel=null; resetDetailState(); collapsed=new Set(); initApp();
+    A=Math.max(0,Math.min(oA,NOW)); B=Math.max(A,Math.min(oB,NOW)); tab=oTab; if(tab.startsWith("p")&&!REPS.some(p=>"p"+p.n===tab)) tab="tot"; render();
+    const t=new Date(); tx.textContent="zojuist ververst · "+String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0")+" · "+L.length+" leads · "+AP.length+" afspraken";
+  }catch(e){ tx.textContent="verversen mislukt ("+(e&&e.message?e.message:"netwerk")+") — de oude stand blijft staan"; }
+  VBEZIG=false; btn.disabled=false; btn.textContent="⟳ Ververs";
+}
+
+// ---- model opbouwen ----
+function objs(cols, rows){ return (rows||[]).map(r=>{ const o={}; cols.forEach((c,i)=>o[c]=r[i]); return o; }); }
+function initApp(){
+  DEFS=D.definitions||{}; PAY_MIN=+(DEFS.pay_min_amount||1000);
+  STAGES=(D.stages||[]).map(s=>s[1]);
+  L=objs(D.lead_cols, D.leads); AP=objs(D.appt_cols, D.appointments); EV=objs(D.event_cols, D.events);
+  for(const l of L){
+    l.name=cap(l.contact_name); l.cd=dOf(l.created_on); l.pd=dOf(l.planned_on); l.id_=dOf(l.intake_on); l.payd=dOf(l.paid_on);
+    l.scd=dOf(l.status_changed_on); l.stgd=dOf(l.stage_changed_on);
+    l.setter=l.setter_name||""; l.owner=l.owner_short||"";
+    l.is_show=!!l.is_show; l.is_noshow=!!l.is_noshow; l.is_signed=!!l.is_signed; l.is_paid=!!l.is_paid; l.has_planned=!!l.has_planned; l.lost_in_lead_stage=!!l.lost_in_lead_stage;
+    l.lost=l.status==="lost"; l.open=l.status==="open"; l.paid_amount=+l.paid_amount||0;
+    l.intaker=""; l.attempt=null;
+  }
+  const byC=new Map(); for(const l of L){ if(!byC.has(l.contact_id)) byC.set(l.contact_id,[]); byC.get(l.contact_id).push(l); }
+  for(const a of AP){
+    a.name=cap(a.contact_name); a.sd=dOf(a.starts_on); a.bd=tsDay(a.booked_at); a.hm=tsHM(a.starts_at); a.bhm=tsHM(a.booked_at);
+    a.setter=a.setter_short||""; a.intaker=a.intaker_short||"";
+    // intaker + poging aan de lead hangen (afspraak op de intakedatum van de lead)
+    const ls=byC.get(a.contact_id)||[];
+    for(const l of ls){ if(l.id_>=0 && l.id_===a.sd){ l.intaker=a.intaker; l.attempt=a.attempt_number; l.appt=a; } }
+  }
+  for(const l of L) if(!l.intaker) l.intaker=l.owner;   // terugval: eigenaar van de deal
+  for(const e of EV){ e.dag=dOf(e.occurred_on); e.rep=e.owner_short||""; }
+  // mensen: iedereen die als setter, intaker of eigenaar voorkomt, gesorteerd op activiteit
+  const act=new Map(); const add=(n,w)=>{ if(!n) return; act.set(n,(act.get(n)||0)+w); };
+  for(const l of L){ if(l.pd>=0&&l.stage_position!==0) add(l.setter,1); if(l.id_>=0){ add(l.intaker,1); add(l.owner,.5);} if(l.lost&&l.stage_position===0) add(l.owner,.2); }
+  for(const a of AP){ add(a.setter,.5); add(a.intaker,.5); }
+  P=[...act.keys()];
+  REPS=P.map(n=>({n,a:act.get(n)})).filter(p=>p.a>=3).sort((a,b)=>b.a-a.a);
+  REPS.forEach((p,k)=>RCOL[p.n]=PAL[k%PAL.length]);
+  const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate()));
+  const g=new Date(D.gen); NOW=TODAY;
+  document.getElementById("gen").textContent=isNaN(g)?"—":(g.getDate()+" "+MND[g.getMonth()]+" "+String(g.getHours()).padStart(2,"0")+":"+String(g.getMinutes()).padStart(2,"0"));
+  const tx=document.getElementById("rtxt"); if(tx&&!tx.textContent) tx.textContent=L.length+" leads · "+AP.length+" intake-afspraken · "+EV.length+" live-events";
+  A=s2d(new Date(_n.getFullYear(),_n.getMonth(),1)); B=NOW;
+  dagSel=null; dagOpen=new Set(); dagUur=null;
+  render();
+}
+
+// ---- de funnel per persoon (rolzuiver) ----
+// setter  : plan rate en show rate (van de intakes die hij/zij inplande)
+// intaker : sign rate (intake -> ingeschreven, ongeacht wie sluit)
+// owner   : close rate (ingeschreven vs verloren van de dossiers na show) en pay rate
+function funnel(who, a, b){
+  const isS = l => who==null || l.setter===who;
+  const isI = l => who==null || l.intaker===who;
+  const isO = l => who==null || l.owner===who;
+  const gepland  = L.filter(l=> l.stage_position!==0 && inR(l.pd,a,b) && isS(l));
+  const verloren = L.filter(l=> l.lost_in_lead_stage && inR(l.scd,a,b) && isO(l));
+  const agenda   = L.filter(l=> inR(l.id_,a,b) && isS(l));            // intakes op de agenda van deze setter
+  const show     = agenda.filter(l=> l.is_show);
+  const geenShow = agenda.filter(l=> !l.is_show);
+  const agendaI  = L.filter(l=> inR(l.id_,a,b) && isI(l));            // intakes gevoerd door deze intaker
+  const showI    = agendaI.filter(l=> l.is_show);
+  const sign     = showI.filter(l=> l.is_signed);
+  const nietSign = showI.filter(l=> !l.is_signed);
+  const dossiers = L.filter(l=> inR(l.id_,a,b) && l.is_show && isO(l)); // dossiers na show, van deze eigenaar
+  const closed   = dossiers.filter(l=> l.is_signed);
+  const closeLost= dossiers.filter(l=> !l.is_signed && l.lost);
+  const closeOpen= dossiers.filter(l=> !l.is_signed && !l.lost);
+  const signO    = L.filter(l=> inR(l.id_,a,b) && l.is_signed && isO(l));
+  const paid     = signO.filter(l=> l.is_paid);
+  const nietPaid = signO.filter(l=> !l.is_paid);
+  return {gepland, verloren, agenda, show, geenShow, agendaI, showI, sign, nietSign, dossiers, closed, closeLost, closeOpen, signO, paid, nietPaid};
+}
+// afspraken (slots) in periode
+function slots(who,a,b,role){
+  const f = x => who==null || (role==="intaker"? x.intaker===who : x.setter===who);
+  const inP = AP.filter(x=> inR(x.sd,a,b) && f(x));
+  return { all:inP, show:inP.filter(x=>x.is_show), noshow:inP.filter(x=>x.is_noshow), cancel:inP.filter(x=>x.is_cancelled), late:inP.filter(x=>x.is_late_cancel), open:inP.filter(x=>x.is_upcoming), unres:inP.filter(x=>x.is_unresolved),
+    booked: AP.filter(x=> inR(x.bd,a,b) && f(x)) };
+}
+
+// ---- state ----
+let sortSt = {ok:{c:1,d:-1}, bad:{c:1,d:-1}};
+let colF = {ok:{}, bad:{}};
+let fOpen = null, expand = {};
+let collapsed = new Set();
+function setRange(a,b){ A=a; B=b; sel=null; render(); }
+function resetDetailState(){ sortSt={ok:{c:1,d:-1},bad:{c:1,d:-1}}; colF={ok:{},bad:{}}; expand={}; fClose(); }
+
+// ---- tabs ----
+function drawTabs(){
+  const el=document.getElementById("tabs"); el.innerHTML="";
+  const mk=(id,label,color)=>{ const t=document.createElement("div");
+    t.className="tab"+(tab===id?" on":"");
+    if(color){const d=document.createElement("span");d.className="dot";d.style.background=color;t.appendChild(d);}
+    t.appendChild(document.createTextNode(label));
+    t.onclick=()=>{tab=id; sel=null; render();}; el.appendChild(t); };
+  mk("tot","Totaal");
+  REPS.forEach(p=>mk("p"+p.n, p.n, RCOL[p.n]));
+  mk("won","🏆 Gewonnen");
+  mk("apt","📆 Afspraken");
+  mk("dag","📅 Dag");
+  mk("adv","💡 Advies");
+}
+const repOf = () => (tab.startsWith("p")? tab.slice(1) : null);
+
+// ---- kpi's ----
+function drawKpis(){
+  const who=repOf(); const f=funnel(who,A,B); const s=slots(who,A,B,"setter");
+  const k=document.getElementById("kpis");
+  const first = who==null ? [L.filter(l=>inR(l.cd,A,B)).length,"Nieuwe leads"] : [f.gepland.length+f.verloren.length,"Leads afgehandeld"];
+  const held = s.show.length+s.noshow.length+s.late.length;
+  const items=[first,[f.gepland.length,"Intakes gepland"],[f.agenda.length,"Intakes in periode"],[f.show.length,"Shows"],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows"],[f.sign.length,"Ingeschreven"],[f.paid.length,"Betaald"],
+    [held?fpct(s.show.length,held):"—","Show rate per slot",`${s.show.length} show · ${s.noshow.length} no-show · ${s.late.length} late cancel${s.unres.length?` · ${s.unres.length} zonder uitkomst`:""}`]];
+  k.innerHTML=items.map(x=>`<div class="kpi" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span></div>`).join("");
+}
+
+// ---- funnelkolommen ----
+function rowHtml(cls,lab,who,num,den,uitTxt,phase,repKey){
+  const p=pct(num,den), selCls=(sel&&sel.phase===phase&&sel.repKey===repKey)?" sel":"";
+  return `<div class="frow">
+    <div class="blk ${cls}${selCls}" onclick="pick('${esc(repKey)}','${phase}')">
+      <div class="lab"><span>${lab} <i class="rol">${who}</i></span><span class="uit" title="${esc(uitTxt)}">${esc(uitTxt)}</span></div>
+      <div class="pct">${den?fpct(num,den):"—"}</div>
+      <div class="bar" style="width:${Math.min(100,p)}%"></div>
+    </div>
+    <div class="outN ${cls}${selCls}" onclick="pick('${esc(repKey)}','${phase}')" title="doorgestroomd">${num}</div>
+  </div>`;
+}
+function toggleCol(repKey){ const k=String(repKey); collapsed.has(k)? collapsed.delete(k) : collapsed.add(k); drawCols(); }
+function colHtml(who, name, color, tot){
+  const f=funnel(who,A,B);
+  const behandeld=f.gepland.length+f.verloren.length;
+  const ini=name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+  const repKey=who==null?"tot":who;
+  if(collapsed.has(String(repKey)))
+    return `<div class="fcol mini" onclick="toggleCol('${esc(repKey)}')" title="uitklappen">
+      <div class="ava" style="background:${color}">${ini}</div>
+      <div class="vname">${esc(name)}</div><div class="vnum" style="color:${color}">${behandeld}</div></div>`;
+  const openGS=f.geenShow.filter(l=>l.open).length;
+  const sub = who==null
+    ? `${behandeld} leads afgehandeld · ${f.agenda.length} intakes op de agenda`
+    : `${behandeld} afgehandeld als setter · ${f.agenda.length} intakes gezet · ${f.agendaI.length} intakes gevoerd`;
+  return `<div class="fcol${tot?" tot":""}">
+    <div class="fhead" title="klik om in te klappen" onclick="toggleCol('${esc(repKey)}')"><div class="ava" style="background:${color}">${ini}</div><b>${esc(name)}</b><div class="bigN" title="leads afgehandeld (gepland + verloren in de Leads-fase)">${behandeld}</div></div>
+    <div class="fsub" title="${esc(sub)}">${sub}</div>
+    ${rowHtml("p","Plan rate","setter",f.gepland.length,behandeld,`${f.verloren.length} verloren`,"plan",repKey)}
+    ${rowHtml("h","Show rate","setter",f.show.length,f.agenda.length,`${f.geenShow.length} geen show${openGS?` · ${openGS} nog open`:""}`,"show",repKey)}
+    ${rowHtml("s","Sign rate","intaker",f.sign.length,f.showI.length,`${f.nietSign.length} (nog) niet${f.nietSign.filter(l=>l.open).length?` · ${f.nietSign.filter(l=>l.open).length} open`:""}`,"sign",repKey)}
+    ${rowHtml("c","Close rate","eigenaar",f.closed.length,f.closed.length+f.closeLost.length,`${f.closeLost.length} verloren${f.closeOpen.length?` · ${f.closeOpen.length} open`:""}`,"close",repKey)}
+    ${rowHtml("b","Pay rate","eigenaar",f.paid.length,f.signO.length,`${f.nietPaid.length} nog niet`,"pay",repKey)}
+  </div>`;
+}
+function drawCols(){
+  const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap");
+  for(const x of [el,aw,ww,dw,pw]) x.style.display="none";
+  if(tab==="adv"){ aw.style.display="block"; drawAdvies(); return; }
+  if(tab==="won"){ ww.style.display="block"; drawWon(); return; }
+  if(tab==="dag"){ dw.style.display="block"; drawDag(); return; }
+  if(tab==="apt"){ pw.style.display="block"; drawApt(); return; }
+  el.style.display="flex";
+  if(tab==="tot") el.innerHTML=colHtml(null,"Totaal","#1a2233",true)+REPS.map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join("");
+  else { const n=repOf(); el.innerHTML=colHtml(n,n,RCOL[n]||"#1a2233",true); }
+}
+
+// ---- detail ----
+const PH={
+  plan:{t:"Plan rate (setter)", ok:"Intake gepland", bad:"Verloren in de Leads-fase", d:"pd", bd:"scd", who:"setter"},
+  show:{t:"Show rate (setter)", ok:"Op gesprek verschenen", bad:"Geen show", d:"id_", bd:"id_", who:"setter"},
+  sign:{t:"Sign rate (intaker)", ok:"Ingeschreven (Agreement Signed of verder)", bad:"Show, maar (nog) niet getekend", d:"id_", bd:"id_", who:"intaker"},
+  close:{t:"Close rate (eigenaar)", ok:"Ingeschreven", bad:"Verloren na show", d:"id_", bd:"scd", who:"owner"},
+  pay:{t:"Pay rate (eigenaar)", ok:"Betaald", bad:"Getekend, nog niet betaald", d:"id_", bd:"id_", who:"owner"}};
+function pick(repKey,phase){ sel={repKey, phase}; resetDetailState(); drawCols(); drawDetail(); document.getElementById("detail").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+function sortDetail(tbl,c){ const s=sortSt[tbl]; if(s.c===c) s.d=-s.d; else {s.c=c; s.d=1;} fClose(); drawDetail(); }
+function selRows(f){
+  if(sel.phase==="plan") return [f.gepland, f.verloren];
+  if(sel.phase==="show") return [f.show, f.geenShow];
+  if(sel.phase==="sign") return [f.sign, f.nietSign];
+  if(sel.phase==="close") return [f.closed, f.closeLost.concat(f.closeOpen)];
+  return [f.paid, f.nietPaid];
+}
+function colDefs(phase,win){
+  const ph=PH[phase], di = win? ph.d : ph.bd;
+  const cols=[
+    {t:"Naam", v:l=>l.name.toLowerCase(), k:l=>l.name, f:false},
+    {t:"Datum", v:l=>l[di], k:l=>l[di]>=0?fmt(l[di]):"—", f:true},
+    {t:"Setter", v:l=>l.setter, k:l=>l.setter||"—", f:true},
+    {t:"Intaker", v:l=>l.intaker, k:l=>l.intaker||"—", f:true},
+    {t:"Eigenaar", v:l=>l.owner, k:l=>l.owner||"—", f:true},
+    {t:"Huidige fase", v:l=>l.stage_position, k:l=>l.stage_name, f:true},
+    {t:"Reden", v:l=>l.lost?(l.lost_reason||""):"", k:l=>l.lost?(l.lost_reason||"(geen reden)"):"—", f:true},
+  ];
+  if(phase==="show") cols.push({t:"Poging", v:l=>l.attempt||0, k:l=>l.attempt?String(l.attempt)+"e":"—", f:true});
+  if(phase==="pay") cols.push({t:"Betaald", v:l=>l.paid_amount, k:l=>l.paid_amount>1?eur(l.paid_amount):(l.paid_check?"✅":"—"), f:true});
+  cols.push({t:"Bron", v:l=>l.utm_source||"", k:l=>l.utm_source||"—", f:true});
+  return cols;
+}
+function applyColF(rows,cols,tbl,skipCol){
+  return rows.filter(r=>{ for(const ci in colF[tbl]){ if(+ci===skipCol) continue; const set=colF[tbl][ci]; if(set && set.size && !set.has(cols[ci].k(r))) return false; } return true; });
+}
+function openFilter(ev,tbl,ci,phase,win){
+  ev.stopPropagation();
+  if(fOpen && fOpen.tbl===tbl && fOpen.ci===ci){ fClose(); return; }
+  fOpen={tbl,ci,phase,win};
+  const who = sel.repKey==="tot"? null : sel.repKey;
+  const f=funnel(who,A,B), [ok,bad]=selRows(f);
+  const rows = tbl==="ok"? ok : bad;
+  const cols=colDefs(phase,win);
+  const base=applyColF(rows,cols,tbl,ci);
+  const cnt=new Map(); for(const r of base){ const k=cols[ci].k(r); cnt.set(k,(cnt.get(k)||0)+1); }
+  const set=colF[tbl][ci];
+  let vals=[...cnt.entries()]; vals.sort(ci===1? ((a,b)=>0) : ((a,b)=>b[1]-a[1]));
+  const el=document.getElementById("fdrop");
+  let som=0, nsel=0; if(set&&set.size){ for(const [k,n] of vals) if(set.has(k)){ som+=n; nsel++; } }
+  el.innerHTML=`<div class="fi fall${(!set||!set.size)?" on":""}" onclick="fPick('${tbl}',${ci},null)">Alles <b>${base.length}</b></div>`+
+    vals.map(([k,n])=>`<div class="fi${set&&set.has(k)?" on":""}" onclick="fPick('${tbl}',${ci},${JSON.stringify(k).replace(/"/g,"&quot;")})">${esc(k)} <b>${n}</b></div>`).join("")+
+    (nsel? `<div class="fsum">✓ ${nsel} aangevinkt · samen ${som}</div>` : "");
+  const r2=ev.target.getBoundingClientRect(); el.style.display="block"; el.style.left=Math.min(r2.left, window.innerWidth-230)+"px"; el.style.top=(r2.bottom+4)+"px";
+}
+function fPick(tbl,ci,val){
+  if(val===null){ delete colF[tbl][ci]; }
+  else{ let set=colF[tbl][ci]; if(!set) set=colF[tbl][ci]=new Set(); set.has(val)? set.delete(val) : set.add(val); if(!set.size) delete colF[tbl][ci]; }
+  const keep=fOpen; drawDetail();
+  if(keep){ fOpen=null; const th=document.querySelector(`#tbl-${keep.tbl} th:nth-child(${keep.ci+1}) .fbtn`); if(th){ const fake={stopPropagation:()=>{},target:th}; openFilter(fake,keep.tbl,keep.ci,keep.phase,keep.win); } }
+}
+function fClose(){ document.getElementById("fdrop").style.display="none"; fOpen=null; }
+document.addEventListener("click",e=>{ const p=e.composedPath(); if(!p.some(n=>n.nodeType===1&&n.classList&&(n.classList.contains("fdrop")||n.classList.contains("fbtn")))) fClose(); });
+function rowsTable(rows, phase, win, tblKey){
+  const cols=colDefs(phase,win);
+  let list=applyColF(rows,cols,tblKey,-1);
+  const s=sortSt[tblKey];
+  const sorted=[...list].sort((x,y)=>{ const a=cols[s.c].v(x), b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
+  let h=`<table id="tbl-${tblKey}"><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="sortDetail('${tblKey}',${i})">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span>${c.f?`<span class="fbtn${colF[tblKey][i]?" on":""}" onclick="openFilter(event,'${tblKey}',${i},'${phase}',${win})">⏷</span>`:""}</th>`).join("")+"</tr>";
+  if(!sorted.length) return h+"</table>"+`<div class="empty">Niemand${Object.keys(colF[tblKey]).length?" met dit filter":""} in deze periode.</div>`;
+  const key=phase+tblKey, capN = expand[key]? 1e9 : 120;
+  for(const l of sorted.slice(0,capN)){
+    h+="<tr>"+cols.map((c,i)=>{
+      if(i===0) return `<td>${ghl(l.contact_id,l.name)}</td>`;
+      if(c.t==="Huidige fase") return `<td><span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span></td>`;
+      return `<td>${esc(c.k(l))}</td>`;
+    }).join("")+"</tr>";
+  }
+  h+="</table>";
+  if(sorted.length>capN) h+=`<div class="more" onclick="expand['${key}']=1;drawDetail()">▼ toon alle ${sorted.length} namen</div>`;
+  return h;
+}
+function drawDetail(){
+  const el=document.getElementById("detail");
+  if(!sel || ["adv","won","dag","apt"].includes(tab)){ el.style.display="none"; return; }
+  const who = sel.repKey==="tot"? null : sel.repKey;
+  const name = who==null? "Totaal" : who;
+  const f=funnel(who,A,B), ph=PH[sel.phase];
+  const [ok,bad]=selRows(f);
+  el.style.display="block";
+  const nf=Object.keys(colF.ok).length+Object.keys(colF.bad).length;
+  const okF=applyColF(ok,colDefs(sel.phase,true),"ok",-1).length, badF=applyColF(bad,colDefs(sel.phase,false),"bad",-1).length;
+  document.getElementById("dhead").innerHTML=`<b>${esc(name)} · ${ph.t}</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${ok.length} wel · ${bad.length} niet${nf?` · <a href="#" onclick="colF={ok:{},bad:{}};drawDetail();return false" style="color:var(--plan)">filters wissen (${nf})</a>`:""}</span>`;
+  document.getElementById("dcols").innerHTML=
+    `<div class="dcol"><h3><span class="pill ok">${okF!==ok.length?okF+" van "+ok.length:ok.length}</span> ${ph.ok}</h3>${rowsTable(ok,sel.phase,true,"ok")}</div>
+     <div class="dcol"><h3><span class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</span> ${ph.bad}</h3>${rowsTable(bad,sel.phase,false,"bad")}</div>`;
+}
+
+// ---- 🏆 gewonnen ----
+let wonRep=null, wonSort={c:0,d:-1};
+function drawWon(){
+  const ww=document.getElementById("wonwrap");
+  const all=L.filter(l=> l.is_signed && inR(l.id_,A,B));
+  const perRep=new Map(); for(const l of all){ const k=l.owner||"—"; perRep.set(k,(perRep.get(k)||0)+1); }
+  const chips=[["all","Alle eigenaren",all.length]].concat([...perRep.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>[k,k,n]));
+  const rows = wonRep===null? all : all.filter(l=>(l.owner||"—")===wonRep);
+  const cols=[
+    {t:"Intakedatum", v:l=>l.id_, k:l=>l.id_>=0?fmt(l.id_):"—"},
+    {t:"Naam", v:l=>l.name.toLowerCase(), k:l=>ghl(l.contact_id,l.name)},
+    {t:"Setter", v:l=>l.setter, k:l=>esc(l.setter||"—")},
+    {t:"Intaker", v:l=>l.intaker, k:l=>esc(l.intaker||"—")},
+    {t:"Eigenaar", v:l=>l.owner, k:l=>esc(l.owner||"—")},
+    {t:"Fase", v:l=>l.stage_position, k:l=>`<span class="stg win">${esc(l.stage_name)}</span>${l.lost?' <span class="stg lost">verloren</span>':""}`},
+    {t:"Definitief", v:l=>l.is_signed_definitive?1:0, k:l=>l.is_signed_definitive?"✅":(l.stgd>=0?`bedenktermijn t/m ${fmt(l.stgd+ (+DEFS.cooling_off_days||14))}`:"—")},
+    {t:"Betaald", v:l=>l.paid_amount, k:l=>l.paid_amount>1?("<b>"+eur(l.paid_amount)+"</b>"):(l.paid_check?"✅":"—")},
+    {t:"Betaaldatum", v:l=>l.payd, k:l=>l.payd>=0?fmt(l.payd):"—"},
+    {t:"Bron", v:l=>l.utm_source||"", k:l=>esc(l.utm_source||"—")},
+  ];
+  const s=wonSort;
+  const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x), b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
+  let h=`<div class="wonchips">`+chips.map(c=>`<div class="wchip${(wonRep===null&&c[0]==="all")||wonRep===c[0]?" on":""}" onclick="wonRep=${c[0]==="all"?"null":JSON.stringify(c[0]).replace(/"/g,"&quot;")};drawWon()">${esc(c[1])}<span class="n">${c[2]}</span></div>`).join("")+`</div>`;
+  h+=`<div class="wontbl"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="wonSort.c===${i}?wonSort.d=-wonSort.d:(wonSort={c:${i},d:1});drawWon()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+"</tr>";
+  for(const l of sorted) h+="<tr>"+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+"</tr>";
+  if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen ingeschreven deals in deze periode.</td></tr>`;
+  const paid=rows.filter(l=>l.is_paid), som=rows.reduce((a,l)=>a+(l.paid_amount>1?l.paid_amount:0),0), def=rows.filter(l=>l.is_signed_definitive).length;
+  h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""}</div></div>
+  <p class="note">Telling op intakedatum binnen de gekozen periode (zelfde cohort als de sign rate). Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
+  ww.innerHTML=h;
+}
+
+// ---- 📆 afspraken (slots): twee show rates, poging-nummers, late cancels, zonder uitkomst ----
+let aptSort={c:0,d:-1}, aptFilt="all";
+function drawApt(){
+  const pw=document.getElementById("aptwrap");
+  const tbl=(title,role)=>{
+    const names=[...new Set(AP.filter(x=>inR(x.sd,A,B)||inR(x.bd,A,B)).map(x=>role==="intaker"?x.intaker:x.setter))].filter(Boolean).sort();
+    const line=(n,s)=>{ const held=s.show.length+s.noshow.length+s.late.length; return `<tr><td><b>${esc(n)}</b></td><td>${s.booked.length}</td><td>${s.all.length}</td><td>${s.show.length}</td><td>${s.noshow.length}</td><td>${s.cancel.length}${s.late.length?` <span style="color:var(--red)">(${s.late.length} laat)</span>`:""}</td><td>${s.unres.length}</td><td>${s.open.length}</td><td><b>${held?fpct(s.show.length,held):"—"}</b></td></tr>`; };
+    return `<div class="cmp"><h3 style="margin:0 0 10px;font-size:13.5px">${title} · ${fmtY(A)} t/m ${fmtY(B)}</h3><table><tr><th>${role==="intaker"?"Intaker":"Setter"}</th><th>Geboekt in periode</th><th>Op de agenda</th><th>Show</th><th>No-show</th><th>Geannuleerd</th><th>Zonder uitkomst</th><th>Nog te komen</th><th>Show rate per slot</th></tr>`+
+      line("Totaal",slots(null,A,B,role))+names.map(n=>line(n,slots(n,A,B,role))).join("")+`</table></div>`;
+  };
+  const inP=AP.filter(x=>inR(x.sd,A,B));
+  const p1=inP.filter(x=>x.attempt_number===1), p2=inP.filter(x=>x.attempt_number>=2);
+  const held=x=>x.filter(y=>y.is_show||y.is_noshow||y.is_late_cancel).length;
+  const pog=`<div class="cmp"><h3 style="margin:0 0 10px;font-size:13.5px">Eerste poging versus herplanning</h3><table><tr><th></th><th>Afspraken</th><th>Show</th><th>Show rate per slot</th></tr>
+    <tr><td>1e afspraak van de lead</td><td>${p1.length}</td><td>${p1.filter(x=>x.is_show).length}</td><td><b>${fpct(p1.filter(x=>x.is_show).length,held(p1))}</b></td></tr>
+    <tr><td>2e of latere afspraak</td><td>${p2.length}</td><td>${p2.filter(x=>x.is_show).length}</td><td><b>${fpct(p2.filter(x=>x.is_show).length,held(p2))}</b></td></tr></table></div>`;
+  const filt=[["all","Alles"],["show","Show"],["noshow","No-show"],["cancel","Geannuleerd"],["late","Late cancel"],["unres","Zonder uitkomst"],["open","Nog te komen"]];
+  const list=inP.filter(x=> aptFilt==="all" || (aptFilt==="show"&&x.is_show)||(aptFilt==="noshow"&&x.is_noshow)||(aptFilt==="cancel"&&x.is_cancelled)||(aptFilt==="late"&&x.is_late_cancel)||(aptFilt==="unres"&&x.is_unresolved)||(aptFilt==="open"&&x.is_upcoming));
+  const cols=[
+    {t:"Intake", v:x=>x.starts_at, k:x=>fmt(x.sd)+" "+x.hm},
+    {t:"Naam", v:x=>x.name.toLowerCase(), k:x=>ghl(x.contact_id,x.name)},
+    {t:"Setter", v:x=>x.setter, k:x=>esc(x.setter||"—")},
+    {t:"Intaker", v:x=>x.intaker, k:x=>esc(x.intaker||"—")},
+    {t:"Status", v:x=>x.status, k:x=>{ const s=x.status; const cls=x.is_show?"win":(x.is_noshow||x.is_late_cancel)?"lost":""; const lab=x.is_show?"show":x.is_noshow?"no-show":x.is_late_cancel?"late cancel":x.is_cancelled?"geannuleerd":x.is_unresolved?"zonder uitkomst":x.is_upcoming?"nog te komen":s; return `<span class="stg ${cls}">${esc(lab)}</span>`; }},
+    {t:"Poging", v:x=>x.attempt_number, k:x=>x.attempt_number+"e van "+x.attempts_total},
+    {t:"Geboekt", v:x=>x.booked_at, k:x=>x.bd>=0?fmt(x.bd)+" "+x.bhm:"—"},
+    {t:"Doorlooptijd", v:x=>x.lead_time_days, k:x=>x.lead_time_days!=null?String(x.lead_time_days).replace(".",",")+" d":"—"},
+    {t:"Lead-fase nu", v:x=>x.lead_stage||"", k:x=>x.lead_stage?`<span class="stg${x.lead_status==="lost"?" lost":""}">${esc(x.lead_stage)}${x.lead_status==="lost"?" · verloren":""}</span>`:"—"},
+    {t:"Via", v:x=>x.created_source||"", k:x=>esc((x.created_source||"—").replace(/_/g," "))},
+  ];
+  const s=aptSort; const sorted=[...list].sort((x,y)=>{ const a=cols[s.c].v(x), b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
+  let h=tbl("Per setter (wie plande in)","setter")+tbl("Per intaker (wiens agenda)","intaker")+pog;
+  h+=`<div class="wonchips">`+filt.map(f=>`<div class="wchip${aptFilt===f[0]?" on":""}" onclick="aptFilt='${f[0]}';drawApt()">${f[1]}<span class="n">${f[0]==="all"?inP.length:inP.filter(x=>(f[0]==="show"&&x.is_show)||(f[0]==="noshow"&&x.is_noshow)||(f[0]==="cancel"&&x.is_cancelled)||(f[0]==="late"&&x.is_late_cancel)||(f[0]==="unres"&&x.is_unresolved)||(f[0]==="open"&&x.is_upcoming)).length}</span></div>`).join("")+`</div>`;
+  h+=`<div class="wontbl"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="aptSort.c===${i}?aptSort.d=-aptSort.d:(aptSort={c:${i},d:1});drawApt()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+"</tr>";
+  for(const x of sorted.slice(0,400)) h+="<tr>"+cols.map(c=>`<td>${c.k(x)}</td>`).join("")+"</tr>";
+  if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen afspraken in deze periode.</td></tr>`;
+  h+=`</table>${sorted.length>400?`<div class="more">eerste 400 van ${sorted.length} getoond — kies een kortere periode</div>`:""}</div>
+  <p class="note">Rechtstreeks uit de GHL-agenda's (intakekalender). Setter = wie de afspraak boekte (createdBy), intaker = in wiens agenda hij staat. <b>Show rate per slot</b> = show ÷ (show + no-show + late cancel); een gewone annulering vooraf telt niet als gehouden slot. <b>Late cancel</b> = geannuleerd op de dag zelf. <b>Zonder uitkomst</b> = intake is geweest maar staat nog op new/confirmed — niemand heeft show of no-show geregistreerd; die tellen nergens mee tot dat gebeurt. Poging = hoeveelste intake-afspraak van deze persoon.</p>`;
+  pw.innerHTML=h;
+}
+
+// ---- 💡 advies ----
+function drawAdvies(){
+  const aw=document.getElementById("advwrap");
+  const tot=funnel(null,A,B), ts=slots(null,A,B,"setter");
+  const tBeh=tot.gepland.length+tot.verloren.length;
+  const tPlan=pct(tot.gepland.length,tBeh), tShow=pct(tot.show.length,tot.agenda.length), tSign=pct(tot.sign.length,tot.showI.length), tClose=pct(tot.closed.length,tot.closed.length+tot.closeLost.length);
+  const MP=+(DEFS.min_volume_plan||15), MS=+(DEFS.min_volume_show||8), MG=+(DEFS.min_volume_sign||5);
+  const items=[], rows=[];
+  const r1=v=>(v+"").replace(".",",");
+  for(const p of REPS){
+    const f=funnel(p.n,A,B);
+    const beh=f.gepland.length+f.verloren.length;
+    const pr=pct(f.gepland.length,beh), sr=pct(f.show.length,f.agenda.length), gr=pct(f.sign.length,f.showI.length), cr=pct(f.closed.length,f.closed.length+f.closeLost.length);
+    rows.push({n:p.n,beh,gepland:f.gepland.length,agenda:f.agenda.length,show:f.show.length,agendaI:f.agendaI.length,showI:f.showI.length,sign:f.sign.length,closed:f.closed.length,closeLost:f.closeLost.length,pr:beh>=MP?pr:null,sr:f.agenda.length>=MS?sr:null,gr:f.showI.length>=MG?gr:null,cr:(f.closed.length+f.closeLost.length)>=MG?cr:null});
+    if(beh>=25 && pr < tPlan-5){ const extra=Math.round((tPlan-pr)/100*beh);
+      items.push({imp:extra*3, tag:extra>=8?"hi":"mid", t:`${p.n} verliest veel in de planfase`, p:`Plan rate ${fpct(f.gepland.length,beh)} tegenover ${r1(tPlan)}% gemiddeld, op ${beh} afgehandelde leads (${f.verloren.length} verloren). Op het gemiddelde waren dat ± ${extra} extra geplande intakes.`, d:`Bekijk de verliesredenen van ${p.n} (klik plan-blok → filter Reden) en het belritme in de Leads-fase.`}); }
+    if(f.agenda.length>=MS && sr < tShow-10){ const extra=Math.round((tShow-sr)/100*f.agenda.length);
+      items.push({imp:extra*8, tag:extra>=4?"hi":"mid", t:`Lage show rate op de intakes van ${p.n}`, p:`${f.show.length} van ${f.agenda.length} door ${p.n} ingeplande intakes verschenen (${fpct(f.show.length,f.agenda.length)}) tegenover ${r1(tShow)}% gemiddeld. Op het gemiddelde waren dat ± ${extra} extra shows.`, d:`Check bevestiging/reminders en de doorlooptijd tussen boeken en intake (tab Afspraken).`}); }
+    if(f.showI.length>=MG && gr < tSign-10){ const extra=Math.max(1,Math.round((tSign-gr)/100*f.showI.length));
+      items.push({imp:extra*20, tag:"hi", t:`${p.n}: intakes gevoerd, weinig handtekeningen`, p:`${f.sign.length} van ${f.showI.length} gevoerde intakes leidden tot een inschrijving (${fpct(f.sign.length,f.showI.length)}) tegenover ${r1(tSign)}% gemiddeld — bij € 6.800 per traject is elke gemiste sale direct voelbaar.`, d:`Luister gesprekken terug of laat ${p.n} meedraaien met de best tekenende intaker.`}); }
+    if((f.closed.length+f.closeLost.length)>=MG && cr < tClose-10){
+      items.push({imp:f.closeLost.length*10, tag:"mid", t:`${p.n} verliest relatief veel dossiers na de show`, p:`Van de afgeronde dossiers na show die ${p.n} bezit is ${fpct(f.closed.length,f.closed.length+f.closeLost.length)} ingeschreven (${f.closeLost.length} verloren) tegenover ${r1(tClose)}% gemiddeld.`, d:`Kijk naar de verliesredenen na show (klik close-blok) en het opvolgritme na de intake.`}); }
+  }
+  const openGS=tot.geenShow.filter(l=>l.open);
+  if(openGS.length>=3) items.push({imp:openGS.length*4, tag:openGS.length>=10?"hi":"mid", t:`${openGS.length} no-shows staan nog open`, p:`Van de ${tot.geenShow.length} geen-shows in deze periode zijn er ${openGS.length} nog niet verloren gezet — die zijn mogelijk nog te herplannen.`, d:`Nabellen/appen en direct een nieuwe intake plannen (klik show-blok → rechterlijst, sorteer op Datum).`});
+  if(ts.unres.length>=3) items.push({imp:ts.unres.length*3, tag:"mid", t:`${ts.unres.length} intakes zonder geregistreerde uitkomst`, p:`Deze afspraken zijn geweest maar staan in GHL nog op new/confirmed. Zolang niemand show of no-show zet, tellen ze niet mee en klopt de show rate per slot niet.`, d:`Laat de intakers na elke intake-avond de status zetten (tab Afspraken → filter "Zonder uitkomst").`});
+  if(ts.late.length>=3) items.push({imp:ts.late.length*4, tag:"mid", t:`${ts.late.length} late cancels (op de dag zelf)`, p:`${ts.late.length} van de ${ts.all.length} intakes zijn op de dag zelf geannuleerd — die slots zijn verloren tijd voor de intaker, maar deze mensen hebben wél contact gehad en zijn makkelijker terug te halen dan een no-show.`, d:`Aparte reactivatie-flow voor late cancels; check of de bevestigingsreminder op tijd gaat.`});
+  const withBoth=tot.agenda.filter(l=>l.cd>=0&&l.id_>=0);
+  const fast=withBoth.filter(l=>l.id_-l.cd<=3), slow=withBoth.filter(l=>l.id_-l.cd>3);
+  if(fast.length>=10&&slow.length>=10){ const fs=pct(fast.filter(l=>l.is_show).length,fast.length), ss=pct(slow.filter(l=>l.is_show).length,slow.length);
+    if(fs>ss+8) items.push({imp:Math.round((fs-ss)/100*slow.length)*6, tag:"mid", t:`Snel plannen loont: ${r1(fs)}% vs ${r1(ss)}% show`, p:`Intakes binnen 3 dagen na binnenkomst: ${r1(fs)}% show (${fast.length} leads). Later gepland: ${r1(ss)}% (${slow.length} leads).`, d:`Stuur op inplannen binnen 72 uur; ${slow.length} intakes zaten er deze periode boven.`}); }
+  const p1=ts.all.filter(x=>x.attempt_number===1), p2=ts.all.filter(x=>x.attempt_number>=2), heldN=x=>x.filter(y=>y.is_show||y.is_noshow||y.is_late_cancel).length;
+  if(heldN(p1)>=10&&heldN(p2)>=5){ const a1=pct(p1.filter(x=>x.is_show).length,heldN(p1)), a2=pct(p2.filter(x=>x.is_show).length,heldN(p2));
+    items.push({imp:Math.abs(a1-a2), tag:"lo", t:`Herplande intakes: ${r1(a2)}% show vs ${r1(a1)}% bij de eerste afspraak`, p:`${heldN(p2)} gehouden slots waren een 2e of latere poging van dezelfde persoon; ${heldN(p1)} een eerste. ${a2<a1?"Herplannen levert dus minder op — weeg af hoeveel moeite je erin steekt.":"Herplannen loont hier — blijf no-shows actief herplannen."}`, d:`Zie tab Afspraken → "Eerste poging versus herplanning".`}); }
+  const cnt=new Map(); for(const l of tot.verloren) if(l.lost_reason) cnt.set(l.lost_reason,(cnt.get(l.lost_reason)||0)+1);
+  const top=[...cnt.entries()].sort((a,b)=>b[1]-a[1])[0];
+  if(top && top[1]>=10){ items.push({imp:top[1], tag:"lo", t:`Grootste lek in de Leads-fase: "${top[0]}" (${top[1]}×)`, p:`${r1(pct(top[1],tot.verloren.length))}% van de ${tot.verloren.length} in de Leads-fase verloren leads heeft deze reden.`, d: top[0]==="4 calls attempted" ? "Bereikbaarheidsprobleem: test bellen op andere tijden + extra WhatsApp-poging vóór afboeken." : "Kijk of dit met targeting (advertenties) of het belproces te voorkomen is."}); }
+  items.sort((a,b)=>b.imp-a.imp);
+  const top5=items.slice(0,6);
+  const cell=(v,best,worst)=>v==null?"<td>—</td>":`<td class="${v===best?"best":v===worst?"worst":""}">${r1(v)}%</td>`;
+  const mx=k=>Math.max(...rows.map(r=>r[k]).filter(v=>v!=null)), mn=k=>Math.min(...rows.map(r=>r[k]).filter(v=>v!=null));
+  const tbl=`<div class="cmp"><h3 style="margin:0 0 10px;font-size:13.5px">Team naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} <span style="color:var(--mut);font-weight:400;font-size:11.5px">(— = te weinig volume om eerlijk te vergelijken: plan ≥ ${MP} afgehandeld, show ≥ ${MS} intakes, sign/close ≥ ${MG})</span></h3>
+    <table><tr><th>Naam</th><th>Afgehandeld</th><th>Gepland</th><th>Plan rate<br><i>setter</i></th><th>Intakes gezet</th><th>Show</th><th>Show rate<br><i>setter</i></th><th>Intakes gevoerd</th><th>Ingeschreven</th><th>Sign rate<br><i>intaker</i></th><th>Ingeschr. / verloren<br><i>eigenaar</i></th><th>Close rate<br><i>eigenaar</i></th></tr>
+    <tr><td><b>Totaal</b></td><td>${tBeh}</td><td>${tot.gepland.length}</td><td><b>${r1(tPlan)}%</b></td><td>${tot.agenda.length}</td><td>${tot.show.length}</td><td><b>${r1(tShow)}%</b></td><td>${tot.showI.length}</td><td>${tot.sign.length}</td><td><b>${r1(tSign)}%</b></td><td>${tot.closed.length} / ${tot.closeLost.length}</td><td><b>${r1(tClose)}%</b></td></tr>`+
+    rows.map(r=>`<tr><td>${esc(r.n)}</td><td>${r.beh}</td><td>${r.gepland}</td>${cell(r.pr,mx("pr"),mn("pr"))}<td>${r.agenda}</td><td>${r.show}</td>${cell(r.sr,mx("sr"),mn("sr"))}<td>${r.showI}</td><td>${r.sign}</td>${cell(r.gr,mx("gr"),mn("gr"))}<td>${r.closed} / ${r.closeLost}</td>${cell(r.cr,mx("cr"),mn("cr"))}</tr>`).join("")+"</table></div>";
+  aw.innerHTML=tbl+`<div class="advgrid">`+
+    (top5.length? top5.map((it,i)=>`<div class="advcard"><span class="imp ${it.tag}">${it.tag==="hi"?"grote impact":it.tag==="mid"?"impact":"signaal"}</span><h3><span class="rank">${i+1}</span>${esc(it.t)}</h3><p>${esc(it.p)}</p><div class="doen">→ ${esc(it.d)}</div></div>`).join("")
+     : `<div class="advcard"><p>Geen opvallende afwijkingen in deze periode — of te weinig volume. Kies een langere periode voor een eerlijker beeld.</p></div>`)+
+    `</div><p class="note">Live berekend op de gekozen periode uit de datalaag. Elke rol heeft een eigen noemer, dus niemand wordt dubbel geteld: de setter op wat hij inplant en of dat komt opdagen, de intaker op of zijn gesprek uiteindelijk een inschrijving oplevert (ongeacht wie sluit), de eigenaar op wat hij van de dossiers na show binnenhaalt of verliest. Belpogingen zijn teamvolume (GHL legt niet vast wie een taak aanmaakt).</p>`;
+}
+
+// ---- 📅 dag ----
+let dagSel=null, dagOpen=new Set(), dagUur=null;
+function evDisp(e){
+  const t=e.event_type;
+  if(t==="task.signal") return {ico:"📞", lab:"taak: "+(e.task_title||"(zonder titel)"), cat:"set"};
+  if(t==="appointment.signal") return {ico:"📅", lab:"afspraak geboekt/gewijzigd", cat:"set"};
+  if(t==="status_change.signal") return e.status==="lost"? {ico:"❌", lab:"verloren"+(e.lost_reason?" · "+e.lost_reason:"")+(e.stage_name?" (in "+e.stage_name+")":""), cat:(e.stage_name||"").toLowerCase()==="leads"?"set":"close"} : {ico:"·", lab:"status → "+(e.status||"?"), cat:"close"};
+  const s=(e.stage_name||"").toLowerCase();
+  if(s.includes("agreement signed")) return {ico:"✍️", lab:"ingeschreven", cat:"close"};
+  if(s.includes("agreement")) return {ico:"📤", lab:"agreement verstuurd", cat:"close"};
+  if(s.includes("motivation")) return {ico:"📄", lab:"motivatiebrief binnen", cat:"close"};
+  if(s==="show") return {ico:"🪑", lab:"show", cat:"show"};
+  if(s.includes("no show")) return {ico:"👻", lab:"no-show", cat:"show"};
+  if(s.includes("intake gepland")) return {ico:"📅", lab:"intake gepland", cat:"set"};
+  if(s==="leads") return {ico:"↩️", lab:"terug naar Leads", cat:"set"};
+  return {ico:"·", lab:"→ "+(e.stage_name||t), cat:"set"};
+}
+function dagStap(n){ dagGa(dagSel+n); }
+function dagGa(d){ dagSel=Math.min(TODAY,d); dagUur=null; drawDag(); }
+function dagToggle(k){ dagOpen.has(k)?dagOpen.delete(k):dagOpen.add(k); dagUur=null; drawDag(); }
+function dagPikUur(k,u){ dagUur=(dagUur&&dagUur.rep===k&&dagUur.uur===u)?null:{rep:k,uur:u}; drawDag(); }
+function drawDag(){
+  const dw=document.getElementById("dagwrap");
+  if(dagSel===null||dagSel>TODAY) dagSel=TODAY;
+  const wd=d2s(dagSel).toLocaleDateString("nl-NL",{weekday:"long"});
+  const evts=EV.filter(e=>e.dag===dagSel).map(e=>Object.assign({},e,{d:evDisp(e)}));
+  const crm=new Map(); const add=(rep,key,x)=>{ rep=rep||"(zonder rep)"; if(!crm.has(rep)) crm.set(rep,{gepland:[],agenda:[],show:[],verloren:[],sign:[]}); crm.get(rep)[key].push(x); };
+  for(const l of L){ if(l.stage_position!==0&&l.pd===dagSel) add(l.setter,"gepland",l); if(l.id_===dagSel){ add(l.intaker,"agenda",l); if(l.is_show) add(l.intaker,"show",l);} if(l.lost&&l.scd===dagSel) add(l.owner,"verloren",l); if(l.is_signed&&l.stgd===dagSel) add(l.owner,"sign",l); }
+  const per=new Map(); for(const e of evts){ const k=e.rep||"(zonder rep)"; if(!per.has(k)) per.set(k,[]); per.get(k).push(e); }
+  const keys=[...new Set([...per.keys(),...crm.keys()])];
+  const w=k=>(per.get(k)||[]).length+(crm.has(k)?Object.values(crm.get(k)).reduce((s,a)=>s+a.length,0):0);
+  keys.sort((a,b)=>w(b)-w(a));
+  const nieuw=L.filter(l=>l.cd===dagSel).length, apts=AP.filter(a=>a.sd===dagSel);
+  let h=`<div class="dgkies"><button onclick="dagStap(-1)">‹</button><span class="dgdag">${wd} ${fmtY(dagSel)}</span><button onclick="dagStap(1)" ${dagSel>=TODAY?"disabled":""}>›</button><span class="dgvand" onclick="dagGa(TODAY)">vandaag</span>
+    <span style="font-size:11.5px;color:var(--mut)">· ✨ ${nieuw} nieuwe leads · ${apts.length} intakes op de agenda (${apts.filter(a=>a.is_show).length} show, ${apts.filter(a=>a.is_noshow).length} no-show, ${apts.filter(a=>a.is_cancelled).length} geannuleerd) · ${evts.length} live-events met tijd</span></div>`;
+  if(!keys.length){ h+=`<div class="dgleeg">Geen sales-activiteit gevonden op deze dag${nieuw?` (wel ${nieuw} nieuwe leads binnengekomen)`:""}.</div>`; }
+  else for(const k of keys){
+    const list=per.get(k)||[], c=crm.get(k), color=RCOL[k]||"#8a94a8", ini=(k||"?").split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase(), open=dagOpen.has(k);
+    const nS=list.filter(e=>e.d.cat==="set").length, nH=list.filter(e=>e.d.cat==="show").length, nC=list.length-nS-nH, tot=list.length, p=x=>tot?Math.round(x/tot*100):0;
+    h+=`<div class="dgcard"><div class="dghead" onclick="dagToggle(${JSON.stringify(k).replace(/"/g,"&quot;")})"><div class="ava" style="background:${color}">${esc(ini)}</div><b>${esc(k)}</b>`;
+    h+= tot? `<span class="dgsum">${tot} live-${tot===1?"event":"events"} · ${p(nS)}% set / ${p(nH)}% show / ${p(nC)}% close</span><div class="dgbalk"><i style="width:${p(nS)}%;background:var(--dgset)"></i><i style="width:${p(nH)}%;background:var(--dgshow)"></i><i style="width:${p(nC)}%;background:var(--dgclose)"></i></div><span class="dgcaret">${open?"▲ uren dicht":"▼ uren tonen"}</span>` : `<span class="dgsum">geen live-events met tijdstip — wel dagcijfers hieronder</span>`;
+    h+=`</div>`;
+    if(c){ const defs=[["gepland","📅","ingepland (als setter)"],["agenda","🪑","intakes gevoerd"],["show","✅","shows"],["verloren","❌","verloren"],["sign","✍️","ingeschreven"]];
+      const chips=defs.filter(d=>c[d[0]].length).map(d=>`<span class="dgchip">${d[1]} ${c[d[0]].length} ${d[2]}</span>`).join("");
+      if(chips) h+=`<div class="dgcrm"><div class="dgcrmkop">📊 Dagcijfers uit het CRM</div>${chips}</div>`; }
+    if(open&&tot){
+      const uren={}; for(const e of list){ const u=+String(e.occurred_time||"00").slice(0,2); (uren[u]=uren[u]||[]).push(e); }
+      h+=`<div class="dguren">`;
+      for(const u of Object.keys(uren).map(Number).sort((a,b)=>a-b)){
+        const le=uren[u].slice().sort((a,b)=>a.occurred_at<b.occurred_at?-1:1);
+        const blok=(cat,cls)=>{ const els=le.filter(e=>e.d.cat===cat); if(!els.length) return ""; const agg=new Map(); for(const e of els) agg.set(e.d.ico,(agg.get(e.d.ico)||0)+1); return `<div class="dgblok ${cls}"><span class="lbl">${cat.toUpperCase()}</span>${[...agg.entries()].map(([ic,n])=>ic==="❌"?`<span class="rood">${ic} ${n}</span>`:`${ic} ${n}`).join(" · ")}</div>`; };
+        const selu=dagUur&&dagUur.rep===k&&dagUur.uur===u;
+        h+=`<div class="dguur${selu?" sel":""}" onclick="dagPikUur(${JSON.stringify(k).replace(/"/g,"&quot;")},${u})"><div class="dgu">${String(u).padStart(2,"0")}:00</div><div>${blok("set","dgb-set")}${blok("show","dgb-show")}${blok("close","dgb-close")}</div></div>`;
+        if(selu){ h+=`<div class="dgdet"><table><tr><th style="width:52px">Tijd</th><th style="width:76px">Cat.</th><th>Wat</th><th>Lead</th></tr>`+le.map(e=>{ const l=L.find(x=>x.lead_id===e.entity_id||x.contact_id===e.contact_id); return `<tr><td>${e.occurred_time}</td><td><span class="dgtag dg-${e.d.cat}">${e.d.cat.toUpperCase()}</span></td><td>${e.d.ico} ${esc(e.d.lab)}</td><td>${ghl(e.contact_id||(l&&l.contact_id), l?l.name:"(lead)")}</td></tr>`; }).join("")+`</table></div>`; }
+      }
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  }
+  h+=`<p class="note">Live-events komen realtime binnen uit GHL (taken, fasewissels, verloren/gewonnen, afspraken) sinds 18 augustus 2026; de dagcijfers komen uit de nachtelijke sync. SET = Leads-fase (bellen, inplannen, verliezen), SHOW = intake gepland / no-show, CLOSE = vanaf show. Bij een fasewissel staat de eigenaar van de deal op dat moment; belpogingen zijn teamvolume.</p>`;
+  dw.innerHTML=h;
+}
+
+// ---- datumkiezer (ongewijzigd t.o.v. v1) ----
+let dpView, dpStart=null, dpEnd=null, dpH=null;
+function dpToggle(){ const p=document.getElementById("dpPop"); if(p.classList.contains("open")){p.classList.remove("open");return;} dpStart=null; dpEnd=null; dpH=null; dpView=new Date(d2s(A).getFullYear(),d2s(A).getMonth(),1); dpDraw(); p.classList.add("open"); }
+function dpDraw(){
+  const host=document.getElementById("dpMonths"); host.innerHTML="";
+  const picking = dpStart!==null && dpEnd===null;
+  for(let k=0;k<2;k++){
+    const m=new Date(dpView.getFullYear(),dpView.getMonth()+k,1);
+    const div=document.createElement("div"); div.className="dp-m";
+    let h=`<div class="dp-mh">${k===0?'<button class="dp-nav" onclick="dpNav(-1)">‹</button>':"<span></span>"}<b>${MNDF[m.getMonth()]} ${m.getFullYear()}</b>${k===1?'<button class="dp-nav" onclick="dpNav(1)">›</button>':"<span></span>"}</div><div class="dp-grid">`;
+    for(const d of ["ma","di","wo","do","vr","za","zo"]) h+=`<span class="dp-dow">${d}</span>`;
+    const first=(m.getDay()+6)%7, days=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
+    for(let i=0;i<first;i++) h+="<span></span>";
+    for(let dd=1;dd<=days;dd++){
+      const dv=s2d(new Date(m.getFullYear(),m.getMonth(),dd)); let cls="dp-d";
+      if(picking){ const hv = dpH!==null? dpH : dpStart; const s=Math.min(dpStart,hv), e=Math.max(dpStart,hv); if(dv===dpStart||dv===hv) cls+=" cap"; else if(dv>s&&dv<e) cls+=" prev"; }
+      else{ const s=dpStart!==null?dpStart:A, e=dpEnd!==null?dpEnd:(dpStart!==null?dpStart:B); if(dv===s||dv===e) cls+=" cap"; else if(dv>Math.min(s,e)&&dv<Math.max(s,e)) cls+=" inR"; }
+      h+=`<button class="${cls}" onclick="dpPick(${dv})" onmouseenter="dpHov(${dv})">${dd}</button>`;
+    }
+    div.innerHTML=h+"</div>"; host.appendChild(div);
+  }
+  document.getElementById("dpHint").innerHTML = dpStart===null ? "Klik een <b>startdatum</b>, klik daarna een <b>einddatum</b>" : `Start: <b>${fmtY(dpStart)}</b> — klik nu de <b>einddatum</b>`;
+  const pr=document.getElementById("dpPresets"); pr.innerHTML="";
+  dpPresetList().forEach(p=>{ const c=document.createElement("div"); c.className="chip"; c.textContent=p[0]; c.onclick=()=>{ setRange(p[1],p[2]); dpClose(); }; pr.appendChild(c); });
+}
+function dpNav(k){ dpView.setMonth(dpView.getMonth()+k); dpDraw(); }
+function dpHov(dv){ if(dpStart!==null && dpEnd===null && dpH!==dv){ dpH=dv; dpDraw(); } }
+function dpPick(dv){ if(dpStart===null||dpEnd!==null){ dpStart=dv; dpEnd=null; dpH=null; dpDraw(); return; } if(dv<dpStart){ dpStart=dv; dpH=null; dpDraw(); return; } dpEnd=dv; setRange(dpStart,dpEnd); dpClose(); }
+function dpClose(){ document.getElementById("dpPop").classList.remove("open"); }
+document.addEventListener("click",e=>{ const inDp = e.composedPath().some(n=>n.nodeType===1 && n.classList && n.classList.contains("dp")); if(!inDp) dpClose(); });
+function dpPresetList(){
+  const t=d2s(NOW);
+  const som=s2d(new Date(t.getFullYear(),t.getMonth(),1)), somV=s2d(new Date(t.getFullYear(),t.getMonth()-1,1)), eomV=som-1, jaar=s2d(new Date(t.getFullYear(),0,1)), drie=s2d(new Date(t.getFullYear(),t.getMonth()-3,1));
+  const dow=(t.getDay()+6)%7, week=NOW-dow;
+  return [["Vandaag",NOW,NOW],["Deze week",week,NOW],["Vorige week",week-7,week-1],["Deze maand",som,NOW],["Vorige maand",somV,eomV],["Laatste 30 dagen",NOW-29,NOW],["Laatste 3 maanden",drie,NOW],["Dit jaar",jaar,NOW]];
+}
+
+// ---- render ----
+function drawNote(){
+  document.getElementById("note").innerHTML=`Groot getal naast de naam = leads afgehandeld (gepland + verloren in de Leads-fase). Elke rij heeft een eigen rol en noemer, dus niets telt dubbel: <b>Plan rate</b> (setter) = intakes gepland ÷ afgehandeld · <b>Show rate</b> (setter) = shows ÷ intakes die deze setter inplande, geteld op intakedatum · <b>Sign rate</b> (intaker) = ingeschreven ÷ shows in de agenda van deze intaker · <b>Close rate</b> (eigenaar) = ingeschreven ÷ (ingeschreven + verloren) van de dossiers na show die deze persoon bezit · <b>Pay rate</b> (eigenaar) = betaald ÷ ingeschreven. Show = fase Show of verder, of het Show-veld; Ingeschreven = Agreement Signed; Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")} of het ✅-vinkje. Setter = het setterveld op het contact, anders op de deal; intaker = in wiens agenda de intake stond (uit GHL), anders de eigenaar. Klik op een blok voor de namen; sorteren = kolomkop, filteren = ⏷. Namen linken naar GHL. Alle definities staan in <code>dpac.definitions</code> en de views — één plek, met terugwerkende kracht aanpasbaar.`;
+}
+function render(){
+  document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
+  if(tab.startsWith("p") && !sel){ sel={repKey:tab.slice(1), phase:"plan"}; resetDetailState(); }
+  drawTabs(); drawKpis(); drawCols(); drawDetail(); drawNote();
+}
+setTimeout(()=>{ const g=document.getElementById("gcode"); if(g && document.getElementById("gate").style.display!=="none") g.focus(); },50);
+try{ const c=sessionStorage.dpacSalesCode; if(c) gTry(c, true); else if(location.search.indexOf("local=1")>=0) gTry("", true); }catch(e){}
+</script>
+</body>
+</html>
