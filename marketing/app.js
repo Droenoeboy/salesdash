@@ -311,7 +311,7 @@ function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dfCol=n
 function drawTabs(){
   const el=document.getElementById("tabs"); el.innerHTML="";
   [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","🧭 Wat moet ik veranderen"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
-  const mb=document.getElementById("modebar"); mb.innerHTML=`<div class="modesw" title="Periode: leads op leaddatum, inschrijvingen op tekendatum (advies: zo zie je snel wat een campagne oplevert). Cohort: alles over de leads die in de periode binnenkwamen. Gebeurd: wat er in de periode gebeurde (gepland/intake/show/teken op hun eigen datum).">${[["periode","Periode"],["cohort","Cohort"],["gebeurd","Gebeurd"]].map(x=>`<span class="${MODE===x[0]?"on":""}" onclick="MODE='${x[0]}';detail=null;render()">${x[1]}</span>`).join("")}</div>`;
+  const mb=document.getElementById("modebar"); mb.innerHTML="";   // één telling: cohort — leads (en alles wat eruit voortkomt) tellen bij de periode waarin de lead binnenkwam
 }
 
 // ---- boomtabel ----
@@ -478,7 +478,7 @@ function drawDetailInner(){
   const byCamp=new Map(); for(const l of rows){ const k=(l.camp?l.camp.name:PN(l.platform)); byCamp.set(k,(byCamp.get(k)||0)+1); }
   const topC=[...byCamp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
   el.style.display="block";
-  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}${rows.length!==rowsAll.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${MODE} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${fpanel}
+  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}${rows.length!==rowsAll.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${fpanel}
     <div class="dbody"><div class="two dtwo"><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span>${c.fv?`<span class="fbtn${dFilt[i]?" on":""}" title="filter op ${c.t} (met aantallen)" onclick="dfCol=dfCol===${i}?null:${i};drawDetail()">⏷</span>`:""}</th>`).join("")+`</tr>`+sorted.slice(0,300).map(l=>`<tr>`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>300?`<div class="more">eerste 300 van ${sorted.length}</div>`:""}</div>
     <div style="align-self:start;display:flex;flex-direction:column;gap:12px"><div class="cmp"><h3>Uit welke campagnes komen ze</h3>${topC.length?topC.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/topC[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div>
     <div class="cmp"><h3>Welke advertenties komen het vaakst voor</h3>${top.length?top.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/top[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div></div></div></div>`;
@@ -657,13 +657,14 @@ function drawData(){
   const months=new Map(); for(const l of L){ if(l.cd<0) continue; const k=d2s(l.cd).getFullYear()+"-"+String(d2s(l.cd).getMonth()+1).padStart(2,"0"); if(!months.has(k)) months.set(k,[]); months.get(k).push(l); }
   const cQ=D.counts||{}; const noFormQ=L.filter(l=>l.is_signed&&l.signed_via!=="formulier");
   const unmQ=FORMS.filter(f=>!f.contact_id);
-  let h=`<div class="cmp" style="margin-bottom:12px"><h3>🔧 Actiepunten (belangrijkste taken)</h3><table>
-    <tr><td>1</td><td><b>Meta:</b> de ad "Video 1 | hook 4 | hobby je werk" stuurt nog statische UTM's (utm_campaign=paid_social, geen id's) — zet de URL-parameters van die ad op dynamisch (campaign_id/adset_id/ad_id). De rest van Meta staat sinds ~7 aug goed.</td></tr>
-    <tr><td>2</td><td><b>TikTok:</b> stuurt helemaal geen campagne-/ad-id's mee — UTM-template instellen in TikTok Ads.</td></tr>
-    <tr><td>3</td><td><b>Google:</b> ✅ staat goed (Search met ad-id; PMax kan technisch geen ad-id meesturen).</td></tr>
-    <tr><td>4</td><td><b>Inschrijfformulieren realtime</b> naar Supabase via webhook (nu 1× per nacht) — voorkomt "zonder formulier"-meldingen op de dag zelf.</td></tr>
-    <tr><td>5</td><td><b>2 inschrijvingen van 19 aug zonder formulier in GHL</b> (zie blok hieronder) — nakijken of het formulier onder een ander contact hangt.</td></tr>
-    <tr><td>6</td><td><b>gclid/fbclid bewaren</b> voor offline-conversies terugsturen naar Google/Meta (volgende stap).</td></tr>
+  let h=`<div class="cmp" style="margin-bottom:12px"><h3>🔧 Actiepunten (to-dolijst)</h3><table class="todos">
+    <tr><td><span class="tdo">TO DO</span></td><td><b>Media buyer</b></td><td><b>Meta:</b> de ad "Video 1 | hook 4 | hobby je werk" op dynamische URL-parameters zetten — exacte copy-paste-template staat in de UTM-checklist. Rest van Meta staat sinds ~7 aug goed.</td></tr>
+    <tr><td><span class="tdo">TO DO</span></td><td><b>Media buyer</b></td><td><b>TikTok:</b> álle lopende ads sturen geen campagne-/ad-id's mee — UTM-template instellen (staat in de checklist, met macro's).</td></tr>
+    <tr><td><span class="tdo">TO DO</span></td><td><b>Media buyer</b></td><td><b>Vaste regel:</b> elke nieuwe advertentie éérst URL-parameters checken + testlead doen (2 min, stappen in de checklist), dán pas live.</td></tr>
+    <tr><td><span class="tok">OK</span></td><td><b>—</b></td><td><b>Google:</b> staat goed (Search met ad-id; PMax kan technisch geen ad-id meesturen). Alleen bewaken bij nieuwe campagnes.</td></tr>
+    <tr><td><span class="tdo">TO DO</span></td><td><b>Abel</b></td><td><b>2 inschrijvingen van 19 aug zonder formulier</b> in GHL nakijken (zie blok hieronder) — hangt het formulier onder een ander contact?</td></tr>
+    <tr><td><span class="tdo">TO DO</span></td><td><b>Claude</b></td><td><b>Inschrijfformulieren realtime</b> naar Supabase via webhook (nu 1× per nacht).</td></tr>
+    <tr><td><span class="tdo">TO DO</span></td><td><b>Claude</b></td><td><b>gclid/fbclid bewaren</b> voor offline-conversies terugsturen naar Google/Meta.</td></tr>
   </table></div><div class="two"><div class="cmp ${noFormQ.length?"":""}"><h3>⚠️ Agreement Signed zonder inschrijfformulier · ${noFormQ.length}</h3>${noFormQ.length?`<table><tr><th>Naam</th><th>Fasewissel</th><th>Eigenaar</th></tr>${noFormQ.map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${l.sd>=0?fmt(l.sd):"—"}</td><td>${esc(l.owner||"—")}</td></tr>`).join("")}</table>`:`<div class="empty">Alles gekoppeld. 👌</div>`}</div>
     <div class="cmp"><h3>⚠️ Formulieren zonder contact-koppeling · ${unmQ.length}</h3>${unmQ.length?`<table><tr><th>Datum</th><th>Naam</th><th>Product</th></tr>${unmQ.map(f=>`<tr><td>${fmt(f.d)}</td><td>${esc(f.name)}</td><td>${esc(f.product)}</td></tr>`).join("")}</table>`:`<div class="empty">Alle formulieren zijn aan een contact gekoppeld.</div>`}</div></div>`;
   h+=`<div class="cmp" style="margin-top:12px"><h3>Attributiedekking per maand (leads op binnenkomst)</h3><table><tr><th>Maand</th><th>Leads</th><th>Hard (UTM/ad-id)</th><th>Zacht (GHL klik)</th><th>Afgeleid</th><th>Niet betaald</th><th>Onbekend</th><th>Met campagne</th><th>Met advertentie</th></tr>`;
