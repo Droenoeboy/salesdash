@@ -175,6 +175,7 @@ const eur0=v=>v==null?"—":"€ "+Math.round(v).toLocaleString("nl-NL");
 const eur2=v=>v==null?"—":"€ "+v.toLocaleString("nl-NL",{minimumFractionDigits:0,maximumFractionDigits:0});
 const r1=v=>(Math.round(v*10)/10+"").replace(".",",");
 
+function setRange(a,b){ A=a; B=b; detail=null; render(); }
 function initApp(){
   DEFS=D.definitions||{};
   CAMPS=new Map(); for(const r of D.campaigns||[]){ const [p,id,name,type,status,party,first,last,spend]=r; CAMPS.set(ck(p,id),{platform:p,id,name:name||"(naamloos)",type,status,party:!!party,first:dOf(first),last:dOf(last),spendTotal:+spend||0}); }
