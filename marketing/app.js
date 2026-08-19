@@ -580,7 +580,43 @@ function drawSign(){
   for(const l of rows){ const key=l.adObj?("a|"+(l.adObj.adName||l.adObj.adId)+"|"+(l.camp?l.camp.name:"")):("c|"+(l.camp?l.camp.name:PN(l.platform))+"|");
     if(!byAd.has(key)) byAd.set(key,{ad:l.adObj?(l.adObj.adName||l.adObj.adId):null,camp:l.camp?l.camp.name:(l.platform==="niet_betaald"?"Niet betaald (organisch/direct)":PN(l.platform)),platform:l.platform,n:0,val:0});
     const t=byAd.get(key); t.n++; t.val+=sgMode==="sign"?l.value:0; }
-/*__V14SPLIT__*/
+  const tiles=[...byAd.values()].sort((a,b)=>b.n-a.n);
+  h+=`<div class="cmp"><h3>Uit welke advertentie komen ze</h3><div class="adtiles">`+(tiles.length?tiles.map(t=>`<div class="adtile"><span class="cnt">${t.n}</span><div class="tx"><b title="${esc(t.ad||t.camp)}">${esc(t.ad||"(geen advertentie bekend)")}</b><small><span class="dot" style="background:${PC(t.platform)}"></span>${esc(t.camp)}${sgMode==="sign"&&t.val?" · "+eur0(t.val):""}</small></div></div>`).join(""):`<div class="empty">Geen ${MLAB.toLowerCase()} in deze periode.</div>`)+`</div><p class="note" style="margin:10px 0 0">Grote cijfers = aantal ${MLAB.toLowerCase()} uit die advertentie — komen er 3 uit dezelfde ad, dan zie je dat in één oogopslag.</p></div>`;
+  // goedkoopste campagnes
+  const cheap=camps.filter(g=>g.cpk!=null).sort((a,b)=>a.cpk-b.cpk);
+  h+=`<div class="cmp" style="margin-top:12px"><h3>💶 Goedkoopste campagnes per ${RES1}</h3>`+(cheap.length?cheap.slice(0,10).map((g,i)=>`<div class="lr"><span title="${esc(g.name)}">${esc(g.name)}</span><i><b style="width:${Math.max(4,Math.round(cheap[0].cpk/g.cpk*100))}%"></b></i><em style="width:auto;white-space:nowrap">${eur0(g.cpk)} · ${g.n}</em></div>`).join(""):`<div class="empty">Geen campagnes met kosten én ${MLAB.toLowerCase()} in deze periode.</div>`)+`<p class="note" style="margin:8px 0 0">Kosten per ${RES1} = kosten van de campagne in de periode ÷ ${MLAB.toLowerCase()} uit die campagne. Langere balk = goedkoper.</p></div>`;
+  // per campagne (sorteerbaar)
+  const ccols=[
+    {k:"name",t:"Campagne",v:g=>g.name.toLowerCase(),f:g=>`<span class="dot" style="background:${PC(g.platform)}"></span><span class="campfull"><b>${esc(g.name)}</b></span>${g.split?`<br><small style="margin-left:14px">${g.split}</small>`:""}`,cls:"nmw"},
+    {k:"sg",t:MLAB,v:g=>g.n,f:g=>`<b>${g.n}</b>`},
+    ...(sgMode==="sign"?[{k:"val",t:"Waarde",v:g=>g.val,f:g=>eur0(g.val)}]:[]),
+    {k:"spend",t:"Kosten (periode)",v:g=>g.spend,f:g=>g.cid?eur0(g.spend):"—"},
+    {k:"cpk",t:"Kosten / "+RES1,v:g=>g.cpk,f:g=>g.cpk==null?"—":eur0(g.cpk),cf:g=>sgMode!=="sign"||g.cpk==null?"":(g.cpk<=MAXCPK()*0.85?"good":g.cpk>MAXCPK()*1.25?"bad":"warn")},
+    {k:"cyc",t:"Dagen tot "+(sgMode==="sign"?"tekenen":sgMode==="shows"?"show":"inplannen"),v:g=>g.cyc,f:g=>g.cyc==null?"—":Math.round(g.cyc)+" d",tip:"gemiddeld aantal dagen vanaf binnenkomst van de lead"},
+    {k:"own",t:"Eigenaar(s)",v:g=>g.own.toLowerCase(),f:g=>esc(g.own),cls:"nmw2"}];
+  const cs=sgcSort; const ccol=ccols.find(c=>c.k===cs.k)||ccols[1];
+  camps.sort((x,y)=>{ const a=ccol.v(x),b=ccol.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*cs.d; });
+  h+=`<div class="cmp" style="margin-top:12px"><h3>Per campagne</h3><div style="overflow:auto"><table><tr>`+ccols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="sgcSort.k==='${c.k}'?sgcSort.d=-sgcSort.d:(sgcSort={k:'${c.k}',d:-1});drawSign()">${c.t} <span class="arr">${cs.k===c.k?(cs.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+(camps.length?camps.map(g=>`<tr>`+ccols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(g):""}">${c.f(g)}</td>`).join("")+`</tr>`).join(""):`<tr><td colspan="${ccols.length}" class="empty">Geen ${MLAB.toLowerCase()} in deze periode.</td></tr>`)+`</table></div></div>`;
+  // individuele lijst
+  const cols=[
+    {t:sgMode==="sign"?"Tekendatum":sgMode==="shows"?"Intakedatum":"Ingepland op",v:l=>md(l),k:l=>fmt(md(l))+(sgMode==="sign"&&l.signed_via==="fasewissel"?" <small title='geen formulier; datum = fasewissel'>⚠︎</small>":"")},
+    {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
+    ...(sgMode==="sign"?[{t:"Waarde",v:l=>l.value,k:l=>eur0(l.value)}]:[]),
+    {t:"Kosten deze "+RES1,v:l=>{const g=cg.get(l.ckey); return g&&g.cpk!=null?g.cpk:null;},k:l=>{const g=cg.get(l.ckey); return g&&g.cpk!=null?`<span title="kosten per ${RES1} van deze campagne in de gekozen periode">${eur0(g.cpk)}</span>`:"—";}},
+    {t:"Eigenaar",v:l=>l.owner||"",k:l=>`<b>${esc(l.owner||"—")}</b>`},
+    {t:"Dagen sinds lead",v:l=>l.cd>=0?md(l)-l.cd:null,k:l=>l.cd>=0?`${md(l)-l.cd} d <small>${fmt(l.cd)}</small>`:"—"},
+    {t:"Platform",v:l=>sgKey(l),k:l=>{const kk=sgKey(l); return `<span class="dot" style="background:${SGP[kk][1]}"></span>${esc(SGP[kk][0])}`;}},
+    {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<span class="campfull"><small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small></span>`,cls:"nmw"},
+    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`},
+    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||"—")}</small>`},
+    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—")},
+    ...(sgMode==="sign"?[{t:"All Star",v:l=>l.asm?1:0,k:l=>l.asm?`⭐️ ${l.asd>=0?fmt(l.asd):""}`:"—"}]:[])];
+  const s=sgSort; const sc=cols[Math.min(s.c,cols.length-1)];
+  const sorted=[...rows].sort((x,y)=>{ const a=sc.v(x),b=sc.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
+  h+=`<div class="cmp" style="margin-top:12px"><h3>Alle ${MLAB.toLowerCase()}${sgPlat?` · ${esc(SGP[sgPlat][0])}`:""}</h3><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="sgSort.c===${i}?sgSort.d=-sgSort.d:(sgSort={c:${i},d:1});drawSign()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.map(l=>`<tr>`+cols.map(c=>`<td class="${c.cls||""}">${c.k(l)}</td>`).join("")+`</tr>`).join("")+`${sorted.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen ${MLAB.toLowerCase()} in deze periode.</td></tr>`}</table></div></div>`;
+  // All Star apart
+  if(sgMode==="sign") h+=`<div class="cmp" id="asmblok" style="margin-top:12px"><h3>⭐️ All Star Management (upsell) · ${asm.length} <span class="chsub">apart gehouden — telt niet mee in de PA-cijfers hierboven</span></h3>${asm.length?`<table><tr><th>Datum</th><th>Naam</th><th>Variant</th><th>Waarde</th><th>Betaaloptie</th></tr>${asm.map(f=>`<tr><td>${fmt(f.d)}</td><td>${ghl(f.contact_id,f.name)}</td><td>${esc(f.variant||"—")}</td><td>${eur0(f.value)}</td><td><small>${esc(f.pay||"—")}</small></td></tr>`).join("")}</table>`:`<div class="empty">Geen All Star-inschrijvingen in deze periode.</div>`}</div>`;
+  h+=`<p class="note">${sgMode==="sign"?`Tekendatum = datum van het inschrijfformulier (GHL). Waarde uit de betaaloptie: € 6.800 (termijnen of factuur) · € 6.300 (direct afrekenen — € 500 korting, klopt dus) · € 6.595 (€ 205 korting). ⚠︎ = Agreement Signed zonder gevonden formulier; datum = fasewissel.`:sgMode==="shows"?`Shows op intakedatum in de periode — zo zie je op korte termijn welke advertentie mensen levert die ook echt komen opdagen.`:`Intakes gepland op inplandatum in de periode — de snelste indicator of een advertentie werkt.`} Facebook/Instagram-splitsing komt uit de plaatsing die GHL meekreeg; kosten zijn per campagne (Meta splitst kosten niet per plaatsing in onze data).</p>`;
   w.innerHTML=h;
 }
 
