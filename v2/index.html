@@ -117,6 +117,8 @@
   .blk.p,.outN.p{background:var(--plan-bg)} .blk.p .pct,.outN.p{color:var(--plan-tx)} .blk.p .bar{background:var(--plan)} .blk.p .lab{color:var(--plan-tx)}
   .blk.h,.outN.h{background:var(--show-bg)} .blk.h .pct,.outN.h{color:var(--show-tx)} .blk.h .bar{background:var(--show)} .blk.h .lab{color:var(--show-tx)}
   .blk.s,.outN.s{background:var(--sign-bg)} .blk.s .pct,.outN.s{color:var(--sign-tx)} .blk.s .bar{background:var(--sign)} .blk.s .lab{color:var(--sign-tx)}
+  .blk.i,.outN.i{background:#e6f3f4} .blk.i .pct,.outN.i{color:#0e7a86} .blk.i .bar{background:#0e9aa7} .blk.i .lab{color:#0e7a86}
+  html[data-theme="dark"] .blk.i,html[data-theme="dark"] .outN.i{background:#0f2b2e} html[data-theme="dark"] .blk.i .pct,html[data-theme="dark"] .outN.i,html[data-theme="dark"] .blk.i .lab{color:#5fd0da}
   .blk.c,.outN.c{background:var(--close-bg)} .blk.c .pct,.outN.c{color:var(--close-tx)} .blk.c .bar{background:var(--close)} .blk.c .lab{color:var(--close-tx)}
   .blk.b,.outN.b{background:var(--pay-bg)} .blk.b .pct,.outN.b{color:var(--pay-tx)} .blk.b .bar{background:var(--pay)} .blk.b .lab{color:var(--pay-tx)}
 
@@ -344,6 +346,15 @@
   .askpre{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center} .askpre .chip{font-size:12px}
   .askhead{display:flex;gap:10px;align-items:baseline;margin:4px 2px 10px;flex-wrap:wrap} .askhead b{font-size:15px} .askhead span{font-size:12px;color:var(--mut)}
   .advcard .cat{font-size:10.5px;color:var(--mut2);text-transform:uppercase;letter-spacing:.4px;margin-top:8px}
+  /* ---- persoonlijke pagina ---- */
+  .tab.persoon .caret{font-size:10px;opacity:.7;margin-left:2px}
+  .repgrid{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:12px;align-items:start}
+  .repgrid .cols .fcol{flex:1 1 auto}
+  .repside .two{margin-bottom:0}
+  .smallmult.two-col{grid-template-columns:1fr 1fr}
+  .lr{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line2)} .lr span{flex:0 0 46%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .lr i{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;display:block} .lr i b{display:block;height:100%;background:var(--close)} .lr em{font-style:normal;font-weight:700;width:24px;text-align:right}
+  .todo .td{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line2);font-size:12.5px} .todo .td b{font-size:18px;min-width:32px;color:var(--close-tx)} .todo .td span{flex:1} .todo .td a{color:var(--plan-tx);font-weight:700;text-decoration:none}
+  @media(max-width:1000px){.repgrid{grid-template-columns:1fr} .repgrid .cols{overflow:visible;margin:0;padding:0} .repgrid .fcol{flex:1 1 auto;width:100%}}
   /* ---- uitleg ---- */
   .uitleg{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 16px;font-size:12.5px;color:var(--txt)} .uitleg summary{cursor:pointer;font-weight:600;color:var(--mut);list-style:none} .uitleg summary::-webkit-details-marker{display:none} .uitleg[open] summary{margin-bottom:8px;color:var(--txt)}
   .ucols{display:grid;grid-template-columns:1fr 1fr;gap:16px} .uitleg h4{margin:6px 0 4px;font-size:13px} .uitleg p,.uitleg li{line-height:1.55;color:var(--txt);opacity:.9} .uitleg ul{padding-left:18px;margin:4px 0} .ufoot{color:var(--mut);font-size:11.5px;margin:10px 0 2px}
