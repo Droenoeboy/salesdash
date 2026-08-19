@@ -529,71 +529,58 @@ function drawAdvice(){
       +`<span class="advw">≈ ${eur0(ad.w)}/mnd op het spel</span><i class="chev${opn?" open":""}"></i>`
       +(opn?`<div class="advx"><p>${esc(ad.txt)}</p><div class="doen">${ad.months.length?`Geldt al ${ad.months.length} maand${ad.months.length===1?"":"en"} (${ad.months.map(m=>MND[d2s(m).getMonth()]).join(", ")})`:"Nieuw dit moment"}${ad.buiten?" · valt buiten de gekozen periode maar staat nog open":""}</div></div>`:"")
       +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Geen regels die vuren in deze periode (te weinig kosten of leads per campagne).</span></div>`)+`</div>`
-    +(list.length>12?`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="advAll=!advAll;drawAdvice()">${advAll?"Toon alleen de top 12":"Toon alle "+list.length+" adviezen"}</span></div>`:"");
+    +(shown.length>12?`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="advAll=!advAll;drawAdvice()">${advAll?"Toon alleen de top 12":"Toon alle "+shown.length+" adviezen"}</span></div>`:"");
   h+=`<p class="note">Regels (uit het marketingdocument, drempels in <code>dpac.definitions</code>): <b>opschalen</b> als kosten/klant &lt; 85% van ${eur0(MAXCPK())} en (≥ 2 klanten of ≥ € 800); <b>stoppen</b> als 0 shows, 0 klanten en &gt; € 400; <b>halveren</b> als wel shows maar 0 klanten en &gt; € 400; <b>terugschroeven</b> als kosten/klant &gt; 125% van het plafond. Gewicht = € per maand op het spel; adviezen die al meerdere maanden gelden stijgen (+25% per extra maand); adviezen uit het hele jaar die nu niet vuren tellen ×0,6. Per campagne/adset één advies (hoogste rang). Er wordt <b>niets automatisch gewijzigd</b> — jij voert uit. Status "doorgevoerd" bijhouden volgt in de volgende versie (tabel mkt_advies).</p>`;
   w.innerHTML=h;
 }
 
 // ---- inschrijvingen ----
-let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null;
+let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null, sgMode="sign", sgNF=false;
 const SGP={meta_fb:["Facebook","#1877f2"],meta_ig:["Instagram","#d62976"],meta_x:["Meta · plaatsing onbekend","#5856d6"],google:["Google","#1f6fd8"],tiktok:["TikTok","#0e9aa7"],niet_betaald:["Niet betaald (organisch/direct)","#8f845e"],onbekend:["Onbekend","#8e8e93"]};
 function sgKey(l){ if(l.platform!=="meta") return SGP[l.platform]?l.platform:"onbekend"; const p=(l.placement||"").toLowerCase(); if(p.indexOf("insta")>=0) return "meta_ig"; if(p.indexOf("facebook")>=0||/(^|[^a-z])fb([^a-z]|$)/.test(p)) return "meta_fb"; return "meta_x"; }
 function drawSign(){
   const w=document.getElementById("signwrap");
-  const all=L.filter(l=>l.is_signed&&l.sd>=A&&l.sd<=B&&(PARTY||!l.party));
+  // modus: inschrijvingen (tekendatum) · shows (intakedatum) · intakes gepland (inplandatum)
+  const md=l=> sgMode==="sign"?l.sd : sgMode==="shows"?l.id_ : l.pd;
+  const MLAB=sgMode==="sign"?"Inschrijvingen":sgMode==="shows"?"Shows":"Intakes gepland";
+  const RES1=sgMode==="sign"?"klant":sgMode==="shows"?"show":"geplande intake";
+  const all= sgMode==="sign" ? L.filter(l=>l.is_signed&&l.sd>=A&&l.sd<=B&&!l.party)
+       : sgMode==="shows" ? L.filter(l=>l.is_show&&l.id_>=A&&l.id_<=B&&!l.party)
+       : L.filter(l=>l.pd>=A&&l.pd<=B&&!l.party);
   const rows=sgPlat?all.filter(l=>sgKey(l)===sgPlat):all;
   const asm=FORMS.filter(f=>f.product==="ASM"&&f.d>=A&&f.d<=B);
   // per campagne aggregeren (over de gefilterde set)
   const cg=new Map();
   for(const l of rows){ const k=l.ckey||ck(l.platform,""); if(!cg.has(k)){ const c=l.camp; cg.set(k,{k,platform:l.platform,cid:(l.campaign_id||""),name:c?c.name:(l.platform==="niet_betaald"?"Niet betaald (organisch/direct)":l.platform==="onbekend"?"(bron onbekend)":"(campagne onbekend) · "+PN(l.platform)),ls:[]}); } cg.get(k).ls.push(l); }
-  for(const g of cg.values()){ g.n=g.ls.length; g.val=g.ls.reduce((s,l)=>s+l.value,0);
+  for(const g of cg.values()){ g.n=g.ls.length; g.val=sgMode==="sign"?g.ls.reduce((s,l)=>s+l.value,0):null;
     g.spend=g.cid?spendIn(A,B,r=>r.platform===g.platform&&(r.cid||"")===g.cid).spend:0; g.cpk=g.cid&&g.spend>0?g.spend/g.n:null;
-    const cyc=g.ls.filter(l=>l.cd>=0&&l.sd>=l.cd); g.cyc=cyc.length?cyc.reduce((s,l)=>s+(l.sd-l.cd),0)/cyc.length:null;
+    const cyc=g.ls.filter(l=>l.cd>=0&&md(l)>=l.cd); g.cyc=cyc.length?cyc.reduce((s,l)=>s+(md(l)-l.cd),0)/cyc.length:null;
     const ow=new Map(); g.ls.forEach(l=>{const o=l.owner||"—"; ow.set(o,(ow.get(o)||0)+1);}); g.own=[...ow.entries()].sort((a,b)=>b[1]-a[1]).map(([o,n2])=>o+(n2>1?" "+n2:"")).join(" · ");
     const fb=g.ls.filter(l=>sgKey(l)==="meta_fb").length, ig=g.ls.filter(l=>sgKey(l)==="meta_ig").length;
     g.split=g.platform==="meta"?[fb?"Facebook "+fb:"",ig?"Instagram "+ig:"",(g.n-fb-ig)?"plaatsing onbekend "+(g.n-fb-ig):""].filter(Boolean).join(" · "):""; }
   const camps=[...cg.values()];
-  // kolommen individuele lijst — eigenaar prominent, kosten per klant, sales-cycle
-  const cols=[
-    {t:"Tekendatum",v:l=>l.sd,k:l=>fmt(l.sd)+(l.signed_via==="fasewissel"?" <small title='geen formulier; datum = fasewissel'>⚠︎</small>":"")},
-    {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
-    {t:"Waarde",v:l=>l.value,k:l=>eur0(l.value)},
-    {t:"Kosten deze klant",v:l=>{const g=cg.get(l.ckey); return g&&g.cpk!=null?g.cpk:null;},k:l=>{const g=cg.get(l.ckey); return g&&g.cpk!=null?`<span title="kosten per klant van deze campagne in de gekozen periode">${eur0(g.cpk)}</span>`:"—";},tip:"kosten per klant van de campagne waar deze klant uit kwam (periode)"},
-    {t:"Eigenaar",v:l=>l.owner||"",k:l=>`<b>${esc(l.owner||"—")}</b>`},
-    {t:"Sales-cycle",v:l=>l.cd>=0?l.sd-l.cd:null,k:l=>l.cd>=0?`${l.sd-l.cd} d <small>${fmt(l.cd)}</small>`:"—",tip:"dagen van lead tot tekenen"},
-    {t:"Platform",v:l=>sgKey(l),k:l=>{const kk=sgKey(l); return `<span class="dot" style="background:${SGP[kk][1]}"></span>${esc(SGP[kk][0])}`;}},
-    {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<span class="campfull"><small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small></span>`,cls:"nmw"},
-    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`},
-    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||"—")}</small>`},
-    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—")},
-    {t:"All Star",v:l=>l.asm?1:0,k:l=>l.asm?`⭐️ ${l.asd>=0?fmt(l.asd):""}`:"—"}];
-  const s=sgSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
-  const cycL=rows.filter(l=>l.cd>=0&&l.sd>=l.cd); const cycAvg=cycL.length?Math.round(cycL.reduce((t,l)=>t+(l.sd-l.cd),0)/cycL.length):null;
-  const geenForm=rows.length-rows.filter(l=>l.signed_via==="formulier").length;
-  let h=`<div class="kpis ikp"><div class="kpi"><b>${rows.length}</b><span>Inschrijvingen PA (tekendatum in periode)</span></div><div class="kpi"><b>${eur0(rows.reduce((t,l)=>t+l.value,0))}</b><span>Waarde</span></div><div class="kpi"><b>${cycAvg==null?"—":cycAvg+" d"}</b><span>Gem. sales-cycle (lead → tekenen)</span></div><div class="kpi ${geenForm?"warnk":""}"><b>${geenForm}</b><span>Zonder formulier (fasewissel)</span></div><div class="kpi"><b>${asm.length}</b><span>All Star (apart — telt hier niet mee)</span></div></div>`;
+  // modus-knoppen
+  let h=`<div class="wonchips"><span class="lbl">Wat wil je zien:</span>`+[["sign","🧾 Inschrijvingen"],["shows","👀 Shows"],["gepland","🗓 Intakes gepland"]].map(x=>`<div class="wchip${sgMode===x[0]?" on":""}" onclick="sgMode='${x[0]}';sgNF=false;drawSign()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">${sgMode==="sign"?"":"snel zien of een advertentie op korte termijn werkt"}</span></div>`;
+  // KPI's van deze pagina
+  const cycL=rows.filter(l=>l.cd>=0&&md(l)>=l.cd); const cycAvg=cycL.length?Math.round(cycL.reduce((t,l)=>t+(md(l)-l.cd),0)/cycL.length):null;
+  const geenForm=sgMode==="sign"?rows.length-rows.filter(l=>l.signed_via==="formulier").length:0;
+  h+=`<div class="kpis ikp"><div class="kpi"><b>${rows.length}</b><span>${MLAB} in periode</span></div>`
+    +(sgMode==="sign"?`<div class="kpi"><b>${eur0(rows.reduce((t,l)=>t+l.value,0))}</b><span>Waarde</span></div>`:"")
+    +`<div class="kpi"><b>${cycAvg==null?"—":cycAvg+" d"}</b><span>Gem. van lead tot ${sgMode==="sign"?"tekenen":sgMode==="shows"?"show":"inplannen"}</span></div>`
+    +(sgMode==="sign"?`<div class="kpi kclk ${geenForm?"warnk":""}" onclick="sgNF=!sgNF;drawSign()" title="klik voor de namen"><b>${geenForm}</b><span>Zonder formulier (fasewissel) ⏷</span></div>`:"")
+    +(sgMode==="sign"?`<div class="kpi kclk" onclick="document.getElementById('asmblok').scrollIntoView({behavior:'smooth'})" title="klik om ernaartoe te springen"><b>${asm.length}</b><span>All Star (apart — telt hier niet mee)</span></div>`:"")+`</div>`;
+  // zonder-formulier detail
+  if(sgMode==="sign"&&sgNF){ const nf=rows.filter(l=>l.signed_via!=="formulier");
+    h+=`<div class="cmp" style="margin-bottom:12px"><h3>⚠︎ Ingeschreven zonder inschrijfformulier · ${nf.length}</h3>${nf.length?`<table><tr><th>Naam</th><th>Fasewissel naar Agreement Signed</th><th>Eigenaar</th><th>Setter</th></tr>${nf.map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${l.sd>=0?fmt(l.sd):"—"}</td><td>${esc(l.owner||"—")}</td><td>${esc(l.setter||"—")}</td></tr>`).join("")}</table><p class="note" style="margin:8px 0 0">Voor deze mensen staat géén PA-inschrijfformulier in GHL gekoppeld (ook niet via e-mail/telefoon). Check in GHL of het formulier onder een ander contact hangt, of dat de fase handmatig is versleept.</p>`:`<div class="empty">Alles heeft een formulier. 👌</div>`}</div>`; }
   // platform-chips met FB/IG-splitsing
   const pp=new Map(); all.forEach(l=>{const k=sgKey(l); if(!pp.has(k)) pp.set(k,{n:0,v:0}); const o=pp.get(k); o.n++; o.v+=l.value;});
-  h+=`<div class="wonchips"><span class="lbl">Waar komen ze vandaan:</span><div class="wchip sm${sgPlat==null?" on":""}" onclick="sgPlat=null;drawSign()">Alles <span class="n">${all.length}</span></div>`+[...pp.entries()].sort((a,b)=>b[1].n-a[1].n).map(([k,o])=>`<div class="wchip sm${sgPlat===k?" on":""}" onclick="sgPlat=${jq(k)};drawSign()" title="${eur0(o.v)} waarde"><span class="dot" style="background:${SGP[k][1]}"></span>${esc(SGP[k][0])} <span class="n">${o.n}</span></div>`).join("")+`</div>`;
-  // goedkoopste campagnes
-  const cheap=camps.filter(g=>g.cpk!=null).sort((a,b)=>a.cpk-b.cpk);
-  h+=`<div class="cmp"><h3>💶 Goedkoopste campagnes om een klant binnen te halen</h3>`+(cheap.length?cheap.slice(0,10).map((g,i)=>`<div class="lr"><span title="${esc(g.name)}">${i<3?["🥇","🥈","🥉"][i]+" ":""}${esc(g.name)}</span><i><b style="width:${Math.max(4,Math.round(cheap[0].cpk/g.cpk*100))}%"></b></i><em style="width:auto;white-space:nowrap">${eur0(g.cpk)} · ${g.n} klant${g.n===1?"":"en"}</em></div>`).join(""):`<div class="empty">Geen campagnes met kosten én inschrijvingen in deze periode.</div>`)+`<p class="note" style="margin:8px 0 0">Kosten per klant = kosten van de campagne in de periode ÷ inschrijvingen uit die campagne (tekendatum in de periode). Langere balk = goedkoper.</p></div>`;
-  // per campagne (sorteerbaar)
-  const ccols=[
-    {k:"name",t:"Campagne",v:g=>g.name.toLowerCase(),f:g=>`<span class="dot" style="background:${PC(g.platform)}"></span><span class="campfull"><b>${esc(g.name)}</b></span>${g.split?`<br><small style="margin-left:14px">${g.split}</small>`:""}`,cls:"nmw"},
-    {k:"sg",t:"Inschrijvingen",v:g=>g.n,f:g=>`<b>${g.n}</b>`},
-    {k:"val",t:"Waarde",v:g=>g.val,f:g=>eur0(g.val)},
-    {k:"spend",t:"Kosten (periode)",v:g=>g.spend,f:g=>g.cid?eur0(g.spend):"—"},
-    {k:"cpk",t:"Kosten / klant",v:g=>g.cpk,f:g=>g.cpk==null?"—":eur0(g.cpk),cf:g=>g.cpk==null?"":(g.cpk<=MAXCPK()*0.85?"good":g.cpk>MAXCPK()*1.25?"bad":"warn")},
-    {k:"cyc",t:"Sales-cycle",v:g=>g.cyc,f:g=>g.cyc==null?"—":Math.round(g.cyc)+" d",tip:"gemiddeld aantal dagen van lead tot tekenen"},
-    {k:"own",t:"Eigenaar(s)",v:g=>g.own.toLowerCase(),f:g=>esc(g.own),cls:"nmw2"}];
-  const cs=sgcSort; const ccol=ccols.find(c=>c.k===cs.k)||ccols[1];
-  camps.sort((x,y)=>{ const a=ccol.v(x),b=ccol.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*cs.d; });
-  h+=`<div class="cmp" style="margin-top:12px"><h3>Per campagne</h3><div style="overflow:auto"><table><tr>`+ccols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="sgcSort.k==='${c.k}'?sgcSort.d=-sgcSort.d:(sgcSort={k:'${c.k}',d:-1});drawSign()">${c.t} <span class="arr">${cs.k===c.k?(cs.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+(camps.length?camps.map(g=>`<tr>`+ccols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(g):""}">${c.f(g)}</td>`).join("")+`</tr>`).join(""):`<tr><td colspan="${ccols.length}" class="empty">Geen inschrijvingen in deze periode.</td></tr>`)+`</table></div></div>`;
-  // individuele lijst
-  h+=`<div class="cmp" style="margin-top:12px"><h3>Alle inschrijvingen${sgPlat?` · ${esc(SGP[sgPlat][0])}`:""}</h3><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="sgSort.c===${i}?sgSort.d=-sgSort.d:(sgSort={c:${i},d:1});drawSign()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.map(l=>`<tr>`+cols.map(c=>`<td class="${c.cls||""}">${c.k(l)}</td>`).join("")+`</tr>`).join("")+`${sorted.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen inschrijvingen in deze periode.</td></tr>`}</table></div></div>`;
-  // All Star apart
-  h+=`<div class="cmp" style="margin-top:12px"><h3>⭐️ All Star Management (upsell) · ${asm.length} <span class="chsub">apart gehouden — telt niet mee in de PA-cijfers hierboven</span></h3>${asm.length?`<table><tr><th>Datum</th><th>Naam</th><th>Variant</th><th>Waarde</th><th>Betaaloptie</th></tr>${asm.map(f=>`<tr><td>${fmt(f.d)}</td><td>${ghl(f.contact_id,f.name)}</td><td>${esc(f.variant||"—")}</td><td>${eur0(f.value)}</td><td><small>${esc(f.pay||"—")}</small></td></tr>`).join("")}</table>`:`<div class="empty">Geen All Star-inschrijvingen in deze periode.</div>`}</div>`;
-  h+=`<p class="note">Tekendatum = datum van het inschrijfformulier (GHL), gekoppeld via contact-id / e-mail / telefoon. Waarde uit de betaaloptie: € 6.800 (termijnen of factuur) · € 6.300 (direct afrekenen — € 500 korting, klopt dus) · € 6.595 (€ 205 korting). ⚠︎ = Agreement Signed in het CRM maar geen formulier gevonden; datum = fasewissel. Facebook/Instagram-splitsing komt uit de plaatsing die GHL meekreeg; kosten zijn per campagne (Meta splitst kosten niet per plaatsing in onze data).</p>`;
+  h+=`<div class="wonchips"><span class="lbl">Waar komen ze vandaan:</span><div class="wchip sm${sgPlat==null?" on":""}" onclick="sgPlat=null;drawSign()">Alles <span class="n">${all.length}</span></div>`+[...pp.entries()].sort((a,b)=>b[1].n-a[1].n).map(([k,o])=>`<div class="wchip sm${sgPlat===k?" on":""}" onclick="sgPlat=${jq(k)};drawSign()" ${sgMode==="sign"?`title="${eur0(o.v)} waarde"`:""}><span class="dot" style="background:${SGP[k][1]}"></span>${esc(SGP[k][0])} <span class="n">${o.n}</span></div>`).join("")+`</div>`;
+  // uit welke advertentie komen ze — blokjes met aantal
+  const byAd=new Map();
+  for(const l of rows){ const key=l.adObj?("a|"+(l.adObj.adName||l.adObj.adId)+"|"+(l.camp?l.camp.name:"")):("c|"+(l.camp?l.camp.name:PN(l.platform))+"|");
+    if(!byAd.has(key)) byAd.set(key,{ad:l.adObj?(l.adObj.adName||l.adObj.adId):null,camp:l.camp?l.camp.name:(l.platform==="niet_betaald"?"Niet betaald (organisch/direct)":PN(l.platform)),platform:l.platform,n:0,val:0});
+    const t=byAd.get(key); t.n++; t.val+=sgMode==="sign"?l.value:0; }
+/*__V14SPLIT__*/
   w.innerHTML=h;
 }
 
