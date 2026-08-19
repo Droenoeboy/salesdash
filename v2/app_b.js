@@ -40,14 +40,15 @@ const legend = items => `<div class="legend">`+items.map(i=>`<span><i style="bac
 const ppDelta = (cur,prev) => (cur==null||prev==null)? "" : (()=>{ const d=Math.round((cur-prev)*10)/10; const cls=d>0?"up":d<0?"dn":"eq"; return `<i class="dlt ${cls}">${d>0?"▲ +":d<0?"▼ ":"= "}${(Math.abs(d)+"").replace(".",",")} pp</i>`; })();
 
 // ---- ⚖️ vergelijk: mensen naast elkaar, één rij per KPI ----
-let cmpSel=null;   // null = automatisch (iedereen met activiteit in de periode)
+let cmpSel=null, cmpTeam=true;   // null = automatisch (iedereen met activiteit in de periode)
 function cmpToggle(n){ if(cmpSel===null) cmpSel=new Set(cmpAuto()); cmpSel.has(n)?cmpSel.delete(n):cmpSel.add(n); if(!cmpSel.size) cmpSel=null; drawCmp(); }
 function cmpAuto(){ const l=REPS.filter(p=>{ const f=funnel(p.n,A,B); return f.gepland.length+f.verloren.length+f.agenda.length+f.agendaI.length>=5; }).map(p=>p.n).slice(0,5); return l.length? l : REPS.slice(0,3).map(p=>p.n); }
 function drawCmp(){
   const el=document.getElementById("cmpwrap");
   const names = cmpSel? REPS.map(p=>p.n).filter(n=>cmpSel.has(n)) : cmpAuto();
-  const cols=[{n:null,lab:"Team"}].concat(names.map(n=>({n,lab:n})));
+  const cols=(cmpTeam?[{n:null,lab:"Team"}]:[]).concat(names.map(n=>({n,lab:n})));
   const F=cols.map(c=>({f:funnel(c.n,A,B), s:slots(c.n,A,B,"setter"), si:slots(c.n,A,B,"intaker")}));
+  const ti = cmpTeam?1:0;   // index van de eerste persoon
   const rate=(num,den)=>den?pct(num,den):null;
   const rows=[
     {t:"Leads afgehandeld", sub:"gepland + verloren in Leads-fase", g:x=>({v:x.f.gepland.length+x.f.verloren.length}), num:true, phase:"plan"},
@@ -55,28 +56,29 @@ function drawCmp(){
     {t:"Intakes gezet", sub:"op intakedatum, als setter", g:x=>({v:x.f.agenda.length}), num:true, phase:"show"},
     {t:"Show rate", sub:ROL("show"), g:x=>({v:rate(x.f.show.length,x.f.agenda.length), n:x.f.show.length, d:x.f.agenda.length}), phase:"show", min:+(DEFS.min_volume_show||8)},
     {t:"Show rate per slot", sub:"afspraken, als setter", g:x=>{ const d=x.s.show.length+x.s.noshow.length+x.s.late.length; return {v:rate(x.s.show.length,d), n:x.s.show.length, d}; }, min:+(DEFS.min_volume_show||8)},
-    {t:MODE==="rep"?"Shows (als eigenaar)":"Intakes gevoerd (shows)", sub:MODE==="rep"?"eigenaar":"intaker", g:x=>({v:x.f.showI.length}), num:true, phase:"sign"},
-    {t:"Sign rate", sub:ROL("sign"), g:x=>({v:rate(x.f.sign.length,x.f.showI.length), n:x.f.sign.length, d:x.f.showI.length}), phase:"sign", min:+(DEFS.min_volume_sign||5)},
+    {t:MODE==="rep"?"Shows (als eigenaar)":"Intakes gevoerd (shows)", sub:MODE==="rep"?"eigenaar":"intaker · in jouw agenda", g:x=>({v:x.f.showI.length}), num:true, phase:"sign"},
+    {t:"Sign rate", sub:ROL("signS")+" · van jouw shows", g:x=>({v:rate(x.f.signS.length,x.f.show.length), n:x.f.signS.length, d:x.f.show.length}), phase:"signS", min:+(DEFS.min_volume_sign||5)},
+    ...(MODE==="rep"?[]:[{t:"Intake → sign rate", sub:"intaker · shows in jouw agenda", g:x=>({v:rate(x.f.sign.length,x.f.showI.length), n:x.f.sign.length, d:x.f.showI.length}), phase:"sign", min:+(DEFS.min_volume_sign||5)}]),
     ...(MODE==="rep"?[]:[{t:"Close rate", sub:"eigenaar · dossiers na show", g:x=>{ const d=x.f.closed.length+x.f.closeLost.length; return {v:rate(x.f.closed.length,d), n:x.f.closed.length, d}; }, phase:"close", min:+(DEFS.min_volume_sign||5)}]),
     {t:"Ingeschreven", sub:"als eigenaar", g:x=>({v:x.f.signO.length}), num:true, phase:"pay"},
     {t:"Pay rate", sub:"eigenaar", g:x=>({v:rate(x.f.paid.length,x.f.signO.length), n:x.f.paid.length, d:x.f.signO.length}), phase:"pay", min:1},
     {t:"Verloren in Leads-fase", sub:"als eigenaar", g:x=>({v:x.f.verloren.length}), num:true, phase:"plan", lowGood:true},
     {t:"Reactietijd", sub:"mediaan, als setter", g:(x,c)=>{ const m=median(L.filter(l=>inR(l.cd,A,B)&&(c.n==null||l.setter===c.n)).map(l=>l.s2l)); return {v:m, txt:fmin(m)}; }, num:true, rank:true, lowGood:true},
   ];
-  const chips=`<div class="wonchips">`+REPS.map(p=>`<div class="wchip${names.includes(p.n)?" on":""}" onclick="cmpToggle(${JSON.stringify(p.n).replace(/"/g,"&quot;")})"><span class="dot" style="background:${repCol(p.n)}"></span>${esc(p.n)}</div>`).join("")+`<div class="wchip" onclick="cmpSel=null;drawCmp()">↺ auto</div></div>`;
-  let h=chips+`<div class="cmpcard"><table class="cmptbl"><tr><th class="mt">KPI</th>`+cols.map((c,i)=>`<th class="${i===0?"team":""}"><span class="dot" style="background:${c.n?repCol(c.n):"var(--txt)"}"></span>${esc(c.lab)}</th>`).join("")+`</tr>`;
+  const chips=`<div class="wonchips"><div class="wchip${cmpTeam?" on":""}" onclick="cmpTeam=!cmpTeam;drawCmp()" title="Team-kolom tonen/verbergen">Σ Team</div><span class="lbl" style="margin-left:4px">Personen:</span>`+REPS.map(p=>`<div class="wchip${names.includes(p.n)?" on":""}" onclick="cmpToggle(${JSON.stringify(p.n).replace(/"/g,"&quot;")})"><span class="dot" style="background:${repCol(p.n)}"></span>${esc(p.n)}</div>`).join("")+`<div class="wchip" onclick="cmpSel=new Set(REPS.map(p=>p.n));drawCmp()">Iedereen</div><div class="wchip" onclick="cmpSel=null;drawCmp()">↺ auto</div></div>`;
+  let h=chips+`<div class="cmpcard"><table class="cmptbl"><tr><th class="mt">KPI</th>`+cols.map((c,i)=>`<th class="${(cmpTeam&&i===0)?"team":""}"><span class="dot" style="background:${c.n?repCol(c.n):"var(--txt)"}"></span>${esc(c.lab)}</th>`).join("")+`</tr>`;
   for(const r of rows){
     const cells=cols.map((c,i)=>r.g(F[i],c));
-    const vals=r.num&&!r.rank ? [] : cells.slice(1).map((x,i)=>(r.min && x.d!=null && x.d<r.min)? null : x.v).filter(v=>v!=null);
+    const vals=r.num&&!r.rank ? [] : cells.slice(ti).map((x,i)=>(r.min && x.d!=null && x.d<r.min)? null : x.v).filter(v=>v!=null);
     const best= vals.length>1? (r.lowGood? Math.min(...vals) : Math.max(...vals)) : null, worst= vals.length>1? (r.lowGood? Math.max(...vals) : Math.min(...vals)) : null;
     const maxAbs=Math.max(1,...cells.map(x=>x.v==null?0:x.v));
     h+=`<tr><td class="mt"><b>${r.t}</b><small>${r.sub}</small></td>`+cells.map((x,i)=>{
       const c=cols[i]; const weak = r.min && x.d!=null && x.d<r.min;
-      const cls = i>0 && !weak && x.v!=null && best!==null && x.v===best && best!==worst ? "best" : (i>0 && !weak && x.v!=null && worst!==null && x.v===worst && best!==worst ? "worst" : "");
+      const cls = i>=ti && !weak && x.v!=null && best!==null && x.v===best && best!==worst ? "best" : (i>=ti && !weak && x.v!=null && worst!==null && x.v===worst && best!==worst ? "worst" : "");
       const txt = x.txt!=null ? x.txt : (x.v==null ? "—" : (r.num ? x.v : (x.v+"").replace(".",",")+"%"));
       const bar = x.v==null ? "" : `<i class="cbar" style="width:${Math.round((r.num? x.v/maxAbs : x.v/100)*100)}%;background:${c.n?repCol(c.n):"var(--mut2)"}"></i>`;
       const click = r.phase ? `onclick="tab='cmp';pick('${esc(c.n==null?"tot":c.n)}','${r.phase}')" title="klik voor de namen"` : "";
-      return `<td class="${cls}${i===0?" team":""}${weak?" weak":""}" ${click}><b>${txt}</b>${x.d!=null?`<small>${x.n}/${x.d}${weak?" · te weinig":""}</small>`:""}${bar}</td>`; }).join("")+`</tr>`;
+      return `<td class="${cls}${(cmpTeam&&i===0)?" team":""}${weak?" weak":""}" ${click}><b>${txt}</b>${x.d!=null?`<small>${x.n}/${x.d}${weak?" · te weinig":""}</small>`:""}${bar}</td>`; }).join("")+`</tr>`;
   }
   h+=`</table></div>
   <p class="note">Elke rij is één KPI, elke kolom één persoon — zo vergelijk je Django en Marcel direct, ook op je telefoon (schuif horizontaal). <b>Groen</b> = beste van de rij, <b>rood</b> = laagste; grijs = te weinig volume om eerlijk te vergelijken (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}). Klik op een cel voor de namen erachter. Rollen per rij staan eronder; schakel bovenin naar <i>Per rep (v1)</i> voor de oude telling.</p>`;
@@ -91,7 +93,8 @@ function isoWeek(d){ const t=d2s(d); const x=new Date(Date.UTC(t.getFullYear(),t
 const TREND_METRICS=[
   {k:"pr", t:"Plan rate", pct:true, num:r=>r.gepland, den:r=>r.beh, min:()=>+(DEFS.min_volume_plan||15), rol:"plan"},
   {k:"sr", t:"Show rate", pct:true, num:r=>r.show, den:r=>r.agenda, min:()=>+(DEFS.min_volume_show||8), rol:"show"},
-  {k:"gr", t:"Sign rate", pct:true, num:r=>r.sign, den:r=>r.showI, min:()=>+(DEFS.min_volume_sign||5), rol:"sign"},
+  {k:"gs", t:"Sign rate", pct:true, num:r=>r.signS, den:r=>r.show, min:()=>+(DEFS.min_volume_sign||5), rol:"signS"},
+  {k:"gr", t:"Intake → sign", pct:true, num:r=>r.sign, den:r=>r.showI, min:()=>+(DEFS.min_volume_sign||5), rol:"sign", hideRep:false},
   {k:"cr", t:"Close rate", pct:true, num:r=>r.closed, den:r=>r.closed+r.closeLost, min:()=>+(DEFS.min_volume_sign||5), rol:"close", hideRep:true},
   {k:"l2s", t:"Lead → sale", pct:true, num:r=>r.sign, den:r=>r.beh, min:()=>+(DEFS.min_volume_plan||15)},
   {k:"slot", t:"Show rate per slot", pct:true, num:r=>r.slotShow, den:r=>r.held, min:()=>+(DEFS.min_volume_show||8)},
@@ -112,8 +115,8 @@ function trendBuckets(){
 }
 function trendRow(who,a,b){
   const f=funnel(who,a,b), s=slots(who,a,b,"setter"); const beh=f.gepland.length+f.verloren.length; const held=s.show.length+s.noshow.length+s.late.length;
-  return {a,b, nieuw:L.filter(l=>inR(l.cd,a,b)&&(who==null||l.setter===who)).length, beh, gepland:f.gepland.length, verloren:f.verloren.length, agenda:f.agenda.length, show:f.show.length, showI:f.showI.length, sign:f.sign.length, closed:f.closed.length, closeLost:f.closeLost.length, paid:f.paid.length, held, slotShow:s.show.length, late:s.late.length, unres:s.unres.length,
-    pr:pct(f.gepland.length,beh), sr:pct(f.show.length,f.agenda.length), gr:pct(f.sign.length,f.showI.length), cr:pct(f.closed.length,f.closed.length+f.closeLost.length), l2s:pct(f.sign.length,beh), slot:pct(s.show.length,held)};
+  return {a,b, nieuw:L.filter(l=>inR(l.cd,a,b)&&(who==null||l.setter===who)).length, beh, gepland:f.gepland.length, verloren:f.verloren.length, agenda:f.agenda.length, show:f.show.length, signS:f.signS.length, showI:f.showI.length, sign:f.sign.length, closed:f.closed.length, closeLost:f.closeLost.length, paid:f.paid.length, held, slotShow:s.show.length, late:s.late.length, unres:s.unres.length,
+    pr:pct(f.gepland.length,beh), sr:pct(f.show.length,f.agenda.length), gs:pct(f.signS.length,f.show.length), gr:pct(f.sign.length,f.showI.length), cr:pct(f.closed.length,f.closed.length+f.closeLost.length), l2s:pct(f.sign.length,beh), slot:pct(s.show.length,held)};
 }
 function drawTrend(){
   const tw=document.getElementById("trendwrap");
@@ -287,6 +290,8 @@ function insights(){
     if(beh>=25 && pr > tPlan+5){ items.push({cat:"rep",imp:Math.round((pr-tPlan)/100*beh)*2, tag:"lo", t:`${p.n} plant het best in`, p:`Plan rate ${fpct(f.gepland.length,beh)} tegenover ${r1(tPlan)}% gemiddeld (${beh} afgehandeld).`, d:`Laat ${p.n} zijn belscript/aanpak delen met de rest.`}); }
     if(f.agenda.length>=MS && sr < tShow-10){ const extra=Math.round((tShow-sr)/100*f.agenda.length);
       items.push({cat:"rep",imp:extra*8, tag:extra>=4?"hi":"mid", t:`Lage show rate op de intakes van ${p.n}`, p:`${f.show.length} van ${f.agenda.length} door ${p.n} ingeplande intakes verschenen (${fpct(f.show.length,f.agenda.length)}) tegenover ${r1(tShow)}% gemiddeld. Op het gemiddelde waren dat ± ${extra} extra shows.`, d:`Check bevestiging/reminders en de doorlooptijd tussen boeken en intake (tab Afspraken).`}); }
+    const gs=pct(f.signS.length,f.show.length), tSignS=pct(tot.signS.length,tot.show.length);
+    if(f.show.length>=MG && gs < tSignS-10){ items.push({cat:"rep",imp:Math.round((tSignS-gs)/100*f.show.length)*15, tag:"mid", t:`${p.n}: shows gezet, weinig inschrijvingen`, p:`Van de ${f.show.length} geshowde intakes die ${p.n} zette zijn er ${f.signS.length} ingeschreven (${fpct(f.signS.length,f.show.length)}) tegenover ${r1(tSignS)}% gemiddeld — kwaliteit/verwachting van de gezette intakes checken.`, d:`Kijk welke intaker deze shows deed en of de kwalificatie aan de telefoon klopt.`}); }
     if(f.showI.length>=MG && gr < tSign-10){ const extra=Math.max(1,Math.round((tSign-gr)/100*f.showI.length));
       items.push({cat:"rep",imp:extra*20, tag:"hi", t:`${p.n}: intakes gevoerd, weinig handtekeningen`, p:`${f.sign.length} van ${f.showI.length} gevoerde intakes leidden tot een inschrijving (${fpct(f.sign.length,f.showI.length)}) tegenover ${r1(tSign)}% gemiddeld — bij € 6.800 per traject is elke gemiste sale direct voelbaar.`, d:`Luister gesprekken terug of laat ${p.n} meedraaien met de best tekenende intaker.`}); }
     if((f.closed.length+f.closeLost.length)>=MG && cr < tClose-10){ const tr=topReason(f.closeLost);
@@ -352,7 +357,7 @@ function drawAsk(){
   const cell=(v,best,worst)=>v==null?"<td>—</td>":`<td class="${v===best?"best":v===worst?"worst":""}">${r1(v)}%</td>`;
   const rows=I.rows, mx=k=>Math.max(...rows.map(r=>r[k]).filter(v=>v!=null)), mn=k=>Math.min(...rows.map(r=>r[k]).filter(v=>v!=null));
   h+=`<div class="cmp" style="margin-top:14px"><h3>Team naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} <span class="chsub">(— = te weinig volume: plan ≥ ${I.MP}, show ≥ ${I.MS}, sign/close ≥ ${I.MG})</span></h3>
-    <table><tr><th>Naam</th><th>Afgehandeld</th><th>Gepland</th><th>Plan rate<br><i>${ROL("plan")}</i></th><th>Intakes gezet</th><th>Show</th><th>Show rate<br><i>${ROL("show")}</i></th><th>Gevoerd</th><th>Ingeschreven</th><th>Sign rate<br><i>${ROL("sign")}</i></th><th>Ingeschr. / verloren<br><i>eigenaar</i></th><th>Close rate<br><i>eigenaar</i></th></tr>
+    <table><tr><th>Naam</th><th>Afgehandeld</th><th>Gepland</th><th>Plan rate<br><i>${ROL("plan")}</i></th><th>Intakes gezet</th><th>Show</th><th>Show rate<br><i>${ROL("show")}</i></th><th>Gevoerd</th><th>Ingeschreven</th><th>Intake → sign<br><i>${ROL("sign")}</i></th><th>Ingeschr. / verloren<br><i>eigenaar</i></th><th>Close rate<br><i>eigenaar</i></th></tr>
     <tr class="tot"><td><b>Team</b></td><td>${I.tBeh}</td><td>${I.tot.gepland.length}</td><td><b>${r1(I.tPlan)}%</b></td><td>${I.tot.agenda.length}</td><td>${I.tot.show.length}</td><td><b>${r1(I.tShow)}%</b></td><td>${I.tot.showI.length}</td><td>${I.tot.sign.length}</td><td><b>${r1(I.tSign)}%</b></td><td>${I.tot.closed.length} / ${I.tot.closeLost.length}</td><td><b>${r1(I.tClose)}%</b></td></tr>`+
     rows.map(r=>`<tr><td>${esc(r.n)}</td><td>${r.beh}</td><td>${r.gepland}</td>${cell(r.pr,mx("pr"),mn("pr"))}<td>${r.agenda}</td><td>${r.show}</td>${cell(r.sr,mx("sr"),mn("sr"))}<td>${r.showI}</td><td>${r.sign}</td>${cell(r.gr,mx("gr"),mn("gr"))}<td>${r.closed} / ${r.closeLost}</td>${cell(r.cr,mx("cr"),mn("cr"))}</tr>`).join("")+"</table></div>";
   h+=`<p class="note">Deze antwoorden komen uit een vaste regelmotor in het dashboard (plan/show/sign/close per persoon, no-shows, late cancels, doorlooptijd, verliesredenen per fase, campagnes/kanalen, week-op-week trend). Wil je een echt gesprek over de cijfers: klik <b>Kopieer datapakket</b> en plak het in Claude — dat is een compacte samenvatting van precies deze periode. Zodra er een AI-sleutel in n8n staat, kan dit vak rechtstreeks antwoorden.</p>`;
@@ -407,11 +412,12 @@ function drawNote(){
     <div><h4>Rollen (aanbevolen)</h4><p>Elke rij hangt aan de persoon die er echt over gaat:</p>
       <ul><li><b>Plan rate · setter</b> = intakes gepland ÷ (gepland + in de Leads-fase verloren). Wie de intake inplant is de setter (setterveld; bij herplannen de laatste setter). Verloren in de Leads-fase telt bij wie hem op verloren sleept.</li>
       <li><b>Show rate · setter</b> = van de intakes die jíj inplande, hoeveel kwamen opdagen (geteld op intakedatum).</li>
-      <li><b>Sign rate · intaker</b> = van de shows in jóuw agenda, hoeveel zijn uiteindelijk ingeschreven — ook als een collega hem later overneemt en tekent. Dit is de "intake-credit".</li>
-      <li><b>Close rate · eigenaar</b> = van de dossiers na show die jij nu bezit (laatste eigenaar = wie tekende), hoeveel ingeschreven vs verloren. Dit is de "closer-credit".</li>
+      <li><b>Sign rate · setter</b> = van de intakes die jíj zette én die geshowd zijn, hoeveel zijn uiteindelijk ingeschreven — ongeacht wie tekent. (2 intakes gezet, 2 shows, 1 getekend → 50 %.)</li>
+      <li><b>Intake → sign · intaker</b> = van de shows in jóuw agenda (de intakes die jij deed — de kalender-eigenaar van de GHL-afspraak), hoeveel zijn ingeschreven, ook als een collega later overneemt en tekent.</li>
+      <li><b>Close rate · eigenaar</b> = van de dossiers na show die jij nu bezit (laatste eigenaar = wie tekende), hoeveel ingeschreven vs verloren.</li>
       <li><b>Pay rate · eigenaar</b> = betaald ÷ ingeschreven.</li></ul></div>
-    <div><h4>Per rep (v1, zoals het oude dashboard)</h4><p>Plan rate op de setter; <b>show, sign en pay op de eigenaar van de deal</b>, zonder aparte close-rij. Simpeler, maar wie een deal overneemt krijgt ook de show en de sign op zijn naam.</p>
-      <h4>Voorbeeld</h4><p>Vandaag 8 intakes: 6 ingepland door Django (alle 6 verschenen), 2 door Marcel (1 verschenen). <b>Show rate</b>: Django 100%, Marcel 50% — in beide weergaven, want show hangt aan de setter… <i>behalve</i> in Per rep als de deal een andere eigenaar heeft: dan telt de show bij die eigenaar. Stel Django voert een intake, de deal gaat naar Marcel en Marcel tekent: in <b>Rollen</b> krijgt Django de sign-credit (intaker) én Marcel de close-credit (eigenaar); in <b>Per rep</b> telt alles bij Marcel.</p></div>
+    <div><h4>Per rep (v1, zoals het oude dashboard)</h4><p>Plan rate op de setter; <b>show, sign en pay op de eigenaar van de deal</b>, zonder intake→sign- en close-rij. Simpeler, maar wie een deal overneemt krijgt ook de show en de sign op zijn naam.</p>
+      <h4>Voorbeeld</h4><p>Vandaag 8 intakes: 6 ingepland door Django (alle 6 verschenen), 2 door Marcel (1 verschenen). <b>Show rate</b>: Django 100%, Marcel 50% — in beide weergaven, want show hangt aan de setter… <i>behalve</i> in Per rep als de deal een andere eigenaar heeft: dan telt de show bij die eigenaar. Stel Linda zette de intake, Django voerde hem, de deal gaat naar Marcel en Marcel tekent: in <b>Rollen</b> telt hij mee in Linda's sign rate (setter), in Django's intake→sign (intaker) én in Marcels close rate (eigenaar); in <b>Per rep</b> telt alles bij Marcel.</p></div>
   </div>
   <p class="ufoot">Show = fase Show of verder, het Show-veld of een afspraak op "showed"; Ingeschreven = Agreement Signed; Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")} of het ✅-vinkje. KPI-pijltjes vergelijken met de even lange periode direct ervoor. Klik op een blok voor de namen; sorteren = kolomkop, filteren = ⏷. Alle regels staan in <code>dpac.definitions</code> (rule_*) en het regeldocument.</p></details>`;
 }
