@@ -162,7 +162,7 @@ function dpPresetList(){
 //  DPAC · Marketing Dashboard — kern
 // ============================================================
 let CAMPS=new Map(), ADS=[], ADIDX=new Map(), CD=[], AD=[], FORMS=[];
-let MODE="periode";          // periode (leads op leaddatum, inschrijvingen op tekendatum) · cohort · gebeurd
+let MODE="cohort";          // periode (leads op leaddatum, inschrijvingen op tekendatum) · cohort · gebeurd
 let GROUP="tree";            // tree (platform › campagne › adset › ad) · utm_source · placement · bron · temperature · owner · setter
 let PARTY=false;             // party/vacature-campagnes meetellen in totalen
 let open=new Set(), sortKey="spend", sortDir=-1, detail=null, trendBy="week", trendPlat=null, trendMetric="cpk";
@@ -194,6 +194,7 @@ function initApp(){
       if(!hit){ let cnt=0; for(const [kk,a] of ADNORM){ if(!kk.startsWith(l.platform+"|")) continue; const nn=kk.slice(l.platform.length+1); if(nn.startsWith(nc)||nc.startsWith(nn)){ cnt++; hit=a; if(cnt>1){ hit=null; break; } } } }
       if(hit&&l.camp&&hit.cid!==l.campaign_id) hit=null;   // nooit een ad uit een ándere campagne plakken
       if(hit){ l.adObj=hit; if(!l.camp&&hit.cid){ l.campaign_id=hit.cid; l.ckey=ck(l.platform,hit.cid); l.camp=CAMPS.get(l.ckey)||null; l.party=!!(l.camp&&l.camp.party); if(l.bron==="onbekend") l.bron="utm"; } } } }
+    if((l.utm_content||"").toLowerCase()==="link_in_bio"){ l.platform="niet_betaald"; l.ckey=ck("niet_betaald",""); l.camp=null; l.adObj=null; l.bron="niet_betaald"; l.bioLink=true; if(!l.session_source) l.session_source="Instagram bio-link"; }
     l.value=+(l.contract_value||OMZET()); }
   FORMS=(D.forms||[]).map(f=>({...f,d:dOf(f.on)}));
   const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate())); NOW=TODAY;
@@ -304,7 +305,7 @@ function drawKpis(){
   ];
   k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}${x[5]?" kclk":""}" ${x[5]?`onclick="kpiPick('${x[5]}')"`:""} ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
 }
-function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
+function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dfCol=null; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
 
 // ---- tabs ----
 function drawTabs(){
@@ -432,9 +433,12 @@ function drawBestInner(){
 
 // ---- detail (namen) ----
 const SETLAB={nieuw:"Leads binnengekomen",gepland:"Intake gepland",shows:"Shows",sign:"Ingeschreven"};
-let dSort={c:1,d:-1};
-function showDetail(key,set){ detail={key,set}; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
-function drawDetail(){
+let dSort={c:1,d:-1}, dFilt={}, dfCol=null;
+function dfToggle(i,v){ if(!dFilt[i]) dFilt[i]=new Set(); const st=dFilt[i]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete dFilt[i]; drawDetail(); }
+function dfClear(i){ delete dFilt[i]; drawDetail(); }
+function showDetail(key,set){ detail={key,set}; dFilt={}; dfCol=null; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
+function drawDetail(){ const _el=document.getElementById("detail"); if(!detail||tab!=="tree"){ _el.style.display="none"; return; } keepScroll(_el,drawDetailInner); }
+function drawDetailInner(){
   const el=document.getElementById("detail"); if(!detail||tab!=="tree"){ el.style.display="none"; return; }
   let n;
   if(detail.key==="__ALL__"){
@@ -442,29 +446,40 @@ function drawDetail(){
     n={label:"Alle kanalen samen",m:metrics(all,spendIn(A,B,r=>!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B)};
   } else { n=findNode(detail.key,TREE); }
   if(!n){ el.style.display="none"; return; }
-  const rows=n.m.S[detail.set]||[];
+  const rowsAll=n.m.S[detail.set]||[];
   const cols=[
     {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
     {t:detail.set==="sign"?"Tekendatum":detail.set==="gepland"?"Ingepland":"Binnengekomen",v:l=>detail.set==="sign"?l.sd:detail.set==="gepland"?l.pd:l.cd,k:l=>{const d=detail.set==="sign"?l.sd:detail.set==="gepland"?l.pd:l.cd; return d>=0?fmt(d):"—";}},
-    {t:"Fase",v:l=>l.stage_position,k:l=>`<span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span>`},
-    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—")},
-    {t:"Eigenaar",v:l=>l.owner||"",k:l=>esc(l.owner||"—")},
-    {t:"Platform",v:l=>l.platform,k:l=>`<span class="dot" style="background:${PC(l.platform)}"></span>${esc(PN(l.platform))}${l.placement?` <small>${esc(l.placement)}</small>`:""}`},
-    {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small>`},
-    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`},
-    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||l.bron||"—")}</small>${l.alt_last_campaign?`<br><small title="laatste klik week af van de toegekende campagne">misschien ook: ${esc(l.alt_last_campaign)}</small>`:""}`},
+    {t:"Fase",v:l=>l.stage_position,k:l=>`<span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span>`,fv:l=>l.stage_name+(l.lost&&l.stage_position!==0?" · verloren":"")},
+    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—"),fv:l=>l.setter||"—"},
+    {t:"Eigenaar",v:l=>l.owner||"",k:l=>esc(l.owner||"—"),fv:l=>l.owner||"—"},
+    {t:"Platform",v:l=>l.platform,k:l=>`<span class="dot" style="background:${PC(l.platform)}"></span>${esc(PN(l.platform))}${l.placement?` <small>${esc(l.placement)}</small>`:""}${l.bioLink?` <small>bio-link</small>`:""}`,fv:l=>PN(l.platform)+(l.platform==="meta"&&l.placement?" · "+l.placement:"")},
+    {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small>`,fv:l=>l.camp?l.camp.name:(l.utm_campaign||"—")},
+    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`,fv:l=>l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—")},
+    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||l.bron||"—")}</small>${l.alt_last_campaign?`<br><small title="laatste klik week af van de toegekende campagne">misschien ook: ${esc(l.alt_last_campaign)}</small>`:""}`,fv:l=>BRON[l.bron]||l.bron||"—"},
     {t:"Waarde",v:l=>l.is_signed?l.value:0,k:l=>l.is_signed?eur0(l.value)+(l.signed_via==="fasewissel"?" <small title='geen formulier gevonden; datum = fasewissel'>⚠︎</small>":""):"—"},
-    {t:"Temp.",v:l=>l.temperature||"",k:l=>esc(l.temperature||"—")},
+    {t:"Temp.",v:l=>l.temperature||"",k:l=>esc(l.temperature||"—"),fv:l=>l.temperature||"—"},
   ];
+  // filters toepassen (per kolom, meerdere waarden mogelijk)
+  const FE=Object.entries(dFilt);
+  const rows=rowsAll.filter(l=>FE.every(([i,st])=>st.has(cols[i].fv(l))));
   const s=dSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
+  // filterpaneel: waarden + aantallen van de gekozen kolom (geteld binnen de overige filters)
+  let fpanel="";
+  if(dfCol!=null&&cols[dfCol]&&cols[dfCol].fv){ const fc=cols[dfCol];
+    const base=rowsAll.filter(l=>FE.every(([i,st])=>+i===dfCol||st.has(cols[i].fv(l))));
+    const cnt=new Map(); base.forEach(l=>{ const vv=fc.fv(l); cnt.set(vv,(cnt.get(vv)||0)+1); });
+    const sel=dFilt[dfCol];
+    fpanel=`<div class="wonchips" style="margin:10px 14px 0"><span class="lbl">Filter ${fc.t}:</span><div class="wchip sm${sel?"":" on"}" onclick="dfClear(${dfCol})">Alles <span class="n">${base.length}</span></div>`
+      +[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([vv,c2])=>`<div class="wchip sm${sel&&sel.has(vv)?" on":""}" onclick="dfToggle(${dfCol},${jq(vv)})" title="${esc(vv)}"><span style="max-width:230px;overflow:hidden;text-overflow:ellipsis">${esc(vv)}</span> <span class="n">${c2}</span></div>`).join("")+`</div>`; }
   // verdeling binnen deze set: campagnes en advertenties die het vaakst voorkomen
   const byAd=new Map(); for(const l of rows){ const k=l.adObj?(l.adObj.adName||l.adObj.adId):(l.camp?"(campagne: "+l.camp.name+")":"(geen advertentie bekend)"); byAd.set(k,(byAd.get(k)||0)+1); }
   const top=[...byAd.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
   const byCamp=new Map(); for(const l of rows){ const k=(l.camp?l.camp.name:PN(l.platform)); byCamp.set(k,(byCamp.get(k)||0)+1); }
   const topC=[...byCamp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
   el.style.display="block";
-  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${MODE} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>
-    <div class="dbody"><div class="two dtwo"><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.slice(0,300).map(l=>`<tr>`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>300?`<div class="more">eerste 300 van ${sorted.length}</div>`:""}</div>
+  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}${rows.length!==rowsAll.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${MODE} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${fpanel}
+    <div class="dbody"><div class="two dtwo"><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span>${c.fv?`<span class="fbtn${dFilt[i]?" on":""}" title="filter op ${c.t} (met aantallen)" onclick="dfCol=dfCol===${i}?null:${i};drawDetail()">⏷</span>`:""}</th>`).join("")+`</tr>`+sorted.slice(0,300).map(l=>`<tr>`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>300?`<div class="more">eerste 300 van ${sorted.length}</div>`:""}</div>
     <div style="align-self:start;display:flex;flex-direction:column;gap:12px"><div class="cmp"><h3>Uit welke campagnes komen ze</h3>${topC.length?topC.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/topC[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div>
     <div class="cmp"><h3>Welke advertenties komen het vaakst voor</h3>${top.length?top.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/top[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div></div></div></div>`;
 }
@@ -642,7 +657,14 @@ function drawData(){
   const months=new Map(); for(const l of L){ if(l.cd<0) continue; const k=d2s(l.cd).getFullYear()+"-"+String(d2s(l.cd).getMonth()+1).padStart(2,"0"); if(!months.has(k)) months.set(k,[]); months.get(k).push(l); }
   const cQ=D.counts||{}; const noFormQ=L.filter(l=>l.is_signed&&l.signed_via!=="formulier");
   const unmQ=FORMS.filter(f=>!f.contact_id);
-  let h=`<div class="two"><div class="cmp ${noFormQ.length?"":""}"><h3>⚠️ Agreement Signed zonder inschrijfformulier · ${noFormQ.length}</h3>${noFormQ.length?`<table><tr><th>Naam</th><th>Fasewissel</th><th>Eigenaar</th></tr>${noFormQ.map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${l.sd>=0?fmt(l.sd):"—"}</td><td>${esc(l.owner||"—")}</td></tr>`).join("")}</table>`:`<div class="empty">Alles gekoppeld. 👌</div>`}</div>
+  let h=`<div class="cmp" style="margin-bottom:12px"><h3>🔧 Actiepunten (belangrijkste taken)</h3><table>
+    <tr><td>1</td><td><b>Meta:</b> de ad "Video 1 | hook 4 | hobby je werk" stuurt nog statische UTM's (utm_campaign=paid_social, geen id's) — zet de URL-parameters van die ad op dynamisch (campaign_id/adset_id/ad_id). De rest van Meta staat sinds ~7 aug goed.</td></tr>
+    <tr><td>2</td><td><b>TikTok:</b> stuurt helemaal geen campagne-/ad-id's mee — UTM-template instellen in TikTok Ads.</td></tr>
+    <tr><td>3</td><td><b>Google:</b> ✅ staat goed (Search met ad-id; PMax kan technisch geen ad-id meesturen).</td></tr>
+    <tr><td>4</td><td><b>Inschrijfformulieren realtime</b> naar Supabase via webhook (nu 1× per nacht) — voorkomt "zonder formulier"-meldingen op de dag zelf.</td></tr>
+    <tr><td>5</td><td><b>2 inschrijvingen van 19 aug zonder formulier in GHL</b> (zie blok hieronder) — nakijken of het formulier onder een ander contact hangt.</td></tr>
+    <tr><td>6</td><td><b>gclid/fbclid bewaren</b> voor offline-conversies terugsturen naar Google/Meta (volgende stap).</td></tr>
+  </table></div><div class="two"><div class="cmp ${noFormQ.length?"":""}"><h3>⚠️ Agreement Signed zonder inschrijfformulier · ${noFormQ.length}</h3>${noFormQ.length?`<table><tr><th>Naam</th><th>Fasewissel</th><th>Eigenaar</th></tr>${noFormQ.map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${l.sd>=0?fmt(l.sd):"—"}</td><td>${esc(l.owner||"—")}</td></tr>`).join("")}</table>`:`<div class="empty">Alles gekoppeld. 👌</div>`}</div>
     <div class="cmp"><h3>⚠️ Formulieren zonder contact-koppeling · ${unmQ.length}</h3>${unmQ.length?`<table><tr><th>Datum</th><th>Naam</th><th>Product</th></tr>${unmQ.map(f=>`<tr><td>${fmt(f.d)}</td><td>${esc(f.name)}</td><td>${esc(f.product)}</td></tr>`).join("")}</table>`:`<div class="empty">Alle formulieren zijn aan een contact gekoppeld.</div>`}</div></div>`;
   h+=`<div class="cmp" style="margin-top:12px"><h3>Attributiedekking per maand (leads op binnenkomst)</h3><table><tr><th>Maand</th><th>Leads</th><th>Hard (UTM/ad-id)</th><th>Zacht (GHL klik)</th><th>Afgeleid</th><th>Niet betaald</th><th>Onbekend</th><th>Met campagne</th><th>Met advertentie</th></tr>`;
   for(const [k,ls] of [...months.entries()].sort()){ const n=ls.length; const c=f=>ls.filter(f).length; const p=x=>`${x} <small>${fpct(x,n)}</small>`;
