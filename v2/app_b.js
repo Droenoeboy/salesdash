@@ -42,7 +42,7 @@ const ppDelta = (cur,prev) => (cur==null||prev==null)? "" : (()=>{ const d=Math.
 // ---- ⚖️ vergelijk: mensen naast elkaar, één rij per KPI ----
 let cmpSel=null, cmpTeam=true;   // null = automatisch (iedereen met activiteit in de periode)
 function cmpToggle(n){ if(cmpSel===null) cmpSel=new Set(cmpAuto()); cmpSel.has(n)?cmpSel.delete(n):cmpSel.add(n); if(!cmpSel.size) cmpSel=null; drawCmp(); }
-function cmpAuto(){ const l=REPS.filter(p=>{ const f=funnel(p.n,A,B); return f.gepland.length+f.verloren.length+f.agenda.length+f.agendaI.length>=5; }).map(p=>p.n).slice(0,5); return l.length? l : REPS.slice(0,3).map(p=>p.n); }
+function cmpAuto(){ const l=REPS.filter(p=>{ const f=funnel(p.n,A,B); return f.gepland.length+f.verloren.length+f.agenda.length+f.dossiers.length>=5; }).map(p=>p.n).slice(0,5); return l.length? l : REPS.slice(0,3).map(p=>p.n); }
 function drawCmp(){
   const el=document.getElementById("cmpwrap");
   const names = cmpSel? REPS.map(p=>p.n).filter(n=>cmpSel.has(n)) : cmpAuto();
@@ -51,23 +51,26 @@ function drawCmp(){
   const ti = cmpTeam?1:0;   // index van de eerste persoon
   const rate=(num,den)=>den?pct(num,den):null;
   const rows=[
+    {hdr:"Setter · wat lever jij aan?"},
     {t:"Leads afgehandeld", sub:"gepland + verloren in Leads-fase", g:x=>({v:x.f.gepland.length+x.f.verloren.length}), num:true, phase:"plan"},
     {t:"Plan rate", sub:ROL("plan"), g:x=>{ const d=x.f.gepland.length+x.f.verloren.length; return {v:rate(x.f.gepland.length,d), n:x.f.gepland.length, d}; }, phase:"plan", min:+(DEFS.min_volume_plan||15)},
-    {t:"Intakes gezet", sub:"op intakedatum, als setter", g:x=>({v:x.f.agenda.length}), num:true, phase:"show"},
+    {t:"Intakes gezet", sub:"op intakedatum"+(MODE==="rep"?", als eigenaar":", als setter"), g:x=>({v:x.f.agenda.length}), num:true, phase:"show"},
+    {t:"Shows", sub:MODE==="rep"?"als eigenaar":"van jouw intakes", g:x=>({v:x.f.show.length}), num:true, phase:"show"},
     {t:"Show rate", sub:ROL("show"), g:x=>({v:rate(x.f.show.length,x.f.agenda.length), n:x.f.show.length, d:x.f.agenda.length}), phase:"show", min:+(DEFS.min_volume_show||8)},
-    {t:"Show rate per slot", sub:"afspraken, als setter", g:x=>{ const d=x.s.show.length+x.s.noshow.length+x.s.late.length; return {v:rate(x.s.show.length,d), n:x.s.show.length, d}; }, min:+(DEFS.min_volume_show||8)},
-    {t:MODE==="rep"?"Shows (als eigenaar)":"Intakes gevoerd (shows)", sub:MODE==="rep"?"eigenaar":"intaker · in jouw agenda", g:x=>({v:x.f.showI.length}), num:true, phase:"sign"},
-    {t:"Sign rate", sub:ROL("signS")+" · van jouw shows", g:x=>({v:rate(x.f.signS.length,x.f.show.length), n:x.f.signS.length, d:x.f.show.length}), phase:"signS", min:+(DEFS.min_volume_sign||5)},
-    ...(MODE==="rep"?[]:[{t:"Intake → sign rate", sub:"intaker · shows in jouw agenda", g:x=>({v:rate(x.f.sign.length,x.f.showI.length), n:x.f.sign.length, d:x.f.showI.length}), phase:"sign", min:+(DEFS.min_volume_sign||5)}]),
-    ...(MODE==="rep"?[]:[{t:"Close rate", sub:"eigenaar · dossiers na show", g:x=>{ const d=x.f.closed.length+x.f.closeLost.length; return {v:rate(x.f.closed.length,d), n:x.f.closed.length, d}; }, phase:"close", min:+(DEFS.min_volume_sign||5)}]),
+    {t:"Show rate per slot", sub:"agenda-afspraken, als setter", g:x=>{ const d=x.s.show.length+x.s.noshow.length+x.s.late.length; return {v:rate(x.s.show.length,d), n:x.s.show.length, d}; }, min:+(DEFS.min_volume_show||8)},
+    {t:"Sign rate", sub:ROL("signS")+" · van jouw shows, wie ook tekent", g:x=>({v:rate(x.f.signS.length,x.f.show.length), n:x.f.signS.length, d:x.f.show.length}), phase:"signS", min:+(DEFS.min_volume_sign||5)},
+    {t:"Reactietijd", sub:"mediaan, als setter", g:(x,c)=>{ const m=median(L.filter(l=>inR(l.cd,A,B)&&(c.n==null||l.setter===c.n)).map(l=>l.s2l)); return {v:m, txt:fmin(m)}; }, num:true, rank:true, lowGood:true},
+    {t:"Verloren in Leads-fase", sub:"als eigenaar (wie op verloren sleept)", g:x=>({v:x.f.verloren.length}), num:true, phase:"plan", lowGood:true},
+    {hdr:"Eigenaar · hoe beweeg jij dossiers?"},
+    ...(MODE==="rep"?[]:[{t:"Dossiers na show", sub:"in bezit, op intakedatum", g:x=>({v:x.f.dossiers.length}), num:true, phase:"close"}]),
+    ...(MODE==="rep"?[]:[{t:"Close rate", sub:"eigenaar · ingeschreven vs verloren", g:x=>{ const d=x.f.closed.length+x.f.closeLost.length; return {v:rate(x.f.closed.length,d), n:x.f.closed.length, d}; }, phase:"close", min:+(DEFS.min_volume_sign||5)}]),
     {t:"Ingeschreven", sub:"als eigenaar", g:x=>({v:x.f.signO.length}), num:true, phase:"pay"},
     {t:"Pay rate", sub:"eigenaar", g:x=>({v:rate(x.f.paid.length,x.f.signO.length), n:x.f.paid.length, d:x.f.signO.length}), phase:"pay", min:1},
-    {t:"Verloren in Leads-fase", sub:"als eigenaar", g:x=>({v:x.f.verloren.length}), num:true, phase:"plan", lowGood:true},
-    {t:"Reactietijd", sub:"mediaan, als setter", g:(x,c)=>{ const m=median(L.filter(l=>inR(l.cd,A,B)&&(c.n==null||l.setter===c.n)).map(l=>l.s2l)); return {v:m, txt:fmin(m)}; }, num:true, rank:true, lowGood:true},
   ];
   const chips=`<div class="wonchips"><div class="wchip${cmpTeam?" on":""}" onclick="cmpTeam=!cmpTeam;drawCmp()" title="Team-kolom tonen/verbergen">Σ Team</div><span class="lbl" style="margin-left:4px">Personen:</span>`+REPS.map(p=>`<div class="wchip${names.includes(p.n)?" on":""}" onclick="cmpToggle(${JSON.stringify(p.n).replace(/"/g,"&quot;")})"><span class="dot" style="background:${repCol(p.n)}"></span>${esc(p.n)}</div>`).join("")+`<div class="wchip" onclick="cmpSel=new Set(REPS.map(p=>p.n));drawCmp()">Iedereen</div><div class="wchip" onclick="cmpSel=null;drawCmp()">↺ auto</div></div>`;
   let h=chips+`<div class="cmpcard"><table class="cmptbl"><tr><th class="mt">KPI</th>`+cols.map((c,i)=>`<th class="${(cmpTeam&&i===0)?"team":""}"><span class="dot" style="background:${c.n?repCol(c.n):"var(--txt)"}"></span>${esc(c.lab)}</th>`).join("")+`</tr>`;
   for(const r of rows){
+    if(r.hdr){ h+=`<tr class="hdr"><td colspan="${cols.length+1}">${r.hdr}</td></tr>`; continue; }
     const cells=cols.map((c,i)=>r.g(F[i],c));
     const vals=r.num&&!r.rank ? [] : cells.slice(ti).map((x,i)=>(r.min && x.d!=null && x.d<r.min)? null : x.v).filter(v=>v!=null);
     const best= vals.length>1? (r.lowGood? Math.min(...vals) : Math.max(...vals)) : null, worst= vals.length>1? (r.lowGood? Math.max(...vals) : Math.min(...vals)) : null;
@@ -94,14 +97,14 @@ const TREND_METRICS=[
   {k:"pr", t:"Plan rate", pct:true, num:r=>r.gepland, den:r=>r.beh, min:()=>+(DEFS.min_volume_plan||15), rol:"plan"},
   {k:"sr", t:"Show rate", pct:true, num:r=>r.show, den:r=>r.agenda, min:()=>+(DEFS.min_volume_show||8), rol:"show"},
   {k:"gs", t:"Sign rate", pct:true, num:r=>r.signS, den:r=>r.show, min:()=>+(DEFS.min_volume_sign||5), rol:"signS"},
-  {k:"gr", t:"Intake → sign", pct:true, num:r=>r.sign, den:r=>r.showI, min:()=>+(DEFS.min_volume_sign||5), rol:"sign", hideRep:false},
-  {k:"cr", t:"Close rate", pct:true, num:r=>r.closed, den:r=>r.closed+r.closeLost, min:()=>+(DEFS.min_volume_sign||5), rol:"close", hideRep:true},
+  {k:"cr", t:"Close rate", pct:true, num:r=>r.closed, den:r=>r.closed+r.closeLost, min:()=>+(DEFS.min_volume_sign||5), rol:"close"},
+  {k:"pay", t:"Pay rate", pct:true, num:r=>r.paid, den:r=>r.signO, min:()=>1, rol:"pay"},
   {k:"l2s", t:"Lead → sale", pct:true, num:r=>r.sign, den:r=>r.beh, min:()=>+(DEFS.min_volume_plan||15)},
   {k:"slot", t:"Show rate per slot", pct:true, num:r=>r.slotShow, den:r=>r.held, min:()=>+(DEFS.min_volume_show||8)},
   {k:"nieuw", t:"Nieuwe leads", pct:false, num:r=>r.nieuw},
   {k:"gepland", t:"Intakes gepland", pct:false, num:r=>r.gepland},
   {k:"show", t:"Shows", pct:false, num:r=>r.show},
-  {k:"sign", t:"Ingeschreven", pct:false, num:r=>r.sign},
+  {k:"sign", t:"Ingeschreven", pct:false, num:r=>r.signO},
   {k:"verloren", t:"Verloren (Leads-fase)", pct:false, num:r=>r.verloren},
 ];
 function trendBuckets(){
@@ -115,7 +118,7 @@ function trendBuckets(){
 }
 function trendRow(who,a,b){
   const f=funnel(who,a,b), s=slots(who,a,b,"setter"); const beh=f.gepland.length+f.verloren.length; const held=s.show.length+s.noshow.length+s.late.length;
-  return {a,b, nieuw:L.filter(l=>inR(l.cd,a,b)&&(who==null||l.setter===who)).length, beh, gepland:f.gepland.length, verloren:f.verloren.length, agenda:f.agenda.length, show:f.show.length, signS:f.signS.length, showI:f.showI.length, sign:f.sign.length, closed:f.closed.length, closeLost:f.closeLost.length, paid:f.paid.length, held, slotShow:s.show.length, late:s.late.length, unres:s.unres.length,
+  return {a,b, nieuw:L.filter(l=>inR(l.cd,a,b)&&(who==null||l.setter===who)).length, beh, gepland:f.gepland.length, verloren:f.verloren.length, agenda:f.agenda.length, show:f.show.length, signS:f.signS.length, showI:f.showI.length, sign:f.sign.length, closed:f.closed.length, closeLost:f.closeLost.length, paid:f.paid.length, signO:f.signO.length, held, slotShow:s.show.length, late:s.late.length, unres:s.unres.length,
     pr:pct(f.gepland.length,beh), sr:pct(f.show.length,f.agenda.length), gs:pct(f.signS.length,f.show.length), gr:pct(f.sign.length,f.showI.length), cr:pct(f.closed.length,f.closed.length+f.closeLost.length), l2s:pct(f.sign.length,beh), slot:pct(s.show.length,held)};
 }
 function drawTrend(){
@@ -125,7 +128,7 @@ function drawTrend(){
   const labels=buckets.map(lab);
   const M=TREND_METRICS.find(m=>m.k===trendMetric)||TREND_METRICS[0];
   const cw=Math.max(320,(tw.clientWidth||900)-34);
-  const autoReps=REPS.filter(p=>{ const r=trendRow(p.n,buckets[0][0],B); return r.beh+r.agenda+r.showI>=20; }).map(p=>p.n).slice(0,3);
+  const autoReps=REPS.filter(p=>{ const r=trendRow(p.n,buckets[0][0],B); return r.beh+r.agenda>=20; }).map(p=>p.n).slice(0,3);
   const repsShown = trendReps ? REPS.map(p=>p.n).filter(n=>trendReps.has(n)) : autoReps;
   const seriesFor=(who,name,color,isTeam)=>{ const rows=buckets.map(([a,b])=>trendRow(who,a,b));
     const weak=rows.map(r=> M.pct && M.min ? (M.den(r)||0) < M.min() : false);
@@ -156,16 +159,27 @@ function drawTrend(){
   // volledige tabel (counts) team of gekozen persoon
   const who=trendWho; const rows=buckets.map(([a,b])=>trendRow(who,a,b));
   h+=`<div class="cmp"><h3>Alle cijfers per ${by==="week"?"week":"maand"} · ${who?esc(who):"team"} <span class="chsub">(kies: `+[["Team",null]].concat(REPS.map(p=>[p.n,p.n])).map(c=>`<a href="#" onclick="trendWho=${c[1]===null?"null":JSON.stringify(c[1]).replace(/"/g,"&quot;")};drawTrend();return false" style="color:${(trendWho===c[1])?"var(--plan-tx)":"inherit"};font-weight:${trendWho===c[1]?800:500};margin-right:8px">${esc(c[0])}</a>`).join("")+`)</span></h3>
-    <table class="trend"><tr><th>Periode</th><th>Nieuwe leads</th><th>Afgehandeld</th><th>Gepland</th><th>Plan rate</th><th>Intakes</th><th>Shows</th><th>Show rate</th><th>Ingeschr.</th><th>Sign rate</th><th>Lead → sale</th><th>Verloren</th><th>Slot-show</th></tr>`;
+    <table class="trend"><tr><th>Periode</th><th>Nieuwe leads</th><th>Afgehandeld</th><th>Gepland</th><th>Plan rate</th><th>Intakes</th><th>Shows</th><th>Show rate</th><th>Ingeschr.</th><th>Sign rate</th><th>Close rate</th><th>Lead → sale</th><th>Verloren</th><th>Slot-show</th></tr>`;
   const rc=(v,n,d)=>d? `<td><b>${(v+"").replace(".",",")}%</b><small>${n}/${d}</small></td>` : "<td>—</td>";
-  for(let i=rows.length-1;i>=0;i--){ const r=rows[i]; h+=`<tr class="${i===last?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(r.a)}</small></td><td>${r.nieuw}</td><td>${r.beh}</td><td>${r.gepland}</td>${rc(r.pr,r.gepland,r.beh)}<td>${r.agenda}</td><td>${r.show}</td>${rc(r.sr,r.show,r.agenda)}<td>${r.sign}</td>${rc(r.gr,r.sign,r.showI)}${rc(r.l2s,r.sign,r.beh)}<td>${r.verloren}</td>${rc(r.slot,r.slotShow,r.held)}</tr>`; }
+  for(let i=rows.length-1;i>=0;i--){ const r=rows[i]; h+=`<tr class="${i===last?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(r.a)}</small></td><td>${r.nieuw}</td><td>${r.beh}</td><td>${r.gepland}</td>${rc(r.pr,r.gepland,r.beh)}<td>${r.agenda}</td><td>${r.show}</td>${rc(r.sr,r.show,r.agenda)}<td>${r.signS}</td>${rc(r.gs,r.signS,r.show)}${rc(r.cr,r.closed,r.closed+r.closeLost)}${rc(r.l2s,r.sign,r.beh)}<td>${r.verloren}</td>${rc(r.slot,r.slotShow,r.held)}</tr>`; }
   h+=`</table></div>
   <p class="note">Rates per ISO-week (ma t/m zo) met dezelfde definities als de funnelkolommen: nieuwe leads op aanmaakdatum, gepland op inplandatum, intakes/shows/inschrijvingen op intakedatum, verloren op datum van afboeken. Absolute aantallen bewegen mee met het aantal leads; de <b>percentages</b> laten zien of het team beter of slechter wordt. Een open bolletje/grijze cel = te weinig volume in die week (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}) — dan zegt het percentage weinig.</p>`;
   tw.innerHTML=h;
 }
 
 // ---- 📣 bronnen & ads ----
-let bronBy="kanaal", bronSort={c:1,d:-1};
+let bronBy="kanaal", bronSort={c:1,d:-1}, bronMode="periode", bronEvt="show", bronPick=null;
+const BRON_EVT={binnen:["Binnengekomen",l=>inR(l.cd,A,B),"cd"], gepland:["Intake gepland",l=>l.stage_position!==0&&inR(l.pd,A,B),"pd"], intake:["Intakes",l=>inR(l.id_,A,B),"id_"], show:["Shows",l=>inR(l.id_,A,B)&&l.is_show,"id_"], sign:["Ingeschreven",l=>inR(l.id_,A,B)&&l.is_signed,"id_"], paid:["Betaald",l=>inR(l.id_,A,B)&&l.is_paid,"id_"]};
+function bronLijst(ls, dk, title){
+  const rows=[...ls].sort((a,b)=>(b[dk]||0)-(a[dk]||0));
+  return `<div class="cmp"><h3>${title} <span class="chsub">(klik op een naam voor GHL)</span></h3><table><tr><th>Naam</th><th>Datum</th><th>Setter</th><th>Eigenaar</th><th>Fase</th><th>Kanaal</th><th>Campagne</th><th>Advertentie</th><th>Temp.</th></tr>`+
+    rows.slice(0,200).map(l=>`<tr><td>${ghl(l.contact_id,l.name)}</td><td>${l[dk]>=0?fmt(l[dk]):"—"}</td><td>${esc(l.setter||"—")}</td><td>${esc(l.owner||"—")}</td><td><span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span></td><td>${esc(l.kanaal||"—")}</td><td><small>${esc(l.utm_campaign||"(leeg)")}</small></td><td><small>${esc(l.utm_content||"(leeg)")}</small></td><td>${esc(l.temperature||"—")}</td></tr>`).join("")+`</table>${rows.length>200?`<div class="more">eerste 200 van ${rows.length}</div>`:""}</div>`;
+}
+function bronFunnel(k, ls){
+  const steps=[["Binnengekomen",ls.length,"var(--mut2)"],["Intake gepland",ls.filter(l=>l.has_planned||l.pd>=0).length,"var(--plan)"],["Intakes geweest",ls.filter(l=>l.id_>=0&&l.id_<=TODAY).length,"var(--plan)"],["Shows",ls.filter(l=>l.is_show).length,"var(--show)"],["Ingeschreven",ls.filter(l=>l.is_signed).length,"var(--sign)"],["Betaald",ls.filter(l=>l.is_paid).length,"var(--close)"]];
+  const mx=Math.max(1,steps[0][1]); const lost=ls.filter(l=>l.lost).length, open=ls.filter(l=>l.open).length;
+  return `<div class="cmp"><h3>Cohort "${esc(k)}" · ${ls.length} leads binnengekomen ${fmtY(A)} t/m ${fmtY(B)} <span class="chsub">${lost} verloren · ${open} nog open</span></h3>`+steps.map(([t,n,c],i)=>`<div class="fst"><span>${t}</span><em><i style="width:${Math.round(n/mx*100)}%;background:${c}"></i></em><b>${n}</b><small>${i?fpct(n,steps[0][1])+" van binnen":""}${i>1?` · ${fpct(n,steps[i-1][1])} van vorige`:""}</small></div>`).join("")+`</div>`;
+}
 const BRON_KEYS={kanaal:["Kanaal",l=>l.kanaal||"Onbekend"], utm_campaign:["Campagne",l=>l.utm_campaign||"(leeg)"], utm_content:["Advertentie (utm_content)",l=>l.utm_content||"(leeg)"], utm_source:["utm_source",l=>l.utm_source||"(leeg)"], temperature:["Temperatuur",l=>l.temperature||"(leeg)"], contact_source:["Contactbron (GHL)",l=>l.contact_source||"(leeg)"]};
 function bronRows(co,kf){
   const g=new Map(); for(const l of co){ const k=kf(l); if(!g.has(k)) g.set(k,[]); g.get(k).push(l); }
@@ -177,16 +191,30 @@ function drawBron(){
   const bw=document.getElementById("bronwrap");
   const co=L.filter(l=>inR(l.cd,A,B));   // cohort: leads binnengekomen in de periode
   const kf=BRON_KEYS[bronBy][1];
+  let h=`<div class="wonchips"><div class="wchip${bronMode==="periode"?" on":""}" onclick="bronMode='periode';bronPick=null;drawBron()">⏱ Wat gebeurde er in de periode</div><div class="wchip${bronMode==="cohort"?" on":""}" onclick="bronMode='cohort';bronPick=null;drawBron()">👥 Cohort · leads binnengekomen in de periode</div></div>`;
+  h+=`<div class="wonchips"><span class="lbl">Per:</span>`+Object.entries(BRON_KEYS).map(([k,v])=>`<div class="wchip sm${bronBy===k?" on":""}" onclick="bronBy='${k}';bronPick=null;drawBron()">${v[0]}</div>`).join("")+`</div>`;
+  if(bronMode==="periode"){
+    const E=Object.entries(BRON_EVT); const sets={}; for(const [k,v] of E) sets[k]=L.filter(v[1]);
+    h+=`<div class="wonchips"><span class="lbl">Tel:</span>`+E.map(([k,v])=>`<div class="wchip${bronEvt===k?" on":""}" onclick="bronEvt='${k}';bronPick=null;drawBron()">${v[0]}<span class="n">${sets[k].length}</span></div>`).join("")+`</div>`;
+    const allKeys=new Set(); for(const k in sets) sets[k].forEach(l=>allKeys.add(kf(l)));
+    const rws=[...allKeys].map(k=>{ const o={k}; for(const e in sets) o[e]=sets[e].filter(l=>kf(l)===k); return o; }).sort((a,b)=>b[bronEvt].length-a[bronEvt].length||b.binnen.length-a.binnen.length);
+    const tot=sets[bronEvt].length, mx=Math.max(1,...rws.map(r=>r[bronEvt].length));
+    h+=`<div class="cmp"><h3>${BRON_EVT[bronEvt][0]} · ${fmtY(A)} t/m ${fmtY(B)} · per ${BRON_KEYS[bronBy][0].toLowerCase()} · <b>${tot}</b> <span class="chsub">klik op een getal voor de namen</span></h3><table class="brontbl"><tr><th>${BRON_KEYS[bronBy][0]}</th>`+E.map(([k,v])=>`<th class="${k===bronEvt?"on":""}">${v[0]}</th>`).join("")+`<th>Aandeel ${BRON_EVT[bronEvt][0].toLowerCase()}</th></tr>`;
+    for(const r of rws.slice(0,80)){ const n=r[bronEvt].length; h+=`<tr class="${bronPick===r.k?"sel":""}"><td><b>${esc(r.k)}</b></td>`+E.map(([k])=>`<td class="clk${k===bronEvt?" on":""}" onclick="bronPick=${jq(r.k)};bronEvt='${k}';drawBron()">${r[k].length?`<b>${r[k].length}</b>`:"<span class=dim>0</span>"}</td>`).join("")+`<td><div class="shr"><em><i style="width:${Math.round(n/mx*100)}%"></i></em><span>${fpct(n,tot)}</span></div></td></tr>`; }
+    h+=`<tr class="tot"><td><b>Totaal</b></td>`+E.map(([k])=>`<td class="${k===bronEvt?"on":""}"><b>${sets[k].length}</b></td>`).join("")+`<td></td></tr></table>${rws.length>80?`<div class="more">eerste 80 van ${rws.length}</div>`:""}</div>`;
+    if(bronPick!=null){ const ls=sets[bronEvt].filter(l=>kf(l)===bronPick); h+=bronLijst(ls,BRON_EVT[bronEvt][2],`${BRON_EVT[bronEvt][0]} via ${BRON_KEYS[bronBy][0].toLowerCase()} "${esc(bronPick)}" · ${ls.length}`); }
+    h+=`<p class="note">Telt wat er <b>in de gekozen periode gebeurde</b> — binnengekomen op aanmaakdatum, gepland op inplandatum, intakes/shows/inschrijvingen/betaald op intakedatum — en laat zien via welk kanaal, welke campagne of advertentie die mensen ooit binnenkwamen. De totalen sluiten aan op de KPI-tegels bovenin. Bron = de UTM-velden op de <b>opportunity</b> (custom fields utm source/campaign/content), niet het standaard GHL-contactveld; Kanaal = utm_source samengevoegd (facebook/fb/meta → Facebook / Meta, ig → Instagram) met terugval op de GHL-contactbron.</p>`;
+    bw.innerHTML=h; return;
+  }
   const rows=bronRows(co,kf);
   const cols=[["k","Bron"],["n","Leads"],["open","Nog open"],["beh","Afgehandeld"],["gep","Intake gepland"],["pr","Plan rate"],["intake","Intakes"],["show","Shows"],["sr","Show rate"],["sign","Ingeschr."],["gr","Sign rate"],["l2s","Lead → sale"],["lostShare","Verloren %"],["top","Top verliesreden"],["paid","Betaald"],["s2l","Reactietijd"]];
   const s=bronSort; rows.sort((x,y)=>{ const c=cols[s.c][0]; let a=x[c],b=y[c]; if(a==null)a=-1; if(b==null)b=-1; return (a<b?-1:a>b?1:0)*s.d; });
   const T={n:co.length}; for(const k of ["beh","gep","lost","lostAll","open","intake","show","sign","paid","som"]) T[k]=rows.reduce((a,r)=>a+r[k],0);
   const mn=+(DEFS.min_volume_plan||15);
   const bestPr=Math.max(...rows.filter(r=>r.beh>=mn).map(r=>r.pr),-1), worstPr=Math.min(...rows.filter(r=>r.beh>=mn).map(r=>r.pr),999);
-  const cell=(r,c)=>{ const v=r[c]; if(c==="k") return `<td><b>${esc(v)}</b></td>`; if(c==="top") return `<td><small>${esc(v)}</small></td>`;
+  const cell=(r,c)=>{ const v=r[c]; if(c==="k") return `<td class="clk" onclick="bronPick=${jq(v)};drawBron()"><b>${esc(v)}</b></td>`; if(c==="top") return `<td><small>${esc(v)}</small></td>`;
     if(c==="pr"){ const cls=r.beh>=mn&&rows.filter(x=>x.beh>=mn).length>1?(v===bestPr?"best":v===worstPr?"worst":""):""; return `<td class="${cls}${r.beh<mn?" weak":""}"><b>${(v+"").replace(".",",")}%</b></td>`; }
     if(["sr","gr","l2s","lostShare"].includes(c)) return `<td><b>${(v+"").replace(".",",")}%</b></td>`; if(c==="s2l") return `<td>${fmin(v)}</td>`; return `<td>${v}</td>`; };
-  let h=`<div class="wonchips">`+Object.entries(BRON_KEYS).map(([k,v])=>`<div class="wchip${bronBy===k?" on":""}" onclick="bronBy='${k}';drawBron()">${v[0]}</div>`).join("")+`</div>`;
   // beste / slechtste
   const ranked=rows.filter(r=>r.n>=10);
   const rank=(list,title,cls)=>`<div class="cmp"><h3>${title}</h3>`+(list.length?`<table><tr><th>${BRON_KEYS[bronBy][0]}</th><th>Leads</th><th>Lead → intake gepland</th><th>Verloren %</th><th>Ingeschr.</th><th>Top verliesreden</th></tr>`+list.map(r=>`<tr><td><b>${esc(r.k)}</b></td><td>${r.n}</td><td class="${cls}"><b>${(r.l2i+"").replace(".",",")}%</b> <small>${r.gep}/${r.n}</small></td><td>${(r.lostShare+"").replace(".",",")}%</td><td>${r.sign}</td><td><small>${esc(r.top)}</small></td></tr>`).join("")+`</table>`:`<div class="empty">Te weinig volume (min. 10 leads per ${BRON_KEYS[bronBy][0].toLowerCase()}) in deze periode.</div>`)+`</div>`;
