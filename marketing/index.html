@@ -423,6 +423,26 @@ td.warn,.warn{color:#f5c84c}
 .modesw span.on{background:var(--acc,#f5c84c);color:#111;font-weight:600}
 .sm.on{background:var(--acc,#f5c84c);color:#111}
 @media (max-width:700px){table.tree td.nm{max-width:220px}table.tree{font-size:12px}}
+/* ---- v1.2: advies-ranglijst, beste ads, inschrijvingen ---- */
+.advrows{display:flex;flex-direction:column;gap:8px}
+.advrow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:var(--shadow);flex-wrap:wrap}
+.advrow.hi{border-left-color:#e04b4b}.advrow.mid{border-left-color:#e08a00}.advrow.lo{border-left-color:#c9b94a}
+.advrow .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--sel-bg);color:var(--sel-tx2);font-weight:800;font-size:13px;flex:none}
+.sevb{font-size:10px;font-weight:800;border-radius:99px;padding:3px 9px;text-transform:uppercase;letter-spacing:.3px;flex:none}
+.sevb.hi{background:rgba(224,75,75,.16);color:#e04b4b}.sevb.mid{background:rgba(224,138,0,.16);color:#e08a00}.sevb.lo{background:rgba(201,185,74,.18);color:#a08f2c}
+.advmain{font-size:13.5px;min-width:200px;flex:1 1 240px;line-height:1.35}
+.advmain .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 4px;vertical-align:middle}
+.advdata{font-size:11.5px;color:var(--mut);white-space:nowrap}
+.advrow .advw{margin-left:auto;flex:none}
+.advrow>.chev{flex:none;margin-left:2px}
+.advrow .advx{flex:1 1 100%;margin-top:6px;padding-top:8px;border-top:1px dashed var(--line);cursor:default}
+.advrow .advx p{margin:0 0 6px;font-size:13px;line-height:1.55}
+.advrow .advx .doen{font-size:12.5px;font-weight:700;color:var(--plan-tx)}
+.campfull{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+td.nmw{max-width:380px!important;min-width:220px;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.35}
+td.nmw2{max-width:220px!important;white-space:normal!important;overflow:visible!important}
+td.nmw .dot,.wontbl td .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+@media (max-width:700px){td.nmw{min-width:160px} .advdata{white-space:normal} .advrow .advw{margin-left:0}}
 </style>
 </head>
 <body>
@@ -461,6 +481,7 @@ td.warn,.warn{color:#f5c84c}
 <main>
   <div class="kpis" id="kpis"></div>
   <div id="treewrap" style="display:none"></div>
+  <div id="bestwrap" style="display:none"></div>
   <div class="detail" id="detail" style="display:none"></div>
   <div id="trendwrap" style="display:none"></div>
   <div id="advwrap" style="display:none"></div>
@@ -469,6 +490,6 @@ td.warn,.warn{color:#f5c84c}
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
