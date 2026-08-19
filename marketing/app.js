@@ -181,6 +181,8 @@ function initApp(){
   CAMPS=new Map(); for(const r of D.campaigns||[]){ const [p,id,name,type,status,party,first,last,spend]=r; CAMPS.set(ck(p,id),{platform:p,id,name:name||"(naamloos)",type,status,party:!!party,first:dOf(first),last:dOf(last),spendTotal:+spend||0}); }
   ADS=(D.ads||[]).map((r,i)=>({i,platform:r[0],cid:r[1],adsetId:r[2],adsetName:r[3],adId:r[4],adName:r[5],first:dOf(r[6]),last:dOf(r[7]),spendTotal:+r[8]||0}));
   ADIDX=new Map(); for(const a of ADS){ ADIDX.set([a.platform,a.cid,a.adsetId||"",a.adId||""].join("|"),a); }
+  const _nrm=st=>(st||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  const ADNORM=new Map(); for(const a of ADS){ const nn=_nrm(a.adName); if(nn&&nn.length>=6){ const kk=a.platform+"|"+nn; if(!ADNORM.has(kk)) ADNORM.set(kk,a); } }
   CD=(D.campaign_days||[]).map(r=>({d:dOf(r[0]),platform:r[1],cid:r[2],spend:+r[3]||0,clicks:+r[4]||0,imps:+r[5]||0,isr:r[6]==null?null:+r[6],conv:r[7]==null?null:+r[7],pl:r[8]==null?null:+r[8]}));
   AD=(D.ad_days||[]).map(r=>({d:dOf(r[0]),ad:ADS[r[1]],spend:+r[2]||0,clicks:+r[3]||0,imps:+r[4]||0})).filter(x=>x.ad);
   L=objs(D.lead_cols,D.leads);
@@ -188,6 +190,10 @@ function initApp(){
     l.is_show=!!l.is_show; l.is_noshow=!!l.is_noshow; l.is_signed=!!l.is_signed; l.hard=!!l.hard; l.asm=!!l.asm; l.lost=l.status==="lost";
     l.platform=l.platform||"onbekend"; l.ckey=ck(l.platform,l.campaign_id); l.camp=CAMPS.get(l.ckey)||null; l.party=!!(l.camp&&l.camp.party);
     l.adObj=l.ad_id? (ADIDX.get([l.platform,l.campaign_id,l.adset_id||"",l.ad_id].join("|"))||ADS.find(a=>a.platform===l.platform&&a.adId===l.ad_id)||null) : null;
+    if(!l.adObj&&l.utm_content){ const nc=_nrm(l.utm_content); if(nc.length>=6){ let hit=ADNORM.get(l.platform+"|"+nc)||null;
+      if(!hit){ let cnt=0; for(const [kk,a] of ADNORM){ if(!kk.startsWith(l.platform+"|")) continue; const nn=kk.slice(l.platform.length+1); if(nn.startsWith(nc)||nc.startsWith(nn)){ cnt++; hit=a; if(cnt>1){ hit=null; break; } } } }
+      if(hit&&l.camp&&hit.cid!==l.campaign_id) hit=null;   // nooit een ad uit een ándere campagne plakken
+      if(hit){ l.adObj=hit; if(!l.camp&&hit.cid){ l.campaign_id=hit.cid; l.ckey=ck(l.platform,hit.cid); l.camp=CAMPS.get(l.ckey)||null; l.party=!!(l.camp&&l.camp.party); if(l.bron==="onbekend") l.bron="utm"; } } } }
     l.value=+(l.contract_value||OMZET()); }
   FORMS=(D.forms||[]).map(f=>({...f,d:dOf(f.on)}));
   const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate())); NOW=TODAY;
@@ -235,7 +241,9 @@ function buildTree(a,b){
     if(p==="meta"&&pl.length){
       for(const [pk,plab,pc] of [["meta_ig","📸 via Instagram","#d62976"],["meta_fb","📘 via Facebook","#1877f2"],["meta_x","❔ plaatsing onbekend","#8e8e93"]]){
         const ls=pl.filter(l=>sgKey(l)===pk); if(!ls.length) continue;
-        node.children.push({key:"plc:"+pk,level:1,label:plab,sub:"plaatsing van de lead",color:pc,platform:p,leads:ls,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true,plc:true,pin:true});
+        const byC=new Map(); ls.forEach(l=>{ const kk2=l.ckey; if(!byC.has(kk2)) byC.set(kk2,[]); byC.get(kk2).push(l); });
+        const kids=[...byC.entries()].map(([kk2,ls2])=>{ const c2=CAMPS.get(kk2); return {key:"plc:"+pk+"|"+kk2,level:2,label:c2?c2.name:"(campagne onbekend)",platform:p,leads:ls2,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true,plc:true}; });
+        node.children.push({key:"plc:"+pk,level:1,label:plab,sub:"plaatsing van de lead · klik open voor de campagnes",color:pc,platform:p,leads:ls,sp:{spend:0,clicks:0,imps:0},children:kids,plc:true,pin:true});
       }
     }
     // campagnes: uit leads én uit spend
@@ -320,6 +328,9 @@ const COLS=[
   {k:"hard",t:"Hard bewijs",f:m=>m.hard==null?"—":r1(m.hard)+"%",w:"pct",tip:"aandeel leads met harde attributie (UTM / ad-id / campagne-id)"},
 ];
 function toggleNode(k){ open.has(k)?open.delete(k):open.add(k); drawTree(); }
+// let op: functies, geen kale `open=` in onclick — dat raakt document.open i.p.v. onze variabele
+function treeOpenAll(){ const keys=[]; const walk=n=>{ if(n.children&&n.children.length){ keys.push(n.key); n.children.forEach(walk); } }; TREE.forEach(walk); open=new Set(keys); drawTree(); }
+function treeCloseAll(){ open=new Set(); drawTree(); }
 function setSort(k){ if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir=-1; } drawTree(); }
 function rowHtml(n,depth){
   const m=n.m; const has=n.children&&n.children.length; const isOpen=open.has(n.key);
@@ -334,11 +345,14 @@ function rowHtml(n,depth){
   return h;
 }
 let TREE=[];
-function drawTree(){
+function keepScroll(w,fn){ const sy=window.scrollY; const els=[...w.querySelectorAll("*")].filter(e=>e.scrollLeft>0).slice(0,4).map(e=>[e.className,e.scrollLeft]); fn(); window.scrollTo(0,sy);
+  for(const [cls,sl] of els){ const e=[...w.querySelectorAll("*")].find(x=>x.className===cls&&x.scrollWidth>x.clientWidth); if(e) e.scrollLeft=sl; } }
+function drawTree(){ const _w=document.getElementById("treewrap"); keepScroll(_w,()=>drawTreeInner()); }
+function drawTreeInner(){
   const w=document.getElementById("treewrap");
   TREE = GROUP==="tree"? buildTree(A,B) : groupFlat(A,B);
   TREE.forEach(n=>decorate(n,A,B)); sortNodes(TREE,true);
-  let h=`<div class="wonchips"><div class="wchip sm" onclick="open=new Set(TREE.flatMap(n=>[n.key,...n.children.map(c=>c.key)]));drawTree()">alles open</div><div class="wchip sm" onclick="open=new Set();drawTree()">alles dicht</div></div>`;
+  let h=`<div class="wonchips"><div class="wchip sm" onclick="treeOpenAll()">alles open</div><div class="wchip sm" onclick="treeCloseAll()">alles dicht</div></div>`;
   h+=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">${GROUP==="tree"?"Platform › campagne › adset › advertentie":"Groep"} <small>klik op een rij om uit te klappen · klik op een getal voor de namen</small></th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
   // totaalrij
   const all=L.filter(l=>PARTY||!l.party); const tm=metrics(all,spendIn(A,B,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B);
@@ -367,13 +381,14 @@ function scoreCell(sc){ if(sc==null) return `<span class="scorep s0" title="mind
   const cl=sc>=70?"s4":sc>=45?"s3":sc>=25?"s2":"s1", lab=sc>=70?"top":sc>=45?"goed":sc>=25?"matig":"slecht";
   return `<span class="scorep ${cl}">${sc} · ${lab}</span>`; }
 let bestPlat=null;
-function drawBest(){
+function drawBest(){ keepScroll(document.getElementById("bestwrap"),drawBestInner); }
+function drawBestInner(){
   const w=document.getElementById("bestwrap");
   let rows=[];
   if(bestLvl==="ad"){
     for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.adObj===x&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>y===x); const m=metrics(ls,sp,A,B);
-      if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:c?c.name:(x.cid||"—"),platform:x.platform,m,score:perfScore(m)}); }
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:(c?c.name:(x.cid||"—"))+(x.adsetName?" › "+x.adsetName:""),platform:x.platform,m,score:perfScore(m)}); }
   } else if(bestLvl==="adset"){
     const seen=new Map();
     for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
@@ -538,7 +553,8 @@ function drawAdvice(){
 let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null, sgMode="sign", sgNF=false;
 const SGP={meta_fb:["Facebook","#1877f2"],meta_ig:["Instagram","#d62976"],meta_x:["Meta · plaatsing onbekend","#5856d6"],google:["Google","#1f6fd8"],tiktok:["TikTok","#0e9aa7"],niet_betaald:["Niet betaald (organisch/direct)","#8f845e"],onbekend:["Onbekend","#8e8e93"]};
 function sgKey(l){ if(l.platform!=="meta") return SGP[l.platform]?l.platform:"onbekend"; const p=(l.placement||"").toLowerCase(); if(p.indexOf("insta")>=0) return "meta_ig"; if(p.indexOf("facebook")>=0||/(^|[^a-z])fb([^a-z]|$)/.test(p)) return "meta_fb"; return "meta_x"; }
-function drawSign(){
+function drawSign(){ keepScroll(document.getElementById("signwrap"),drawSignInner); }
+function drawSignInner(){
   const w=document.getElementById("signwrap");
   // modus: inschrijvingen (tekendatum) · shows (intakedatum) · intakes gepland (inplandatum)
   const md=l=> sgMode==="sign"?l.sd : sgMode==="shows"?l.id_ : l.pd;
