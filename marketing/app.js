@@ -165,7 +165,7 @@ let CAMPS=new Map(), ADS=[], ADIDX=new Map(), CD=[], AD=[], FORMS=[];
 let MODE="periode";          // periode (leads op leaddatum, inschrijvingen op tekendatum) · cohort · gebeurd
 let GROUP="tree";            // tree (platform › campagne › adset › ad) · utm_source · placement · bron · temperature · owner · setter
 let PARTY=false;             // party/vacature-campagnes meetellen in totalen
-let open=new Set(["p:meta","p:google"]), sortKey="spend", sortDir=-1, detail=null, trendBy="week", trendPlat=null, trendMetric="cpk";
+let open=new Set(), sortKey="spend", sortDir=-1, detail=null, trendBy="week", trendPlat=null, trendMetric="cpk";
 const PLAT={google:["Google","#1f6fd8"],meta:["Meta (FB/IG)","#5856d6"],tiktok:["TikTok","#0e9aa7"],niet_betaald:["Niet betaald (organisch/direct)","#8f845e"],onbekend:["Onbekend","#8e8e93"]};
 const PN=p=>(PLAT[p]||[p||"—"])[0], PC=p=>(PLAT[p]||[null,"#8e8e93"])[1];
 const BRON={ad_id:"hard · advertentie-id",campaign_id:"hard · campagne-id",adset_id:"hard · adset-id",utm:"hard · UTM",afgeleid:"afgeleid (PMax-looptijd)",ghl_klik:"zacht · GHL klik-attributie",niet_betaald:"niet betaald",onbekend:"onbekend"};
@@ -231,6 +231,13 @@ function buildTree(a,b){
     const pl=L.filter(l=>l.platform===p&&(PARTY||!l.party));
     const sp=spendIn(a,b,r=>r.platform===p&&(PARTY||!(CAMPS.get(ck(p,r.cid))||{}).party));
     const node={key:"p:"+p,level:0,label:PN(p),color:PC(p),platform:p,leads:pl,sp,children:[]};
+    // Meta: plaatsing-splitsing (Facebook / Instagram) bovenaan — kosten kent Meta alleen per campagne
+    if(p==="meta"&&pl.length){
+      for(const [pk,plab,pc] of [["meta_ig","📸 via Instagram","#d62976"],["meta_fb","📘 via Facebook","#1877f2"],["meta_x","❔ plaatsing onbekend","#8e8e93"]]){
+        const ls=pl.filter(l=>sgKey(l)===pk); if(!ls.length) continue;
+        node.children.push({key:"plc:"+pk,level:1,label:plab,sub:"plaatsing van de lead",color:pc,platform:p,leads:ls,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true,plc:true,pin:true});
+      }
+    }
     // campagnes: uit leads én uit spend
     const ckeys=new Set(); pl.forEach(l=>ckeys.add(l.ckey)); CD.forEach(r=>{ if(r.platform===p&&r.d>=a&&r.d<=b&&r.spend>0) ckeys.add(ck(p,r.cid)); });
     for(const k of ckeys){ const c=CAMPS.get(k); const cid=k.split("|")[1]; if(c&&c.party&&!PARTY) continue;
@@ -264,7 +271,7 @@ function groupFlat(a,b){
 }
 function decorate(n,a,b){ n.m=metrics(n.leads,n.sp,a,b); n.children.forEach(c=>decorate(c,a,b)); }
 const SORTS={spend:n=>n.m.spend,n:n=>n.m.n,cpl:n=>n.m.cpl,g:n=>n.m.g,plan:n=>n.m.plan,i:n=>n.m.i,sh:n=>n.m.sh,show:n=>n.m.show,sg:n=>n.m.sg,sign:n=>n.m.sign,l2k:n=>n.m.l2k,cpk:n=>n.m.cpk,omzet:n=>n.m.omzet,hard:n=>n.m.hard};
-function sortNodes(ns,top){ const f=SORTS[sortKey]||SORTS.spend; if(!(top&&GROUP==="tree")) ns.sort((x,y)=>{ const a=f(x),b=f(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a-b)*sortDir; }); ns.forEach(n=>sortNodes(n.children,false)); }
+function sortNodes(ns,top){ const f=SORTS[sortKey]||SORTS.spend; if(!(top&&GROUP==="tree")) ns.sort((x,y)=>{ const a=f(x),b=f(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a-b)*sortDir; }); ns.sort((x,y)=>(y.pin?1:0)-(x.pin?1:0)); ns.forEach(n=>sortNodes(n.children,false)); }
 
 // ---- KPI's ----
 function drawKpis(){
@@ -280,20 +287,21 @@ function drawKpis(){
     [eur0(m.spend),"Advertentiekosten",`excl. party/vacature (${eur0(party.spend)})`,dlt(m.spend,pm.spend,eur0,true)],
     [m.n,"Leads binnengekomen",null,dlt(m.n,pm.n,v=>v)],
     [m.cpl==null?"—":eur0(m.cpl),"Kosten per lead",null,dlt(m.cpl,pm.cpl,eur0,true)],
-    [m.g,"Intake gepland",m.plan!=null?`${r1(m.plan)}% van de leads`:null,dlt(m.g,pm.g,v=>v)],
-    [m.sh,"Shows",m.show!=null?`${r1(m.show)}% van de intakes`:null,dlt(m.sh,pm.sh,v=>v)],
-    [m.sg,"Inschrijvingen",MODE==="cohort"?"uit dit cohort":"op tekendatum in periode",dlt(m.sg,pm.sg,v=>v)],
+    [m.g,"Intake gepland",m.plan!=null?`${r1(m.plan)}% van de leads · klik voor de namen`:null,dlt(m.g,pm.g,v=>v),"","gepland"],
+    [m.sh,"Shows",m.show!=null?`${r1(m.show)}% van de intakes · klik voor de namen`:null,dlt(m.sh,pm.sh,v=>v),"","shows"],
+    [m.sg,"Inschrijvingen",(MODE==="cohort"?"uit dit cohort":"op tekendatum in periode")+" · klik voor de namen",dlt(m.sg,pm.sg,v=>v),"","sign"],
     [m.cpk==null?"—":eur0(m.cpk),"Kosten per klant",`plafond ${eur0(MAXCPK())} (25% van ${eur0(OMZET())})`,dlt(m.cpk,pm.cpk,eur0,true),cpkCls],
     [m.pctOmzet==null?"—":r1(m.pctOmzet)+"%","% van omzet per student",m.roas!=null?`ROAS ${r1(m.roas)}×`:null,""],
     [eur0(m.omzet),"Omzet uit inschrijvingen",asm?`+ ${asm} All Star-upsell${asm===1?"":"s"}`:null,dlt(m.omzet,pm.omzet,eur0)],
   ];
-  k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
+  k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}${x[5]?" kclk":""}" ${x[5]?`onclick="kpiPick('${x[5]}')"`:""} ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
 }
+function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
 
 // ---- tabs ----
 function drawTabs(){
   const el=document.getElementById("tabs"); el.innerHTML="";
-  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","🧭 Wat moet ik veranderen"],["sign","🧾 Inschrijvingen"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
+  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","🧭 Wat moet ik veranderen"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
   const mb=document.getElementById("modebar"); mb.innerHTML=`<div class="modesw" title="Periode: leads op leaddatum, inschrijvingen op tekendatum (advies: zo zie je snel wat een campagne oplevert). Cohort: alles over de leads die in de periode binnenkwamen. Gebeurd: wat er in de periode gebeurde (gepland/intake/show/teken op hun eigen datum).">${[["periode","Periode"],["cohort","Cohort"],["gebeurd","Gebeurd"]].map(x=>`<span class="${MODE===x[0]?"on":""}" onclick="MODE='${x[0]}';detail=null;render()">${x[1]}</span>`).join("")}</div>`;
 }
 
@@ -308,7 +316,7 @@ const COLS=[
   {k:"show",t:"Show %",f:m=>m.show==null?"—":r1(m.show)+"%",w:"pct",sub:m=>m.i?`${m.sh}/${m.i}`:""},
   {k:"sg",t:"Ingeschr.",f:m=>m.sg,w:"num",click:"sign"},
   {k:"sign",t:"Sign %",f:m=>m.sign==null?"—":r1(m.sign)+"%",w:"pct"},
-  {k:"cpk",t:"Kosten / klant",f:m=>m.cpk==null?"—":eur0(m.cpk),w:"num",cls:m=>m.cpk==null?"":(m.cpk<=MAXCPK()*0.85?"good":m.cpk>MAXCPK()*1.25?"bad":"warn")},
+  {k:"cpk",t:"Kosten / klant",f:m=>m.cpk!=null?eur0(m.cpk):(m.sg===0&&m.spend>=100?eur0(m.spend):"—"),w:"num",cls:m=>m.cpk!=null?(m.cpk<=MAXCPK()*0.85?"good":m.cpk>MAXCPK()*1.25?"bad":"warn"):(m.sg===0&&m.spend>=400?"bad":m.sg===0&&m.spend>=100?"warn":""),sub:m=>m.cpk==null&&m.sg===0&&m.spend>=100?"uitgegeven, 0 klanten":"",tip:"kosten ÷ inschrijvingen · een rood/oranje bedrag = al uitgegeven zonder één klant (rood vanaf € 400)"},
   {k:"hard",t:"Hard bewijs",f:m=>m.hard==null?"—":r1(m.hard)+"%",w:"pct",tip:"aandeel leads met harde attributie (UTM / ad-id / campagne-id)"},
 ];
 function toggleNode(k){ open.has(k)?open.delete(k):open.add(k); drawTree(); }
@@ -317,7 +325,9 @@ function rowHtml(n,depth){
   const m=n.m; const has=n.children&&n.children.length; const isOpen=open.has(n.key);
   const pad=10+depth*22;
   let h=`<tr class="lv${n.level}${isOpen?" open":""}${n.camp&&n.camp.party?" party":""}${has?" has":""}"${has?` onclick="toggleNode(${jq(n.key)})" title="${isOpen?"klik om in te klappen":"klik om uit te klappen"}"`:""}><td class="nm" style="padding-left:${pad}px">${has?`<span class="tg"><i class="chev${isOpen?" open":""}"></i></span>`:`<span class="tg leaf"></span>`}${n.color?`<span class="dot" style="background:${n.color}"></span>`:""}<span class="lab" title="${esc(n.label)}">${esc(n.label)}</span>${n.sub?`<small>${esc(n.sub)}</small>`:""}${n.key.startsWith("c:")&&n.cid?`<small class="isr" title="zoekvertoningsaandeel (Google)">${(()=>{const v=isr(A,B,n.cid);return v==null?"":"ISR "+Math.round(v*100)+"%";})()}</small>`:""}</td>`;
-  for(const c of COLS){ const v=c.f(m); const cl=c.cls?c.cls(m):""; const clk=c.click&&(+v>0)?` class="clk ${c.w} ${cl}" onclick="event.stopPropagation();showDetail(${jq(n.key)},'${c.click}')" title="klik voor de namen"`:` class="${c.w} ${cl}"`;
+  for(const c of COLS){
+    if(n.plc&&(c.k==="spend"||c.k==="cpl"||c.k==="cpk")){ h+=`<td class="${c.w}" title="Meta rapporteert kosten per campagne, niet per plaatsing — kosten staan bij de campagnes hieronder">—</td>`; continue; }
+    const v=c.f(m); const cl=c.cls?c.cls(m):""; const clk=c.click&&(+v>0)?` class="clk ${c.w} ${cl}" onclick="event.stopPropagation();showDetail(${jq(n.key)},'${c.click}')" title="klik voor de namen"`:` class="${c.w} ${cl}"`;
     h+=`<td${clk}><b>${v}</b>${c.sub?`<small>${c.sub(m)}</small>`:""}</td>`; }
   h+=`</tr>`;
   if(has&&isOpen) for(const c of n.children) h+=rowHtml(c,depth+1);
@@ -328,7 +338,7 @@ function drawTree(){
   const w=document.getElementById("treewrap");
   TREE = GROUP==="tree"? buildTree(A,B) : groupFlat(A,B);
   TREE.forEach(n=>decorate(n,A,B)); sortNodes(TREE,true);
-  let h=`<div class="wonchips"><div class="wchip sm" onclick="open=new Set(TREE.flatMap(n=>[n.key,...n.children.map(c=>c.key)]));drawTree()">alles open</div><div class="wchip sm" onclick="open=new Set();drawTree()">alles dicht</div><span style="flex:1"></span><div class="wchip sm${PARTY?" on":""}" onclick="PARTY=!PARTY;render()" title="party-/vacature-/verkoopcampagnes meetellen">🎉 Party meetellen</div></div>`;
+  let h=`<div class="wonchips"><div class="wchip sm" onclick="open=new Set(TREE.flatMap(n=>[n.key,...n.children.map(c=>c.key)]));drawTree()">alles open</div><div class="wchip sm" onclick="open=new Set();drawTree()">alles dicht</div></div>`;
   h+=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">${GROUP==="tree"?"Platform › campagne › adset › advertentie":"Groep"} <small>klik op een rij om uit te klappen · klik op een getal voor de namen</small></th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
   // totaalrij
   const all=L.filter(l=>PARTY||!l.party); const tm=metrics(all,spendIn(A,B,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B);
@@ -356,20 +366,31 @@ function perfScore(m){
 function scoreCell(sc){ if(sc==null) return `<span class="scorep s0" title="minder dan € 100 kosten en minder dan 3 leads — te weinig om eerlijk te beoordelen">te weinig data</span>`;
   const cl=sc>=70?"s4":sc>=45?"s3":sc>=25?"s2":"s1", lab=sc>=70?"top":sc>=45?"goed":sc>=25?"matig":"slecht";
   return `<span class="scorep ${cl}">${sc} · ${lab}</span>`; }
+let bestPlat=null;
 function drawBest(){
   const w=document.getElementById("bestwrap");
-  const rows=[];
+  let rows=[];
   if(bestLvl==="ad"){
     for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.adObj===x&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>y===x); const m=metrics(ls,sp,A,B);
       if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:c?c.name:(x.cid||"—"),platform:x.platform,m,score:perfScore(m)}); }
+  } else if(bestLvl==="adset"){
+    const seen=new Map();
+    for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
+      const key=x.platform+"|"+x.cid+"|"+(x.adsetId||"");
+      if(!seen.has(key)) seen.set(key,{label:x.adsetName||(x.adsetId?"adset "+x.adsetId:"(zonder adgroep)"),camp:c?c.name:(x.cid||"—"),platform:x.platform,ads:[]});
+      seen.get(key).ads.push(x); }
+    for(const g of seen.values()){ const set=new Set(g.ads);
+      const ls=L.filter(l=>l.adObj&&set.has(l.adObj)&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>set.has(y)); const m=metrics(ls,sp,A,B);
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:g.label,camp:g.camp,platform:g.platform,m,score:perfScore(m)}); }
   } else {
     for(const [k,c] of CAMPS){ if(c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.ckey===k&&(PARTY||!l.party)); const sp=spendIn(A,B,r=>r.platform===c.platform&&(r.cid||"")===(c.id||"")); const m=metrics(ls,sp,A,B);
       if(m.n<1&&m.spend<0.5) continue; rows.push({label:c.name,camp:"",platform:c.platform,m,score:perfScore(m)}); }
   }
+  if(bestPlat) rows=rows.filter(r=>r.platform===bestPlat);
   const cols=[
-    {k:"label",t:bestLvl==="ad"?"Advertentie":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<div class="adnm" title="${esc(r.label)}${r.camp?" — "+esc(r.camp):""}"><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</b>${r.camp?`<small>${esc(r.camp)}</small>`:""}</div>`,cls:"nmw"},
+    {k:"label",t:bestLvl==="ad"?"Advertentie":bestLvl==="adset"?"Advertentiegroep":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<div class="adnm" title="${esc(r.label)}${r.camp?" — "+esc(r.camp):""}"><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</b>${r.camp?`<small>${esc(r.camp)}</small>`:""}</div>`,cls:"nmw"},
     {k:"score",t:"Prestatie",v:r=>r.score,f:r=>scoreCell(r.score),tip:"0–100: kosten per klant laag (max 60) + genoeg klanten om erop te vertrouwen (max 20) + intakes en shows per uitgegeven euro (max 20)"},
     {k:"spend",t:"Kosten",v:r=>r.m.spend,f:r=>eur0(r.m.spend)},
     {k:"n",t:"Leads",v:r=>r.m.n,f:r=>r.m.n},
@@ -377,6 +398,7 @@ function drawBest(){
     {k:"g",t:"Intakes gepland (SQL)",v:r=>r.m.g,f:r=>r.m.g},
     {k:"sh",t:"Shows",v:r=>r.m.sh,f:r=>r.m.sh},
     {k:"sg",t:"Inschrijvingen",v:r=>r.m.sg,f:r=>`<b>${r.m.sg}</b>`},
+    {k:"open",t:"Nog open",v:r=>r.m.S.nieuw.filter(l=>!l.is_signed&&!l.lost).length,f:r=>{const o=r.m.S.nieuw.filter(l=>!l.is_signed&&!l.lost).length;return o||"—";},tip:"leads uit deze periode die nog niet getekend én nog niet verloren zijn — hier kan nog wat uitkomen"},
     {k:"sign",t:"Sign %",v:r=>r.m.sign,f:r=>r.m.sign==null?"—":r1(r.m.sign)+"%"},
     {k:"cpk",t:"Kosten / klant",v:r=>r.m.cpk,f:r=>r.m.cpk==null?"—":eur0(r.m.cpk),cf:r=>r.m.cpk==null?"":(r.m.cpk<=MAXCPK()*0.85?"good":r.m.cpk>MAXCPK()*1.25?"bad":"warn")},
   ];
