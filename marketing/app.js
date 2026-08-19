@@ -624,15 +624,16 @@ function drawSign(){
 function drawData(){
   const w=document.getElementById("datawrap");
   const months=new Map(); for(const l of L){ if(l.cd<0) continue; const k=d2s(l.cd).getFullYear()+"-"+String(d2s(l.cd).getMonth()+1).padStart(2,"0"); if(!months.has(k)) months.set(k,[]); months.get(k).push(l); }
-  let h=`<div class="cmp"><h3>Attributiedekking per maand (leads op binnenkomst)</h3><table><tr><th>Maand</th><th>Leads</th><th>Hard (UTM/ad-id)</th><th>Zacht (GHL klik)</th><th>Afgeleid</th><th>Niet betaald</th><th>Onbekend</th><th>Met campagne</th><th>Met advertentie</th></tr>`;
+  const cQ=D.counts||{}; const noFormQ=L.filter(l=>l.is_signed&&l.signed_via!=="formulier");
+  const unmQ=FORMS.filter(f=>!f.contact_id);
+  let h=`<div class="two"><div class="cmp ${noFormQ.length?"":""}"><h3>⚠️ Agreement Signed zonder inschrijfformulier · ${noFormQ.length}</h3>${noFormQ.length?`<table><tr><th>Naam</th><th>Fasewissel</th><th>Eigenaar</th></tr>${noFormQ.map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${l.sd>=0?fmt(l.sd):"—"}</td><td>${esc(l.owner||"—")}</td></tr>`).join("")}</table>`:`<div class="empty">Alles gekoppeld. 👌</div>`}</div>
+    <div class="cmp"><h3>⚠️ Formulieren zonder contact-koppeling · ${unmQ.length}</h3>${unmQ.length?`<table><tr><th>Datum</th><th>Naam</th><th>Product</th></tr>${unmQ.map(f=>`<tr><td>${fmt(f.d)}</td><td>${esc(f.name)}</td><td>${esc(f.product)}</td></tr>`).join("")}</table>`:`<div class="empty">Alle formulieren zijn aan een contact gekoppeld.</div>`}</div></div>`;
+  h+=`<div class="cmp" style="margin-top:12px"><h3>Attributiedekking per maand (leads op binnenkomst)</h3><table><tr><th>Maand</th><th>Leads</th><th>Hard (UTM/ad-id)</th><th>Zacht (GHL klik)</th><th>Afgeleid</th><th>Niet betaald</th><th>Onbekend</th><th>Met campagne</th><th>Met advertentie</th></tr>`;
   for(const [k,ls] of [...months.entries()].sort()){ const n=ls.length; const c=f=>ls.filter(f).length; const p=x=>`${x} <small>${fpct(x,n)}</small>`;
     h+=`<tr><td><b>${k}</b></td><td>${n}</td><td>${p(c(l=>l.hard))}</td><td>${p(c(l=>l.bron==="ghl_klik"))}</td><td>${p(c(l=>l.bron==="afgeleid"))}</td><td>${p(c(l=>l.bron==="niet_betaald"))}</td><td class="${c(l=>l.bron==="onbekend")/n>0.1?"bad":""}">${p(c(l=>l.bron==="onbekend"))}</td><td>${p(c(l=>!!l.camp))}</td><td>${p(c(l=>!!l.adObj))}</td></tr>`; }
   h+=`</table></div>`;
-  const c=D.counts||{}; const noForm=L.filter(l=>l.is_signed&&l.signed_via!=="formulier");
-  h+=`<div class="two"><div class="cmp"><h3>Bronnen</h3><table><tr><td>Spend-data t/m</td><td><b>${c.spend_last?fmtY(dOf(c.spend_last)):"— (nog geen spend geladen)"}</b></td></tr><tr><td>Campagne-dagen / ad-dagen</td><td>${c.campaign_days||0} / ${c.ad_days||0}</td></tr><tr><td>Leads met GHL-attributie opgehaald</td><td>${c.attr||0}</td></tr><tr><td>Inschrijfformulieren</td><td>${c.forms||0} (PA ${FORMS.filter(f=>f.product==="PA").length} · ASM ${FORMS.filter(f=>f.product==="ASM").length})</td></tr><tr><td>Laatste stand</td><td>${document.getElementById("gen").textContent}</td></tr></table></div>
-    <div class="cmp"><h3>Agreement Signed zonder inschrijfformulier · ${noForm.length}</h3>${noForm.length?`<table><tr><th>Naam</th><th>Fasewissel</th><th>Eigenaar</th></tr>${noForm.map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${l.sd>=0?fmt(l.sd):"—"}</td><td>${esc(l.owner||"—")}</td></tr>`).join("")}</table>`:`<div class="empty">Alles gekoppeld. 👌</div>`}</div></div>`;
-  const unm=FORMS.filter(f=>!f.contact_id);
-  h+=`<div class="cmp"><h3>Formulieren zonder contact-koppeling · ${unm.length}</h3>${unm.length?`<table><tr><th>Datum</th><th>Naam</th><th>Product</th></tr>${unm.map(f=>`<tr><td>${fmt(f.d)}</td><td>${esc(f.name)}</td><td>${esc(f.product)}</td></tr>`).join("")}</table>`:`<div class="empty">Alle formulieren zijn aan een contact gekoppeld.</div>`}</div>`;
+  const c=D.counts||{};
+  h+=`<div class="cmp" style="margin-top:12px"><h3>Bronnen</h3><table><tr><td>Spend-data t/m</td><td><b>${c.spend_last?fmtY(dOf(c.spend_last)):"— (nog geen spend geladen)"}</b></td></tr><tr><td>Campagne-dagen / ad-dagen</td><td>${c.campaign_days||0} / ${c.ad_days||0}</td></tr><tr><td>Leads met GHL-attributie opgehaald</td><td>${c.attr||0}</td></tr><tr><td>Inschrijfformulieren</td><td>${c.forms||0} (PA ${FORMS.filter(f=>f.product==="PA").length} · ASM ${FORMS.filter(f=>f.product==="ASM").length})</td></tr><tr><td>Laatste stand</td><td>${document.getElementById("gen").textContent}</td></tr></table></div>`;
   h+=`<p class="note">Bekende gaten (uit de overdracht): Google stuurde tot 6 aug <code>utm_campaign={campaignname}</code> letterlijk mee — campagne wordt dan herleid uit het advertentie-id in utm_content; PMax stuurt geen advertentie-id (afgeleid op looptijd); Meta Instant Forms hebben soms geen UTM's (GHL klik-attributie vangt een deel op); 8–22 mei 2026 viel de UTM-doorgifte weg. gclid/fbclid worden nog niet bewaard (staan wél in de GHL-contactattributie — volgende stap voor offline-conversies).</p>`;
   w.innerHTML=h;
 }
@@ -641,6 +642,7 @@ function drawData(){
 function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
   drawTabs(); drawKpis();
+  document.getElementById("kpis").style.display = tab==="tree"?"":"none";
   const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",sign:"signwrap",data:"datawrap"};
   for(const k in ids) document.getElementById(ids[k]).style.display = tab===k?"block":"none";
   if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
