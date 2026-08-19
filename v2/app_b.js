@@ -68,23 +68,32 @@ function drawCmp(){
     {t:"Pay rate", sub:"eigenaar", g:x=>({v:rate(x.f.paid.length,x.f.signO.length), n:x.f.paid.length, d:x.f.signO.length}), phase:"pay", min:1},
   ];
   const chips=`<div class="wonchips"><div class="wchip${cmpTeam?" on":""}" onclick="cmpTeam=!cmpTeam;drawCmp()" title="Team-kolom tonen/verbergen">Σ Team</div><span class="lbl" style="margin-left:4px">Personen:</span>`+REPS.map(p=>`<div class="wchip${names.includes(p.n)?" on":""}" onclick="cmpToggle(${JSON.stringify(p.n).replace(/"/g,"&quot;")})"><span class="dot" style="background:${repCol(p.n)}"></span>${esc(p.n)}</div>`).join("")+`<div class="wchip" onclick="cmpSel=new Set(REPS.map(p=>p.n));drawCmp()">Iedereen</div><div class="wchip" onclick="cmpSel=null;drawCmp()">↺ auto</div></div>`;
+  const TF={f:funnel(null,A,B), s:slots(null,A,B,"setter"), si:slots(null,A,B,"intaker")};   // teamtotaal voor de vergelijking
   let h=chips+`<div class="cmpcard"><table class="cmptbl"><tr><th class="mt">KPI</th>`+cols.map((c,i)=>`<th class="${(cmpTeam&&i===0)?"team":""}"><span class="dot" style="background:${c.n?repCol(c.n):"var(--txt)"}"></span>${esc(c.lab)}</th>`).join("")+`</tr>`;
   for(const r of rows){
     if(r.hdr){ h+=`<tr class="hdr"><td colspan="${cols.length+1}">${r.hdr}</td></tr>`; continue; }
     const cells=cols.map((c,i)=>r.g(F[i],c));
+    const isRate=!r.num;
+    const teamV=isRate? r.g(TF,{n:null}).v : null;   // teamgemiddelde van deze rate
     const vals=r.num&&!r.rank ? [] : cells.slice(ti).map((x,i)=>(r.min && x.d!=null && x.d<r.min)? null : x.v).filter(v=>v!=null);
-    const best= vals.length>1? (r.lowGood? Math.min(...vals) : Math.max(...vals)) : null, worst= vals.length>1? (r.lowGood? Math.max(...vals) : Math.min(...vals)) : null;
+    const best= vals.length>1? (r.lowGood? Math.min(...vals) : Math.max(...vals)) : null;
     const maxAbs=Math.max(1,...cells.map(x=>x.v==null?0:x.v));
-    h+=`<tr><td class="mt"><b>${r.t}</b><small>${r.sub}</small></td>`+cells.map((x,i)=>{
+    h+=`<tr><td class="mt"><b>${r.t}</b><small>${r.sub}</small>${isRate&&teamV!=null?`<small>team ${(Math.round(teamV*10)/10+"").replace(".",",")}%</small>`:""}</td>`+cells.map((x,i)=>{
       const c=cols[i]; const weak = r.min && x.d!=null && x.d<r.min;
-      const cls = i>=ti && !weak && x.v!=null && best!==null && x.v===best && best!==worst ? "best" : (i>=ti && !weak && x.v!=null && worst!==null && x.v===worst && best!==worst ? "worst" : "");
+      // kleur = afwijking t.o.v. het teamgemiddelde (≥ 2 pp beter = groen, ≥ 2 pp slechter = rood)
+      let cls=""; let devTxt="";
+      if(isRate && i>=ti && !weak && x.v!=null && teamV!=null){
+        const dev=(r.lowGood? teamV-x.v : x.v-teamV);
+        cls = dev>=2 ? "best" : dev<=-2 ? "worst" : "";
+        devTxt = `<small class="${dev>=0?"up":"dn"}">${dev>=0?"+":"−"}${(Math.round(Math.abs(dev)*10)/10+"").replace(".",",")} pp vs team</small>`;
+      } else if(!isRate && r.rank && i>=ti && !weak && x.v!=null && best!==null && x.v===best){ cls="best"; }
       const txt = x.txt!=null ? x.txt : (x.v==null ? "—" : (r.num ? x.v : (x.v+"").replace(".",",")+"%"));
       const bar = x.v==null ? "" : `<i class="cbar" style="width:${Math.round((r.num? x.v/maxAbs : x.v/100)*100)}%;background:${c.n?repCol(c.n):"var(--mut2)"}"></i>`;
       const click = r.phase ? `onclick="tab='cmp';pick('${esc(c.n==null?"tot":c.n)}','${r.phase}')" title="klik voor de namen"` : "";
-      return `<td class="${cls}${(cmpTeam&&i===0)?" team":""}${weak?" weak":""}" ${click}><b>${txt}</b>${x.d!=null?`<small>${x.n}/${x.d}${weak?" · te weinig":""}</small>`:""}${bar}</td>`; }).join("")+`</tr>`;
+      return `<td class="${cls}${(cmpTeam&&i===0)?" team":""}${weak?" weak":""}" ${click}><b>${txt}</b>${x.d!=null?`<small>${x.n}/${x.d}${weak?" · te weinig":""}</small>`:""}${devTxt}${bar}</td>`; }).join("")+`</tr>`;
   }
   h+=`</table></div>
-  <p class="note">Elke rij is één KPI, elke kolom één persoon — zo vergelijk je Django en Marcel direct, ook op je telefoon (schuif horizontaal). <b>Groen</b> = beste van de rij, <b>rood</b> = laagste; grijs = te weinig volume om eerlijk te vergelijken (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}). Klik op een cel voor de namen erachter. Rollen per rij staan eronder; schakel bovenin naar <i>Per rep (v1)</i> voor de oude telling.</p>`;
+  <p class="note">Elke rij is één KPI, elke kolom één persoon — zo vergelijk je Django en Marcel direct naast elkaar. <b>Groen</b> = minstens 2 procentpunt beter dan het teamgemiddelde van die rij, <b>rood</b> = minstens 2 pp slechter; het verschil staat onder elke waarde. Het teamgemiddelde zelf staat links onder de KPI-naam. Grijs = te weinig volume om eerlijk te vergelijken (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}). Klik op een cel voor de namen erachter. Schakel bovenin naar <i>Per rep (v1)</i> voor de oude telling.</p>`;
   el.innerHTML=h;
 }
 
@@ -396,6 +405,8 @@ function askPak(){ const I=insights(); const r1=v=>(v+"").replace(".",",");
   lines.push("Opvallend (regelmotor): "+I.items.slice(0,8).map(i=>i.t).join(" | "));
   const txt=lines.join("\n"); const done=()=>{ const b=document.getElementById("pakbtn"); if(b){ b.textContent="✓ gekopieerd — plak het in je chat met Claude"; setTimeout(()=>b.textContent="📋 Kopieer datapakket voor Claude",3000);} };
   if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done,()=>{ prompt("Kopieer:",txt); }); else prompt("Kopieer:",txt); }
+let askOpen=new Set();
+function askTog(k){ askOpen.has(k)?askOpen.delete(k):askOpen.add(k); drawAsk(); }
 function drawAsk(){
   const aw=document.getElementById("advwrap"); const I=insights(); const r1=v=>(v+"").replace(".",",");
   const presets=[["Top 5 opvallende zaken",""],["Waar lekt de funnel?","funnel"],["Wie moet ik coachen?","coach"],["Welke ads presteren slecht?","ads"],["Waarom verliezen we leads?","verlies reden"],["Wat is de trend?","trend"]];
@@ -404,8 +415,16 @@ function drawAsk(){
   const list = (askFilter==="all"? I.items : I.items.filter(i=>i.cat===askFilter)).slice(0,6);
   const catLab={rep:"per persoon",funnel:"funnel",lost:"verliezen",bron:"bronnen & ads",trend:"trend"};
   h+=`<div class="askhead"><b>${askQ?esc(askQ):"Top opvallende zaken"}</b><span>${fmtY(A)} t/m ${fmtY(B)}${askFilter!=="all"?" · focus: "+catLab[askFilter]:""} · ${list.length} van ${I.items.length} signalen</span></div>`;
-  h+=`<div class="advgrid">`+(list.length? list.map((it,i)=>`<div class="advcard"><span class="imp ${it.tag}">${it.tag==="hi"?"grote impact":it.tag==="mid"?"impact":"signaal"}</span><h3><span class="rank">${i+1}</span>${esc(it.t)}</h3><p>${esc(it.p)}</p><div class="doen">→ ${esc(it.d)}</div><div class="cat">${catLab[it.cat]||it.cat}</div></div>`).join("")
-     : `<div class="advcard"><p>Geen opvallende afwijkingen in deze selectie — of te weinig volume. Kies een langere periode voor een eerlijker beeld.</p></div>`)+`</div>`;
+  const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Signaal"};
+  h+=`<div class="advrows">`+(list.length? list.map((it,i)=>{ const key=it.cat+"|"+it.t; const opn=askOpen.has(key);
+    return `<div class="advrow ${it.tag}${opn?" open":""}" onclick="askTog(${jq(key)})">`
+      +`<span class="rank">${i+1}</span><span class="sevb ${it.tag}">${SEVLAB[it.tag]||"Signaal"}</span>`
+      +`<span class="advmain"><b>${esc(it.t)}</b></span>`
+      +`<span class="advdata elli">${esc(it.p)}</span>`
+      +`<span class="advw">${catLab[it.cat]||it.cat}</span><i class="chev${opn?" open":""}"></i>`
+      +(opn?`<div class="advx"><p>${esc(it.p)}</p><div class="doen">→ ${esc(it.d)}</div></div>`:"")
+      +`</div>`; }).join("")
+     : `<div class="advrow lo"><span class="advmain">Geen opvallende afwijkingen in deze selectie — of te weinig volume. Kies een langere periode voor een eerlijker beeld.</span></div>`)+`</div>`;
   const cell=(v,best,worst)=>v==null?"<td>—</td>":`<td class="${v===best?"best":v===worst?"worst":""}">${r1(v)}%</td>`;
   const rows=I.rows, mx=k=>Math.max(...rows.map(r=>r[k]).filter(v=>v!=null)), mn=k=>Math.min(...rows.map(r=>r[k]).filter(v=>v!=null));
   h+=`<div class="cmp" style="margin-top:14px"><h3>Team naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} <span class="chsub">(— = te weinig volume: plan ≥ ${I.MP}, show ≥ ${I.MS}, sign/close ≥ ${I.MG})</span></h3>

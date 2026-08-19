@@ -112,6 +112,23 @@
   small.up{color:var(--sign-tx)} small.dn{color:var(--close-tx)}
   .lostm td.clk{cursor:pointer} .lostm td.clk:hover .lc b{text-decoration:underline} .lostm td.worst{outline:2px solid var(--close);outline-offset:-3px;border-radius:8px} .lostm td.on{background:rgba(31,111,216,.12)} .wtag{font-size:10px;background:var(--close-bg);color:var(--close-tx);border-radius:99px;padding:1px 6px;vertical-align:middle;font-weight:800}
   .lostr td.clk{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px} .lostr td.clk:hover{color:var(--plan)}
+  /* v2.7: adviezen-ranglijst (zelfde stijl als marketing) */
+  .advrows{display:flex;flex-direction:column;gap:8px}
+  .advrow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:var(--shadow);flex-wrap:wrap}
+  .advrow.hi{border-left-color:#e04b4b}.advrow.mid{border-left-color:#e08a00}.advrow.lo{border-left-color:#c9b94a}
+  .advrow .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--sel-bg);color:var(--sel-tx2);font-weight:800;font-size:13px;flex:none}
+  .sevb{font-size:10px;font-weight:800;border-radius:99px;padding:3px 9px;text-transform:uppercase;letter-spacing:.3px;flex:none}
+  .sevb.hi{background:rgba(224,75,75,.16);color:#e04b4b}.sevb.mid{background:rgba(224,138,0,.16);color:#e08a00}.sevb.lo{background:rgba(201,185,74,.18);color:#a08f2c}
+  .advmain{font-size:13.5px;min-width:180px;flex:1 1 220px;line-height:1.35}
+  .advdata{font-size:11.5px;color:var(--mut);white-space:nowrap}
+  .advdata.elli{overflow:hidden;text-overflow:ellipsis;max-width:430px;flex:0 1 auto}
+  .advrow .advw{margin-left:auto;flex:none;font-size:11px;color:var(--mut2);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+  .advrow>.chev{flex:none;width:9px;height:9px;border-right:2.5px solid var(--mut);border-bottom:2.5px solid var(--mut);transform:rotate(-45deg);transition:transform .15s}
+  .advrow>.chev.open{transform:rotate(45deg)}
+  .advrow .advx{flex:1 1 100%;margin-top:6px;padding-top:8px;border-top:1px dashed var(--line);cursor:default}
+  .advrow .advx p{margin:0 0 6px;font-size:13px;line-height:1.55}
+  .advrow .advx .doen{font-size:12.5px;font-weight:700;color:var(--plan-tx)}
+  @media(max-width:700px){.advdata.elli{white-space:normal;max-width:none} .advrow .advw{margin-left:0}}
   svg circle.pt{cursor:pointer} svg circle.pt:hover{fill:rgba(31,111,216,.18)}
 
   .cmptbl tr.hdr td{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);padding:12px 10px 4px;background:transparent;border-bottom:1px solid var(--line)}
@@ -432,6 +449,6 @@
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>
