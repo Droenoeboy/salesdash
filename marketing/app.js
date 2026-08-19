@@ -341,21 +341,36 @@ function drawTree(){
 function findNode(key,ns){ for(const n of ns){ if(n.key===key) return n; const f=findNode(key,n.children); if(f) return f; } return null; }
 
 // ---- beste ads ----
-let bestSort={k:"sg",d:-1}, bestAll=false, bestLvl="ad";
+let bestSort={k:"score",d:-1}, bestAll=false, bestLvl="ad";
+// Prestatiescore 0–100: (1) kosten per klant t.o.v. het plafond — laag = veel punten (max 60);
+// (2) zekerheid: hoe meer klanten, hoe betrouwbaarder (max 20); (3) funnel-rendement: intakes
+// gepland + shows per € 100 (max 20). Weinig kosten én weinig leads → "te weinig data" (geen score).
+function perfScore(m){
+  if(m.spend<100&&m.n<3) return null;
+  const MX=MAXCPK(); let s=0;
+  if(m.sg>0&&m.cpk!=null){ const r=m.cpk/MX; s+=60*Math.max(0,Math.min(1,1.5-r)); s+= m.sg>=3?20:m.sg===2?14:8; }
+  if(m.spend>0){ s+=Math.min(10,(m.g/(m.spend/100))*2.5); s+=Math.min(10,(m.sh/(m.spend/100))*5); }
+  else if(m.n>0) s+=10;
+  return Math.round(Math.min(100,s));
+}
+function scoreCell(sc){ if(sc==null) return `<span class="scorep s0" title="minder dan € 100 kosten en minder dan 3 leads — te weinig om eerlijk te beoordelen">te weinig data</span>`;
+  const cl=sc>=70?"s4":sc>=45?"s3":sc>=25?"s2":"s1", lab=sc>=70?"top":sc>=45?"goed":sc>=25?"matig":"slecht";
+  return `<span class="scorep ${cl}">${sc} · ${lab}</span>`; }
 function drawBest(){
   const w=document.getElementById("bestwrap");
   const rows=[];
   if(bestLvl==="ad"){
     for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.adObj===x&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>y===x); const m=metrics(ls,sp,A,B);
-      if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:c?c.name:(x.cid||"—"),platform:x.platform,m}); }
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:c?c.name:(x.cid||"—"),platform:x.platform,m,score:perfScore(m)}); }
   } else {
     for(const [k,c] of CAMPS){ if(c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.ckey===k&&(PARTY||!l.party)); const sp=spendIn(A,B,r=>r.platform===c.platform&&(r.cid||"")===(c.id||"")); const m=metrics(ls,sp,A,B);
-      if(m.n<1&&m.spend<0.5) continue; rows.push({label:c.name,camp:"",platform:c.platform,m}); }
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:c.name,camp:"",platform:c.platform,m,score:perfScore(m)}); }
   }
   const cols=[
-    {k:"label",t:bestLvl==="ad"?"Advertentie":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<span class="dot" style="background:${PC(r.platform)}"></span><span class="campfull">${esc(r.label)}</span>${r.camp?`<br><small class="campfull" style="margin-left:14px">${esc(r.camp)}</small>`:""}`,cls:"nmw"},
+    {k:"label",t:bestLvl==="ad"?"Advertentie":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<div class="adnm" title="${esc(r.label)}${r.camp?" — "+esc(r.camp):""}"><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</b>${r.camp?`<small>${esc(r.camp)}</small>`:""}</div>`,cls:"nmw"},
+    {k:"score",t:"Prestatie",v:r=>r.score,f:r=>scoreCell(r.score),tip:"0–100: kosten per klant laag (max 60) + genoeg klanten om erop te vertrouwen (max 20) + intakes en shows per uitgegeven euro (max 20)"},
     {k:"spend",t:"Kosten",v:r=>r.m.spend,f:r=>eur0(r.m.spend)},
     {k:"n",t:"Leads",v:r=>r.m.n,f:r=>r.m.n},
     {k:"cpl",t:"CPL",v:r=>r.m.cpl,f:r=>r.m.cpl==null?"—":eur0(r.m.cpl)},
@@ -365,15 +380,15 @@ function drawBest(){
     {k:"sign",t:"Sign %",v:r=>r.m.sign,f:r=>r.m.sign==null?"—":r1(r.m.sign)+"%"},
     {k:"cpk",t:"Kosten / klant",v:r=>r.m.cpk,f:r=>r.m.cpk==null?"—":eur0(r.m.cpk),cf:r=>r.m.cpk==null?"":(r.m.cpk<=MAXCPK()*0.85?"good":r.m.cpk>MAXCPK()*1.25?"bad":"warn")},
   ];
-  const s=bestSort; const col=cols.find(c=>c.k===s.k)||cols[6];
+  const s=bestSort; const col=cols.find(c=>c.k===s.k)||cols[1];
   rows.sort((x,y)=>{ const a=col.v(x),b=col.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
   const LIMN=bestAll?rows.length:40;
   let h=`<div class="wonchips">`+[["ad","Per advertentie"],["camp","Per campagne"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
-  h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`
-    + rows.slice(0,LIMN).map((r,i)=>`<tr>`+cols.map((c,ci)=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${ci===0&&i<3?["🥇","🥈","🥉"][i]+" ":""}${c.f(r)}</td>`).join("")+`</tr>`).join("")
+  h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`
+    + rows.slice(0,LIMN).map(r=>`<tr>`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`).join("")
     + (rows.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen advertenties met leads of kosten in deze periode.</td></tr>`)+`</table></div>`;
   if(rows.length>40) h+=`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="bestAll=!bestAll;drawBest()">${bestAll?"Toon top 40":"Toon alle "+rows.length}</span></div>`;
-  h+=`<p class="note">Alle ${bestLvl==="ad"?"advertenties":"campagnes"} plat naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} · telmodus ${MODE}. Sorteer op wat jij belangrijk vindt: inschrijvingen (standaard), intakes gepland (SQL's), shows of kosten per klant. De medailles volgen de gekozen sortering. Party-campagnes ${PARTY?"tellen mee":"zijn verborgen"}.</p>`;
+  h+=`<p class="note">Alle ${bestLvl==="ad"?"advertenties":"campagnes"} plat naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} · telmodus ${MODE}. Standaard gesorteerd op <b>Prestatie</b>: van best naar slechtst presterend. De score (0–100) = <b>kosten per klant</b> t.o.v. het plafond van ${eur0(MAXCPK())} (laag = veel punten, max 60) + <b>zekerheid</b> (1 klant = 8, 2 = 14, 3+ = 20 punten — één toevalstreffer wint dus niet) + <b>funnel-rendement</b> (intakes gepland en shows per € 100, max 20). Iets met weinig kosten én weinig leads krijgt "te weinig data" en staat onderaan — goedkoop maar niks opleveren telt niet als goed. Party-campagnes ${PARTY?"tellen mee":"zijn verborgen"}.</p>`;
   w.innerHTML=h;
 }
 
