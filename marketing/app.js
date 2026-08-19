@@ -402,6 +402,14 @@ function perfScore(m){
   else if(m.n>0) s+=10;
   return Math.round(Math.min(100,s));
 }
+function adAdvice(m){ const MX=MAXCPK();
+  if(m.spend<100&&m.n<3) return ["🤷 Te weinig data","Nog te weinig kosten/leads om iets zinnigs te adviseren."];
+  if(m.cpk!=null&&m.cpk<MX*0.85&&(m.sg>=2||m.spend>=800)) return ["🚀 Opschalen",`Kosten per klant ${eur0(m.cpk)} zit ruim onder het plafond van ${eur0(MX)} — budget ×1,35 is verantwoord.`];
+  if(m.sg===0&&m.sh===0&&m.spend>400) return ["⛔️ Stoppen",`${eur0(m.spend)} uitgegeven zonder één show of klant.`];
+  if(m.sg===0&&m.sh>0&&m.spend>400) return ["½ Halveren",`Wel ${m.sh} show${m.sh===1?"":"s"} maar nog geen klant — halveer tot de eerste klant binnen is.`];
+  if(m.cpk!=null&&m.cpk>MX*1.25) return ["🔻 Terugschroeven",`Kosten per klant ${eur0(m.cpk)} zit boven 125% van het plafond.`];
+  return ["✅ Zo laten",`Binnen de marges${m.cpk!=null?` (kosten per klant ${eur0(m.cpk)})`:""} — geen ingreep nodig.`];
+}
 function scoreCell(sc){ if(sc==null) return `<span class="scorep s0" title="minder dan € 100 kosten en minder dan 3 leads — te weinig om eerlijk te beoordelen">te weinig data</span>`;
   const cl=sc>=70?"s4":sc>=45?"s3":sc>=25?"s2":"s1", lab=sc>=70?"top":sc>=45?"goed":sc>=25?"matig":"slecht";
   return `<span class="scorep ${cl}">${sc} · ${lab}</span>`; }
@@ -450,7 +458,7 @@ function drawBestInner(){
   h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`
     + rows.slice(0,LIMN).map(r=>{ const bk=bestLvl+"|"+r.label+"|"+r.camp; const opn=bestOpen.has(bk);
       return `<tr class="clkrow${opn?" onrow":""}" onclick="bestTog(${jq(bk)})" title="klik voor de volledige opbouw">`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`
-        +(opn?`<tr class="bestx"><td colspan="${cols.length}"><div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div>${r.adsetName?`<div><small>Advertentiegroep</small><b>${esc(r.adsetName)}</b></div>`:""}${bestLvl==="ad"?`<div><small>Advertentie</small><b>${esc(r.label)}</b></div>`:""}<div><small>Kosten</small><b>${eur0(r.m.spend)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div>${r.m.cpk!=null?`<div><small>Kosten / klant</small><b>${eur0(r.m.cpk)}</b></div>`:""}</div></td></tr>`:""); }).join("")
+        +(opn?`<tr class="bestx"><td colspan="${cols.length}"><div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div>${r.adsetName?`<div><small>Advertentiegroep</small><b>${esc(r.adsetName)}</b></div>`:""}${bestLvl==="ad"?`<div><small>Advertentie</small><b>${esc(r.label)}</b></div>`:""}<div><small>Kosten</small><b>${eur0(r.m.spend)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div>${r.m.cpk!=null?`<div><small>Kosten / klant</small><b>${eur0(r.m.cpk)}</b></div>`:""}</div>${(()=>{const [al,at]=adAdvice(r.m);return `<div class="bxadv"><small>Advies voor ${bestLvl==="ad"?"deze advertentie":bestLvl==="adset"?"deze advertentiegroep":"deze campagne"} (gekozen periode)</small><b>${al}</b> <span>${at}</span></div>`;})()}</td></tr>`:""); }).join("")
     + (rows.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen advertenties met leads of kosten in deze periode.</td></tr>`)+`</table></div>`;
   if(rows.length>40) h+=`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="bestAll=!bestAll;drawBest()">${bestAll?"Toon top 40":"Toon alle "+rows.length}</span></div>`;
   h+=`<p class="note">Alle ${bestLvl==="ad"?"advertenties":"campagnes"} plat naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} · telmodus ${MODE}. Standaard gesorteerd op <b>Prestatie</b>: van best naar slechtst presterend. De score (0–100) = <b>kosten per klant</b> t.o.v. het plafond van ${eur0(MAXCPK())} (laag = veel punten, max 60) + <b>zekerheid</b> (1 klant = 8, 2 = 14, 3+ = 20 punten — één toevalstreffer wint dus niet) + <b>funnel-rendement</b> (intakes gepland en shows per € 100, max 20). Iets met weinig kosten én weinig leads krijgt "te weinig data" en staat onderaan — goedkoop maar niks opleveren telt niet als goed. Party-campagnes ${PARTY?"tellen mee":"zijn verborgen"}.</p>`;
@@ -475,16 +483,12 @@ function drawDetailInner(){
   const rowsAll=n.m.S[detail.set]||[];
   const cols=[
     {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
-    {t:detail.set==="sign"?"Tekendatum":detail.set==="gepland"?"Ingepland":"Binnengekomen",v:l=>detail.set==="sign"?l.sd:detail.set==="gepland"?l.pd:l.cd,k:l=>{const d=detail.set==="sign"?l.sd:detail.set==="gepland"?l.pd:l.cd; return d>=0?fmt(d):"—";}},
     {t:"Fase",v:l=>l.stage_position,k:l=>`<span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span>`,fv:l=>l.stage_name+(l.lost&&l.stage_position!==0?" · verloren":"")},
-    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—"),fv:l=>l.setter||"—"},
-    {t:"Eigenaar",v:l=>l.owner||"",k:l=>esc(l.owner||"—"),fv:l=>l.owner||"—"},
     {t:"Platform",v:l=>l.platform,k:l=>`<span class="dot" style="background:${PC(l.platform)}"></span>${esc(PN(l.platform))}${l.placement?` <small>${esc(l.placement)}</small>`:""}${l.bioLink?` <small>bio-link</small>`:""}`,fv:l=>PN(l.platform)+(l.platform==="meta"&&l.placement?" · "+l.placement:"")},
     {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small>`,fv:l=>l.camp?l.camp.name:(l.utm_campaign||"—")},
     {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`,fv:l=>l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—")},
-    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||l.bron||"—")}</small>${l.alt_last_campaign?`<br><small title="laatste klik week af van de toegekende campagne">misschien ook: ${esc(l.alt_last_campaign)}</small>`:""}`,fv:l=>BRON[l.bron]||l.bron||"—"},
+    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||l.bron||"—")}</small>`,fv:l=>BRON[l.bron]||l.bron||"—"},
     {t:"Waarde",v:l=>l.is_signed?l.value:0,k:l=>l.is_signed?eur0(l.value)+(l.signed_via==="fasewissel"?" <small title='geen formulier gevonden; datum = fasewissel'>⚠︎</small>":""):"—"},
-    {t:"Temp.",v:l=>l.temperature||"",k:l=>esc(l.temperature||"—"),fv:l=>l.temperature||"—"},
   ];
   // filters toepassen (per kolom, meerdere waarden mogelijk)
   const FE=Object.entries(dFilt);
@@ -497,7 +501,7 @@ function drawDetailInner(){
     const cnt=new Map(); base.forEach(l=>{ const vv=fc.fv(l); cnt.set(vv,(cnt.get(vv)||0)+1); });
     const sel=dFilt[dfCol];
     fpanel=`<div class="wonchips" style="margin:10px 14px 0"><span class="lbl">Filter ${fc.t}:</span><div class="wchip sm${sel?"":" on"}" onclick="dfClear(${dfCol})">Alles <span class="n">${base.length}</span></div>`
-      +[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([vv,c2])=>`<div class="wchip sm${sel&&sel.has(vv)?" on":""}" onclick="dfToggle(${dfCol},${jq(vv)})" title="${esc(vv)}"><span style="max-width:230px;overflow:hidden;text-overflow:ellipsis">${esc(vv)}</span> <span class="n">${c2}</span></div>`).join("")+`</div>`; }
+      +[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([vv,c2])=>`<div class="wchip sm${sel&&sel.has(vv)?" on":""}" onclick="dfToggle(${dfCol},${jq(vv)})" title="${esc(vv)}"><span style="display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">${esc(vv)}</span> <span class="n">${c2}</span></div>`).join("")+`</div>`; }
   // verdeling binnen deze set: campagnes en advertenties die het vaakst voorkomen
   const byAd=new Map(); for(const l of rows){ const k=l.adObj?(l.adObj.adName||l.adObj.adId):(l.camp?"(campagne: "+l.camp.name+")":"(geen advertentie bekend)"); byAd.set(k,(byAd.get(k)||0)+1); }
   const top=[...byAd.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
