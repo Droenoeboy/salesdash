@@ -194,7 +194,7 @@ function initApp(){
       if(!hit){ let cnt=0; for(const [kk,a] of ADNORM){ if(!kk.startsWith(l.platform+"|")) continue; const nn=kk.slice(l.platform.length+1); if(nn.startsWith(nc)||nc.startsWith(nn)){ cnt++; hit=a; if(cnt>1){ hit=null; break; } } } }
       if(hit&&l.camp&&hit.cid!==l.campaign_id) hit=null;   // nooit een ad uit een ándere campagne plakken
       if(hit){ l.adObj=hit; if(!l.camp&&hit.cid){ l.campaign_id=hit.cid; l.ckey=ck(l.platform,hit.cid); l.camp=CAMPS.get(l.ckey)||null; l.party=!!(l.camp&&l.camp.party); if(l.bron==="onbekend") l.bron="utm"; } } } }
-    if((l.utm_content||"").toLowerCase()==="link_in_bio"){ l.platform="niet_betaald"; l.ckey=ck("niet_betaald",""); l.camp=null; l.adObj=null; l.bron="niet_betaald"; l.bioLink=true; if(!l.session_source) l.session_source="Instagram bio-link"; }
+    if((l.utm_content||"").toLowerCase()==="link_in_bio"){ l.bioLink=true; if(!l.session_source) l.session_source="Instagram bio-link"; }   // blijft bij Meta (ze zagen onze video's), maar duidelijk gelabeld
     l.value=+(l.contract_value||OMZET()); }
   FORMS=(D.forms||[]).map(f=>({...f,d:dOf(f.on)}));
   const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate())); NOW=TODAY;
