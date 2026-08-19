@@ -102,6 +102,14 @@
   .ava{width:30px;height:30px;border-radius:50%;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex:none}
   .fhead b{font-size:15px;letter-spacing:-.2px}
   .bigN{margin-left:auto;background:var(--sel-bg);color:var(--sel-tx2);border-radius:10px;padding:3px 11px;font-size:17px;font-weight:800}
+  .grp{font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);margin:12px 0 6px 2px;display:flex;align-items:center;gap:6px} .grp.first{margin-top:0} .grp i{font-style:normal;font-weight:600;text-transform:none;letter-spacing:0;opacity:.85} .grp:after{content:"";flex:1;height:1px;background:var(--line)}
+  .chw{padding:12px 16px 10px;border-bottom:1px solid var(--line)} .chstrip{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:4px;-webkit-overflow-scrolling:touch} .chc{flex:0 0 auto;min-width:60px;border:1px solid var(--line);border-radius:8px;padding:5px 7px;text-align:center;font-size:10.5px;color:var(--mut)} .chc b{display:block;font-size:13px;color:var(--txt);letter-spacing:-.2px} .chc small{font-size:10px} .chc.cur{border-color:var(--plan)} .chc.weak b{color:var(--mut)}
+  .sm.on{border-color:var(--plan);box-shadow:0 0 0 1px var(--plan) inset}
+  .cmptbl tr.hdr td{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);padding:12px 10px 4px;background:transparent;border-bottom:1px solid var(--line)}
+  .brontbl th.on,.brontbl td.on{background:rgba(31,111,216,.08)} .brontbl td.clk{cursor:pointer} .brontbl td.clk:hover b{text-decoration:underline} .brontbl tr.sel td,.cmp tr.sel td{background:rgba(31,111,216,.12)} .cmp td.clk{cursor:pointer} .cmp td.clk:hover b{text-decoration:underline} .dim{color:var(--mut2)}
+  .shr{display:flex;align-items:center;gap:6px} .shr em{width:70px;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;display:block;flex:0 0 auto} .shr em i{display:block;height:100%;background:var(--plan)} .shr span{font-size:11.5px;color:var(--mut)}
+  .fst{display:grid;grid-template-columns:130px 1fr 48px minmax(0,1.2fr);gap:10px;align-items:center;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--line2)} .fst em{height:10px;background:var(--bg);border-radius:5px;overflow:hidden;display:block} .fst em i{display:block;height:100%} .fst b{font-size:14px} .fst small{color:var(--mut)}
+  .dayhd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px} .dayhd b{font-size:14px} .dayhd span{font-size:12px;color:var(--mut)} .daycard.today{border-color:var(--plan)} .warnt{color:var(--close-tx)} .stg.warn{background:rgba(201,154,0,.15);color:var(--show-tx)} .kpi.warnk b{color:var(--close-tx)} .kpis.ikp{margin-bottom:12px}
   .fsub{font-size:11.5px;color:var(--mut);margin:0 0 12px 39px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .frow{display:flex;gap:8px;align-items:stretch;margin-bottom:8px}
   .blk{flex:1;min-width:0;border-radius:var(--r2);padding:8px 12px 10px;cursor:pointer;position:relative;overflow:hidden;border:2px solid transparent}
@@ -358,7 +366,7 @@
   /* ---- uitleg ---- */
   .uitleg{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 16px;font-size:12.5px;color:var(--txt)} .uitleg summary{cursor:pointer;font-weight:600;color:var(--mut);list-style:none} .uitleg summary::-webkit-details-marker{display:none} .uitleg[open] summary{margin-bottom:8px;color:var(--txt)}
   .ucols{display:grid;grid-template-columns:1fr 1fr;gap:16px} .uitleg h4{margin:6px 0 4px;font-size:13px} .uitleg p,.uitleg li{line-height:1.55;color:var(--txt);opacity:.9} .uitleg ul{padding-left:18px;margin:4px 0} .ufoot{color:var(--mut);font-size:11.5px;margin:10px 0 2px}
-  @media(max-width:900px){.two{grid-template-columns:1fr} .ucols{grid-template-columns:1fr}}
+  @media(max-width:900px){.two{grid-template-columns:1fr} .ucols{grid-template-columns:1fr} .fst{grid-template-columns:100px 1fr 40px minmax(0,1fr)} .fst small{font-size:10px}}
   @media(max-width:720px){ .cmptbl td{min-width:84px;padding:8px 8px} .cmptbl td.mt,.cmptbl th.mt{min-width:104px;max-width:104px;white-space:normal} .cmptbl td.mt small{display:none} .cmptbl td b{font-size:15px} .weektbl td.mt{min-width:120px;font-size:11px} .chnow b{font-size:22px} .askrow input{font-size:16px} .btnrow{gap:6px} }
 </style>
 </head>
@@ -405,14 +413,16 @@
   <div id="bronwrap" style="display:none"></div>
   <div id="lostwrap" style="display:none"></div>
   <div id="cmpwrap" style="display:none"></div>
+  <div id="intwrap" style="display:none"></div>
   <div class="cols" id="cols"></div>
   <div class="detail" id="detail" style="display:none">
     <div class="dhead" id="dhead"></div>
+    <div id="dchart"></div>
     <div class="dcols" id="dcols"></div>
   </div>
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>
