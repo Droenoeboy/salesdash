@@ -234,7 +234,7 @@ function buildTree(a,b){
     const ckeys=new Set(); pl.forEach(l=>ckeys.add(l.ckey)); CD.forEach(r=>{ if(r.platform===p&&r.d>=a&&r.d<=b&&r.spend>0) ckeys.add(ck(p,r.cid)); });
     for(const k of ckeys){ const c=CAMPS.get(k); const cid=k.split("|")[1]; if(c&&c.party&&!PARTY) continue;
       const cl=pl.filter(l=>l.ckey===k); const csp=spendIn(a,b,r=>r.platform===p&&(r.cid||"")===cid);
-      if(!cl.length&&csp.spend<=0) continue;
+      if(!cl.length&&csp.spend<0.5) continue;
       const cn={key:"c:"+k,level:1,label:c?c.name:(cid?("(campagne "+cid+")"):"(geen campagne toegekend)"),sub:c?(c.type||"")+(c.party?" · party":""):"",platform:p,cid,camp:c,leads:cl,sp:csp,children:[],noCamp:!cid};
       if(!cid){ // onderverdeling op bron
         const bs=new Map(); cl.forEach(l=>{ const kk=l.bron||"onbekend"; if(!bs.has(kk)) bs.set(kk,[]); bs.get(kk).push(l); });
@@ -244,9 +244,9 @@ function buildTree(a,b){
         const akeys=new Set(); cl.forEach(l=>{ if(l.adObj) akeys.add(l.adObj.adsetId||""); }); ADS.forEach(x=>{ if(x.platform===p&&x.cid===cid) akeys.add(x.adsetId||""); });
         for(const ak of akeys){ const adsIn=ADS.filter(x=>x.platform===p&&x.cid===cid&&(x.adsetId||"")===ak); if(!adsIn.length) continue;
           const al=cl.filter(l=>l.adObj&&(l.adObj.adsetId||"")===ak); const asp=spendAds(a,b,x=>x.platform===p&&x.cid===cid&&(x.adsetId||"")===ak);
-          if(!al.length&&asp.spend<=0) continue;
+          if(!al.length&&asp.spend<0.5) continue;
           const an={key:"s:"+k+"|"+ak,level:2,label:adsIn[0].adsetName||(ak?("adset "+ak):"(zonder adset)"),platform:p,cid,leads:al,sp:asp,children:[]};
-          for(const x of adsIn){ const xl=cl.filter(l=>l.adObj===x); const xsp=spendAds(a,b,y=>y===x); if(!xl.length&&xsp.spend<=0) continue;
+          for(const x of adsIn){ const xl=cl.filter(l=>l.adObj===x); const xsp=spendAds(a,b,y=>y===x); if(!xl.length&&xsp.spend<0.5) continue;
             an.children.push({key:"a:"+x.i,level:3,label:x.adName||(x.adId?("ad "+x.adId):"(zonder advertentie)"),platform:p,cid,leads:xl,sp:xsp,children:[],leaf:true,ad:x}); }
           cn.children.push(an); }
         const rest=cl.filter(l=>!l.adObj); if(rest.length) cn.children.push({key:"r:"+k,level:2,label:"(campagne bekend, advertentie niet)",platform:p,cid,leads:rest,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true});
@@ -315,8 +315,8 @@ function setSort(k){ if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir
 function rowHtml(n,depth){
   const m=n.m; const has=n.children&&n.children.length; const isOpen=open.has(n.key);
   const pad=10+depth*22;
-  let h=`<tr class="lv${n.level}${isOpen?" open":""}${n.camp&&n.camp.party?" party":""}"><td class="nm" style="padding-left:${pad}px">${has?`<span class="tg" onclick="toggleNode(${jq(n.key)})">${isOpen?"▾":"▸"}</span>`:`<span class="tg leaf">·</span>`}${n.color?`<span class="dot" style="background:${n.color}"></span>`:""}<span class="lab" title="${esc(n.label)}">${esc(n.label)}</span>${n.sub?`<small>${esc(n.sub)}</small>`:""}${n.key.startsWith("c:")&&n.cid?`<small class="isr" title="zoekvertoningsaandeel (Google)">${(()=>{const v=isr(A,B,n.cid);return v==null?"":"ISR "+Math.round(v*100)+"%";})()}</small>`:""}</td>`;
-  for(const c of COLS){ const v=c.f(m); const cl=c.cls?c.cls(m):""; const clk=c.click&&(+v>0)?` class="clk ${c.w} ${cl}" onclick="showDetail(${jq(n.key)},'${c.click}')" title="klik voor de namen"`:` class="${c.w} ${cl}"`;
+  let h=`<tr class="lv${n.level}${isOpen?" open":""}${n.camp&&n.camp.party?" party":""}${has?" has":""}"${has?` onclick="toggleNode(${jq(n.key)})" title="${isOpen?"klik om in te klappen":"klik om uit te klappen"}"`:""}><td class="nm" style="padding-left:${pad}px">${has?`<span class="tg"><i class="chev${isOpen?" open":""}"></i></span>`:`<span class="tg leaf"></span>`}${n.color?`<span class="dot" style="background:${n.color}"></span>`:""}<span class="lab" title="${esc(n.label)}">${esc(n.label)}</span>${n.sub?`<small>${esc(n.sub)}</small>`:""}${n.key.startsWith("c:")&&n.cid?`<small class="isr" title="zoekvertoningsaandeel (Google)">${(()=>{const v=isr(A,B,n.cid);return v==null?"":"ISR "+Math.round(v*100)+"%";})()}</small>`:""}</td>`;
+  for(const c of COLS){ const v=c.f(m); const cl=c.cls?c.cls(m):""; const clk=c.click&&(+v>0)?` class="clk ${c.w} ${cl}" onclick="event.stopPropagation();showDetail(${jq(n.key)},'${c.click}')" title="klik voor de namen"`:` class="${c.w} ${cl}"`;
     h+=`<td${clk}><b>${v}</b>${c.sub?`<small>${c.sub(m)}</small>`:""}</td>`; }
   h+=`</tr>`;
   if(has&&isOpen) for(const c of n.children) h+=rowHtml(c,depth+1);
@@ -329,7 +329,7 @@ function drawTree(){
   TREE.forEach(n=>decorate(n,A,B)); sortNodes(TREE);
   const grp=[["tree","Platform › campagne › adset › ad"],["utm_source","utm_source"],["placement","Plaatsing (FB/IG)"],["bron","Attributiebron"],["session","GHL sessiebron"],["temperature","Temperatuur"],["owner","Eigenaar (sales)"],["setter","Setter"]];
   let h=`<div class="wonchips"><span class="lbl">Groepeer:</span>`+grp.map(g=>`<div class="wchip sm${GROUP===g[0]?" on":""}" onclick="GROUP='${g[0]}';detail=null;drawTree()">${g[1]}</div>`).join("")+`<span style="flex:1"></span><div class="wchip sm${PARTY?" on":""}" onclick="PARTY=!PARTY;render()" title="party-/vacature-/verkoopcampagnes meetellen">🎉 Party meetellen</div>${GROUP==="tree"?`<div class="wchip sm" onclick="open=new Set(TREE.flatMap(n=>[n.key,...n.children.map(c=>c.key)]));drawTree()">alles open</div><div class="wchip sm" onclick="open=new Set();drawTree()">alles dicht</div>`:""}</div>`;
-  h+=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">${GROUP==="tree"?"Platform › campagne › adset › advertentie":"Groep"} <small>klik ▸ om uit te klappen · klik op een getal voor de namen</small></th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
+  h+=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">${GROUP==="tree"?"Platform › campagne › adset › advertentie":"Groep"} <small>klik op een rij om uit te klappen · klik op een getal voor de namen</small></th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
   // totaalrij
   const all=L.filter(l=>PARTY||!l.party); const tm=metrics(all,spendIn(A,B,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B);
   h+=`<tr class="tot"><td class="nm" style="padding-left:10px"><b>Totaal</b></td>`+COLS.map(c=>`<td class="${c.w}">${c.f(tm)}</td>`).join("")+`</tr>`;
