@@ -345,15 +345,38 @@ function rowHtml(n,depth){
   if(has&&isOpen) for(const c of n.children) h+=rowHtml(c,depth+1);
   return h;
 }
-let TREE=[];
+let TREE=[], treePlat=null, treeAutoOpen=false;
+function treePick(p){ treePlat=p; detail=null; treeAutoOpen=!!p; drawTree(); }
+function nbKind(l){ const ss=(l.session_source||"").toLowerCase(); return ss.indexOf("direct")>=0?"nb_dir":"nb_org"; }
+function buildTreeFiltered(a,b){
+  const base=buildTree(a,b);
+  if(!treePlat) return base;
+  if(["meta","google","tiktok","onbekend","niet_betaald"].indexOf(treePlat)>=0) return base.filter(n=>n.platform===treePlat);
+  if(treePlat==="meta_fb"||treePlat==="meta_ig"){
+    const pl=L.filter(l=>l.platform==="meta"&&!l.party&&sgKey(l)===treePlat);
+    const byC=new Map(); pl.forEach(l=>{ const k=l.ckey; if(!byC.has(k)) byC.set(k,[]); byC.get(k).push(l); });
+    const kids=[...byC.entries()].map(([k,ls])=>{ const c=CAMPS.get(k); return {key:"pf:"+treePlat+"|"+k,level:1,label:c?c.name:"(campagne onbekend)",platform:"meta",leads:ls,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true,plc:true}; });
+    return [{key:"p:"+treePlat,level:0,label:treePlat==="meta_fb"?"📘 Facebook (plaatsing van de lead)":"📸 Instagram (plaatsing van de lead)",color:treePlat==="meta_fb"?"#1877f2":"#d62976",platform:"meta",leads:pl,sp:{spend:0,clicks:0,imps:0},children:kids,plc:true}];
+  }
+  if(treePlat==="nb_org"||treePlat==="nb_dir"){
+    const pl=L.filter(l=>l.platform==="niet_betaald"&&!l.party&&nbKind(l)===treePlat);
+    const byS=new Map(); pl.forEach(l=>{ const k=l.session_source||"(onbekende bron)"; if(!byS.has(k)) byS.set(k,[]); byS.get(k).push(l); });
+    const kids=[...byS.entries()].map(([k,ls])=>({key:"nb:"+treePlat+"|"+k,level:1,label:k,platform:"niet_betaald",leads:ls,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true,plc:true}));
+    return [{key:"p:"+treePlat,level:0,label:treePlat==="nb_org"?"🌱 Organisch (niet betaald)":"↩️ Direct (niet betaald)",color:"#8f845e",platform:"niet_betaald",leads:pl,sp:{spend:0,clicks:0,imps:0},children:kids,plc:true}];
+  }
+  return base;
+}
 function keepScroll(w,fn){ const sy=window.scrollY; const els=[...w.querySelectorAll("*")].filter(e=>e.scrollLeft>0).slice(0,4).map(e=>[e.className,e.scrollLeft]); fn(); window.scrollTo(0,sy);
   for(const [cls,sl] of els){ const e=[...w.querySelectorAll("*")].find(x=>x.className===cls&&x.scrollWidth>x.clientWidth); if(e) e.scrollLeft=sl; } }
 function drawTree(){ const _w=document.getElementById("treewrap"); keepScroll(_w,()=>drawTreeInner()); }
 function drawTreeInner(){
   const w=document.getElementById("treewrap");
-  TREE = GROUP==="tree"? buildTree(A,B) : groupFlat(A,B);
+  TREE = GROUP==="tree"? buildTreeFiltered(A,B) : groupFlat(A,B);
   TREE.forEach(n=>decorate(n,A,B)); sortNodes(TREE,true);
-  let h=`<div class="wonchips"><div class="wchip sm" onclick="treeOpenAll()">alles open</div><div class="wchip sm" onclick="treeCloseAll()">alles dicht</div></div>`;
+  if(treePlat&&treeAutoOpen){ TREE.forEach(n=>open.add(n.key)); treeAutoOpen=false; }
+  const PB=[[null,"Alles",null],["meta","Meta (FB/IG)",PC("meta")],["meta_fb","📘 Facebook",null],["meta_ig","📸 Instagram",null],["google","Google",PC("google")],["tiktok","TikTok",PC("tiktok")],["niet_betaald","Niet betaald",PC("niet_betaald")],["nb_org","🌱 Organisch",null],["nb_dir","↩️ Direct",null],["onbekend","Onbekend",PC("onbekend")]];
+  let h=`<div class="wonchips pbig">`+PB.map(([k,lab,col])=>`<div class="wchip${treePlat===k?" on":""}" onclick="treePick(${k?jq(k):"null"})">${col?`<span class="dot" style="background:${col}"></span>`:""}${lab}</div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><div class="wchip sm" onclick="treeOpenAll()">alles open</div><div class="wchip sm" onclick="treeCloseAll()">alles dicht</div>${treePlat?`<span class="lbl">Facebook/Instagram en Organisch/Direct tonen alleen lead-aantallen — kosten kent Meta alleen per campagne.</span>`:""}</div>`;
   h+=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">${GROUP==="tree"?"Platform › campagne › adset › advertentie":"Groep"} <small>klik op een rij om uit te klappen · klik op een getal voor de namen</small></th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
   // totaalrij
   const all=L.filter(l=>PARTY||!l.party); const tm=metrics(all,spendIn(A,B,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B);
@@ -366,7 +389,8 @@ function drawTreeInner(){
 function findNode(key,ns){ for(const n of ns){ if(n.key===key) return n; const f=findNode(key,n.children); if(f) return f; } return null; }
 
 // ---- beste ads ----
-let bestSort={k:"score",d:-1}, bestAll=false, bestLvl="ad";
+let bestSort={k:"score",d:-1}, bestAll=false, bestLvl="ad", bestOpen=new Set();
+function bestTog(k){ bestOpen.has(k)?bestOpen.delete(k):bestOpen.add(k); drawBest(); }
 // Prestatiescore 0–100: (1) kosten per klant t.o.v. het plafond — laag = veel punten (max 60);
 // (2) zekerheid: hoe meer klanten, hoe betrouwbaarder (max 20); (3) funnel-rendement: intakes
 // gepland + shows per € 100 (max 20). Weinig kosten én weinig leads → "te weinig data" (geen score).
@@ -389,7 +413,7 @@ function drawBestInner(){
   if(bestLvl==="ad"){
     for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.adObj===x&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>y===x); const m=metrics(ls,sp,A,B);
-      if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:(c?c.name:(x.cid||"—"))+(x.adsetName?" › "+x.adsetName:""),platform:x.platform,m,score:perfScore(m)}); }
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:x.adName||("ad "+(x.adId||"?")),camp:(c?c.name:(x.cid||"—"))+(x.adsetName?" › "+x.adsetName:""),campName:c?c.name:(x.cid||"—"),adsetName:x.adsetName||"",platform:x.platform,m,score:perfScore(m)}); }
   } else if(bestLvl==="adset"){
     const seen=new Map();
     for(const x of ADS){ if(x.platform==="onbekend"||x.platform==="niet_betaald") continue; const c=CAMPS.get(ck(x.platform,x.cid)); if(c&&c.party&&!PARTY) continue;
@@ -398,11 +422,11 @@ function drawBestInner(){
       seen.get(key).ads.push(x); }
     for(const g of seen.values()){ const set=new Set(g.ads);
       const ls=L.filter(l=>l.adObj&&set.has(l.adObj)&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>set.has(y)); const m=metrics(ls,sp,A,B);
-      if(m.n<1&&m.spend<0.5) continue; rows.push({label:g.label,camp:g.camp,platform:g.platform,m,score:perfScore(m)}); }
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:g.label,camp:g.camp,campName:g.camp,adsetName:g.label,platform:g.platform,m,score:perfScore(m)}); }
   } else {
     for(const [k,c] of CAMPS){ if(c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.ckey===k&&(PARTY||!l.party)); const sp=spendIn(A,B,r=>r.platform===c.platform&&(r.cid||"")===(c.id||"")); const m=metrics(ls,sp,A,B);
-      if(m.n<1&&m.spend<0.5) continue; rows.push({label:c.name,camp:"",platform:c.platform,m,score:perfScore(m)}); }
+      if(m.n<1&&m.spend<0.5) continue; rows.push({label:c.name,camp:"",campName:c.name,adsetName:"",platform:c.platform,m,score:perfScore(m)}); }
   }
   if(bestPlat) rows=rows.filter(r=>r.platform===bestPlat);
   const cols=[
@@ -424,7 +448,9 @@ function drawBestInner(){
   let h=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${bestPlat==null?" on":""}" onclick="bestPlat=null;drawBest()">Alle</div>`+["meta","google","tiktok"].map(p=>`<div class="wchip sm${bestPlat===p?" on":""}" onclick="bestPlat='${p}';drawBest()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
   h+=`<div class="wonchips"><span class="lbl">Niveau:</span>`+[["camp","Campagne"],["adset","Advertentiegroep"],["ad","Advertentie"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
   h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`
-    + rows.slice(0,LIMN).map(r=>`<tr>`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`).join("")
+    + rows.slice(0,LIMN).map(r=>{ const bk=bestLvl+"|"+r.label+"|"+r.camp; const opn=bestOpen.has(bk);
+      return `<tr class="clkrow${opn?" onrow":""}" onclick="bestTog(${jq(bk)})" title="klik voor de volledige opbouw">`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`
+        +(opn?`<tr class="bestx"><td colspan="${cols.length}"><div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div>${r.adsetName?`<div><small>Advertentiegroep</small><b>${esc(r.adsetName)}</b></div>`:""}${bestLvl==="ad"?`<div><small>Advertentie</small><b>${esc(r.label)}</b></div>`:""}<div><small>Kosten</small><b>${eur0(r.m.spend)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div>${r.m.cpk!=null?`<div><small>Kosten / klant</small><b>${eur0(r.m.cpk)}</b></div>`:""}</div></td></tr>`:""); }).join("")
     + (rows.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen advertenties met leads of kosten in deze periode.</td></tr>`)+`</table></div>`;
   if(rows.length>40) h+=`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="bestAll=!bestAll;drawBest()">${bestAll?"Toon top 40":"Toon alle "+rows.length}</span></div>`;
   h+=`<p class="note">Alle ${bestLvl==="ad"?"advertenties":"campagnes"} plat naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} · telmodus ${MODE}. Standaard gesorteerd op <b>Prestatie</b>: van best naar slechtst presterend. De score (0–100) = <b>kosten per klant</b> t.o.v. het plafond van ${eur0(MAXCPK())} (laag = veel punten, max 60) + <b>zekerheid</b> (1 klant = 8, 2 = 14, 3+ = 20 punten — één toevalstreffer wint dus niet) + <b>funnel-rendement</b> (intakes gepland en shows per € 100, max 20). Iets met weinig kosten én weinig leads krijgt "te weinig data" en staat onderaan — goedkoop maar niks opleveren telt niet als goed. Party-campagnes ${PARTY?"tellen mee":"zijn verborgen"}.</p>`;
@@ -612,7 +638,7 @@ function drawSignInner(){
     if(!byAd.has(key)) byAd.set(key,{ad:l.adObj?(l.adObj.adName||l.adObj.adId):null,camp:l.camp?l.camp.name:(l.platform==="niet_betaald"?"Niet betaald (organisch/direct)":PN(l.platform)),platform:l.platform,n:0,val:0});
     const t=byAd.get(key); t.n++; t.val+=sgMode==="sign"?l.value:0; }
   const tiles=[...byAd.values()].sort((a,b)=>b.n-a.n);
-  h+=`<div class="cmp"><h3>Uit welke advertentie komen ze</h3><div class="adtiles">`+(tiles.length?tiles.map(t=>`<div class="adtile"><span class="cnt">${t.n}</span><div class="tx"><b title="${esc(t.ad||t.camp)}">${esc(t.ad||"(geen advertentie bekend)")}</b><small><span class="dot" style="background:${PC(t.platform)}"></span>${esc(t.camp)}${sgMode==="sign"&&t.val?" · "+eur0(t.val):""}</small></div></div>`).join(""):`<div class="empty">Geen ${MLAB.toLowerCase()} in deze periode.</div>`)+`</div><p class="note" style="margin:10px 0 0">Grote cijfers = aantal ${MLAB.toLowerCase()} uit die advertentie — komen er 3 uit dezelfde ad, dan zie je dat in één oogopslag.</p></div>`;
+  h+=`<div class="cmp"><h3>Uit welke advertentie komen ze <span class="chsub">gesorteerd · hoogste eerst</span></h3><div class="adlist">`+(tiles.length?tiles.map(t=>`<div class="adli"><span class="cnt">${t.n}</span><div class="tx"><b title="${esc(t.ad||t.camp)}">${esc(t.ad||"(geen advertentie bekend)")}</b><small><span class="dot" style="background:${PC(t.platform)}"></span>${esc(PN(t.platform))} › ${esc(t.camp)}${sgMode==="sign"&&t.val?" · "+eur0(t.val):""}</small></div></div>`).join(""):`<div class="empty">Geen ${MLAB.toLowerCase()} in deze periode.</div>`)+`</div><p class="note" style="margin:10px 0 0">Het grote cijfer = aantal ${MLAB.toLowerCase()} uit die advertentie; eronder altijd platform › campagne.</p></div>`;
   // goedkoopste campagnes
   const cheap=camps.filter(g=>g.cpk!=null).sort((a,b)=>a.cpk-b.cpk);
   h+=`<div class="cmp" style="margin-top:12px"><h3>💶 Goedkoopste campagnes per ${RES1}</h3>`+(cheap.length?cheap.slice(0,10).map((g,i)=>`<div class="lr"><span title="${esc(g.name)}">${esc(g.name)}</span><i><b style="width:${Math.max(4,Math.round(cheap[0].cpk/g.cpk*100))}%"></b></i><em style="width:auto;white-space:nowrap">${eur0(g.cpk)} · ${g.n}</em></div>`).join(""):`<div class="empty">Geen campagnes met kosten én ${MLAB.toLowerCase()} in deze periode.</div>`)+`<p class="note" style="margin:8px 0 0">Kosten per ${RES1} = kosten van de campagne in de periode ÷ ${MLAB.toLowerCase()} uit die campagne. Langere balk = goedkoper.</p></div>`;
