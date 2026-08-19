@@ -5,7 +5,7 @@
 //  Alle definities staan in dpac.definitions + de views; dit bestand telt alleen op per periode.
 // ============================================================
 const DATA_URL = "https://dpac.app.n8n.cloud/webhook/dpac-dashboard-data";
-const DASH_VERSIE = "v2.4-2026-08-19";
+const DASH_VERSIE = "v2.5-2026-08-19";
 const LOC = "TdkRfY76R77enqlUSRHi";
 const EPOCH = new Date(2026,0,1);
 const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
@@ -199,10 +199,11 @@ function drawTabs(){
     t.onclick=()=>{tab=id; sel=null; render();}; el.appendChild(t); };
   mk("tot","Totaal");
   // personenkiezer: één tab met uitklapmenu i.p.v. losse tabs
-  const cur=repOf(); const pt=document.createElement("div"); pt.className="tab persoon"+(cur?" on":""); pt.id="persoonTab";
-  pt.innerHTML=(cur?`<span class="dot" style="background:${RCOL[cur]}"></span>${esc(cur)}`:"👤 Persoon")+` <span class="caret">▾</span>`;
+  const cur=repOf(); const pt=document.createElement("div"); pt.className="tab persoon"+((cur||tab==="ov")?" on":""); pt.id="persoonTab";
+  pt.innerHTML=(cur?`<span class="dot" style="background:${RCOL[cur]}"></span>${esc(cur)}`:tab==="ov"?"Σ Iedereen":"👤 Persoon")+` <span class="caret">▾</span>`;
   pt.onclick=(e)=>{ e.stopPropagation(); persoonMenu(pt); }; el.appendChild(pt);
   mk("cmp","⚖️ Vergelijk");
+  mk("int","🗓 Intakes");
   mk("won","🏆 Gewonnen");
   mk("apt","📆 Afspraken");
   mk("trend","📈 Trend");
@@ -218,10 +219,11 @@ function drawTabs(){
 function persoonMenu(anchor){
   const el=document.getElementById("fdrop"); if(el.dataset.open==="persoon"&&el.style.display==="block"){ el.style.display="none"; el.dataset.open=""; return; }
   el.dataset.open="persoon";
-  el.innerHTML=`<div class="fi fall">Kies een persoon</div>`+REPS.map(p=>{ const f=funnel(p.n,A,B); const beh=f.gepland.length+f.verloren.length; return `<div class="fi${tab==="p"+p.n?" on":""}" onclick="tab=${JSON.stringify("p"+p.n).replace(/"/g,"&quot;")};sel=null;fClose();render()"><span><span class="dot" style="background:${RCOL[p.n]};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px"></span>${esc(p.n)}</span><b>${beh} · ${f.agenda.length} int.</b></div>`; }).join("");
+  el.innerHTML=`<div class="fi fall">Kies een persoon</div><div class="fi${tab==="ov"?" on":""}" onclick="tab='ov';sel=null;fClose();render()"><span>Σ Iedereen · overzichtspagina</span></div>`+REPS.map(p=>{ const f=funnel(p.n,A,B); const beh=f.gepland.length+f.verloren.length; return `<div class="fi${tab==="p"+p.n?" on":""}" onclick="tab=${JSON.stringify("p"+p.n).replace(/"/g,"&quot;")};sel=null;fClose();render()"><span><span class="dot" style="background:${RCOL[p.n]};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px"></span>${esc(p.n)}</span><b>${beh} · ${f.agenda.length} int.</b></div>`; }).join("");
   const r=anchor.getBoundingClientRect(); el.style.display="block"; el.style.left=Math.min(r.left, window.innerWidth-240)+"px"; el.style.top=(r.bottom+6)+"px";
 }
 const ROL = ph => MODE==="rep" ? (ph==="plan"?"setter":"eigenaar") : ({plan:"setter",show:"setter",signS:"setter",sign:"intaker",close:"eigenaar",pay:"eigenaar"})[ph];
+const jq = s => JSON.stringify(s).replace(/"/g,"&quot;");
 const repOf = () => (tab.startsWith("p")? tab.slice(1) : null);
 
 // ---- kpi's ----
@@ -235,7 +237,7 @@ function drawKpis(){
   const dlt=(n,p)=>{ if(p==null) return ""; const d=n-p; const cls=d>0?"up":d<0?"dn":"eq"; return `<i class="dlt ${cls}" title="vorige periode van ${len} dagen (${fmtY(pA)} t/m ${fmtY(pB)}): ${p}">${d>0?"▲ +"+d:d<0?"▼ "+d:"= "+p}</i>`; };
   const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2l!=null).length;
   const s2b=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2b)), n2b=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2b!=null).length;
-  const items=[[first[0],first[1],null,dlt(first[0],prevFirst)],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length)],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length)],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length)],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length)],[f.sign.length,"Ingeschreven",null,dlt(f.sign.length,pf.sign.length)],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length)],
+  const items=[[first[0],first[1],null,dlt(first[0],prevFirst)],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length)],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length)],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length)],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length)],[f.signO.length,who?"Ingeschreven · eigenaar":"Ingeschreven",who?"ingeschreven dossiers waarvan deze persoon eigenaar is, op intakedatum":null,dlt(f.signO.length,pf.signO.length)],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length)],
     [held?fpct(s.show.length,held):"—","Show rate per slot",`${s.show.length} show · ${s.noshow.length} no-show · ${s.late.length} late cancel${s.unres.length?` · ${s.unres.length} zonder uitkomst`:""}`,""],
     [fmin(s2l),"Reactietijd (mediaan)",`Tijd van binnenkomst lead tot het eerste geregistreerde contactmoment (taak/belpoging/afspraak/fasewissel) — bekend voor ${n2l} leads uit deze periode (alleen sinds het live-eventlog draait). Tijd tot eerste intake-boeking: mediaan ${s2b==null?"—":(s2b+"").replace(".",",")+" uur"} (${n2b} leads).`,s2b!=null?`<i class="dlt eq">${(s2b+"").replace(".",",")} u tot boeking</i>`:""]];
   k.innerHTML=items.map(x=>`<div class="kpi" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[3]||""}</div>`).join("");
@@ -267,21 +269,23 @@ function colHtml(who, name, color, tot){
   const sub = who==null
     ? `${behandeld} leads afgehandeld · ${f.agenda.length} intakes op de agenda`
     : MODE==="rep" ? `${behandeld} afgehandeld als setter · ${f.agenda.length} intakes als eigenaar`
-    : `${behandeld} afgehandeld als setter · ${f.agenda.length} intakes gezet · ${f.agendaI.length} intakes gevoerd`;
+    : `${behandeld} afgehandeld als setter · ${f.agenda.length} intakes gezet · ${f.dossiers.length} dossiers na show`;
   return `<div class="fcol${tot?" tot":""}">
     <div class="fhead" title="klik om in te klappen" onclick="toggleCol('${esc(repKey)}')"><div class="ava" style="background:${color}">${ini}</div><b>${esc(name)}</b><div class="bigN" title="leads afgehandeld (gepland + verloren in de Leads-fase)">${behandeld}</div></div>
     <div class="fsub" title="${esc(sub)}">${sub}</div>
+    <div class="grp first">Setter <i>· wat lever jij aan?</i></div>
     ${rowHtml("p","Plan rate",ROL("plan"),f.gepland.length,behandeld,`${f.verloren.length} verloren`,"plan",repKey)}
+    ${MODE==="rep"?`<div class="grp">Eigenaar <i>· v1: show, sign en pay op de deal-eigenaar</i></div>`:""}
     ${rowHtml("h","Show rate",ROL("show"),f.show.length,f.agenda.length,`${f.geenShow.length} geen show${openGS?` · ${openGS} nog open`:""}`,"show",repKey)}
     ${rowHtml("s","Sign rate",ROL("signS"),f.signS.length,f.show.length,`${f.nietSignS.length} (nog) niet${f.nietSignS.filter(l=>l.open).length?` · ${f.nietSignS.filter(l=>l.open).length} open`:""}`,"signS",repKey)}
-    ${MODE==="rep"?"":rowHtml("i","Intake → sign",ROL("sign"),f.sign.length,f.showI.length,`${f.nietSign.length} (nog) niet${f.nietSign.filter(l=>l.open).length?` · ${f.nietSign.filter(l=>l.open).length} open`:""}`,"sign",repKey)}
+    ${MODE==="rep"?"":`<div class="grp">Eigenaar <i>· hoe beweeg jij dossiers?</i></div>`}
     ${MODE==="rep"?"":rowHtml("c","Close rate",ROL("close"),f.closed.length,f.closed.length+f.closeLost.length,`${f.closeLost.length} verloren${f.closeOpen.length?` · ${f.closeOpen.length} open`:""}`,"close",repKey)}
     ${rowHtml("b","Pay rate",ROL("pay"),f.paid.length,f.signO.length,`${f.nietPaid.length} nog niet`,"pay",repKey)}
   </div>`;
 }
 function drawCols(){
-  const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap");
-  for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw]) x.style.display="none";
+  const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap"), iw=document.getElementById("intwrap");
+  for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw]) x.style.display="none";
   if(tab==="cmp"){ cw.style.display="block"; drawCmp(); return; }
   if(tab==="trend"){ tw.style.display="block"; drawTrend(); return; }
   if(tab==="bron"){ bw.style.display="block"; drawBron(); return; }
@@ -290,36 +294,40 @@ function drawCols(){
   if(tab==="won"){ ww.style.display="block"; drawWon(); return; }
   if(tab==="dag"){ dw.style.display="block"; drawDag(); return; }
   if(tab==="apt"){ pw.style.display="block"; drawApt(); return; }
+  if(tab==="int"){ iw.style.display="block"; drawInt(); return; }
   if(tab==="tot"){ el.style.display="flex"; el.innerHTML=colHtml(null,"Totaal","#1a2233",true)+REPS.map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join(""); return; }
+  if(tab==="ov"){ el.style.display="block"; el.innerHTML=repPage(null); return; }
   const n=repOf(); el.style.display="block"; el.innerHTML=repPage(n);
 }
 
 // ---- persoonlijke pagina ----
 function repPage(n){
   const f=funnel(n,A,B), s=slots(n,A,B,"setter"), si=slots(n,A,B,"intaker");
-  const col=`<div class="cols" style="margin:0">${colHtml(n,n,RCOL[n]||"#1a2233",true)}</div>`;
+  const nm = n==null? "Iedereen" : n, key = n==null? "tot" : n, jou = n==null? "" : "jouw ";
+  const col=`<div class="cols" style="margin:0">${colHtml(n,nm,n==null?"#1a2233":(RCOL[n]||"#1a2233"),true)}</div>`;
   // trend: 8 weken van deze persoon (kleine multiples)
   const bs=[]; for(let d=weekKey(NOW)-7*7; d<=NOW; d+=7) bs.push([d,Math.min(d+6,NOW)]);
   const rows=bs.map(([a,b])=>trendRow(n,a,b)), labels=bs.map(([a])=>"wk "+isoWeek(a));
   const cw=Math.max(240,Math.floor(((document.getElementById("cols").clientWidth||900)*0.55-40)/2)-22);
-  const mets=[["pr","Plan rate",r=>[r.gepland,r.beh],+(DEFS.min_volume_plan||15)],["sr","Show rate",r=>[r.show,r.agenda],+(DEFS.min_volume_show||8)],["gs","Sign rate",r=>[r.signS,r.show],+(DEFS.min_volume_sign||5)],["gr","Intake → sign",r=>[r.sign,r.showI],+(DEFS.min_volume_sign||5)]];
+  const mets=[["plan","Plan rate",r=>[r.gepland,r.beh],+(DEFS.min_volume_plan||15)],["show","Show rate",r=>[r.show,r.agenda],+(DEFS.min_volume_show||8)],["signS","Sign rate",r=>[r.signS,r.show],+(DEFS.min_volume_sign||5)],["close","Close rate",r=>[r.closed,r.closed+r.closeLost],+(DEFS.min_volume_sign||5)]];
   const sm=mets.map(([k,t,nd,mn])=>{ const vals=rows.map(r=>{ const [a,b]=nd(r); return b?pct(a,b):null; }); const weak=rows.map(r=>(nd(r)[1]||0)<mn); const c=vals[vals.length-1], p=vals[vals.length-2];
-    return `<div class="sm" onclick="tab='trend';trendMetric='${k}';trendReps=new Set([${JSON.stringify(n)}]);render()"><div class="smh"><span>${t}</span><b>${c==null?"—":(c+"").replace(".",",")+"%"}</b>${ppDelta(c,p)}</div>${svgLine([{name:t,color:RCOL[n]||"var(--plan)",values:vals,weak,width:2}],{pct:true,labels,h:86,pl:30,pb:18,pt:8,ticks:3,w:cw})}</div>`; }).join("");
-  // verliesredenen van deze persoon
-  const lost=L.filter(l=>l.lost&&inR(l.scd,A,B)&&l.owner===n); const rc=new Map(); for(const l of lost) rc.set(l.lost_reason||"(geen reden)",(rc.get(l.lost_reason||"(geen reden)")||0)+1);
+    return `<div class="sm${sel&&sel.phase===k?" on":""}" onclick="pick(${jq(key)},'${k}')" title="klik: grafiek per dag/week/maand + de namen"><div class="smh"><span>${t} <i class="rolTag">${ROL(k)}</i></span><b>${c==null?"—":(c+"").replace(".",",")+"%"}</b>${ppDelta(c,p)}</div>${svgLine([{name:t,color:n==null?"var(--txt)":(RCOL[n]||"var(--plan)"),values:vals,weak,width:2}],{pct:true,labels,h:86,pl:30,pb:18,pt:8,ticks:3,w:cw})}</div>`; }).join("");
+  // verliesredenen van deze persoon (als eigenaar)
+  const lost=L.filter(l=>l.lost&&inR(l.scd,A,B)&&(n==null||l.owner===n)); const rc=new Map(); for(const l of lost) rc.set(l.lost_reason||"(geen reden)",(rc.get(l.lost_reason||"(geen reden)")||0)+1);
   const top=[...rc.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6); const mx=Math.max(1,...top.map(x=>x[1]));
   const lostH=top.length? top.map(([r,c])=>`<div class="lr"><span>${esc(r)}</span><i><b style="width:${Math.round(c/mx*100)}%"></b></i><em>${c}</em></div>`).join("") : `<div class="empty">Niets verloren in deze periode.</div>`;
   // komende intakes (gezet of in agenda)
-  const up=AP.filter(a=>a.is_upcoming&&(a.setter===n||a.intaker===n)).sort((a,b)=>a.starts_at<b.starts_at?-1:1).slice(0,8);
-  const upH=up.length? `<table><tr><th>Wanneer</th><th>Wie</th><th>Rol</th></tr>`+up.map(a=>`<tr><td>${fmt(a.sd)} ${a.hm}</td><td>${ghl(a.contact_id,a.name)}</td><td><small>${a.setter===n&&a.intaker===n?"setter + intaker":a.setter===n?"setter":"intaker"}</small></td></tr>`).join("")+`</table>` : `<div class="empty">Geen komende intakes.</div>`;
+  const upAll=AP.filter(a=>a.is_upcoming&&(n==null||a.setter===n||a.intaker===n)).sort((a,b)=>a.starts_at<b.starts_at?-1:1), up=upAll.slice(0,8);
+  const upH=(up.length? `<table><tr><th>Wanneer</th><th>Wie</th><th>${n==null?"Setter · intaker":"Rol"}</th><th>Status</th></tr>`+up.map(a=>`<tr><td>${fmt(a.sd)} ${a.hm}</td><td>${ghl(a.contact_id,a.name)}</td><td><small>${n==null?esc((a.setter||"—")+" · "+(a.intaker||"—")):(a.setter===n&&a.intaker===n?"setter + intaker":a.setter===n?"setter":"intaker")}</small></td><td>${intStatPill(a)}</td></tr>`).join("")+`</table>` : `<div class="empty">Geen komende intakes.</div>`)+`<div class="more" onclick="tab='int';intScope='komend';intWho=${n==null?"null":jq(n)};render()">🗓 alle ${upAll.length} komende intakes →</div>`;
   // open dossiers na show (eigenaar) + no-shows nog open (setter)
   const openDoss=f.closeOpen.length, openNS=f.geenShow.filter(l=>l.open).length, unres=si.unres.length;
-  const todo=`<div class="todo">${openNS?`<div class="td"><b>${openNS}</b><span>no-shows van jouw intakes nog open — herplannen</span><a href="#" onclick="pick(${JSON.stringify(n).replace(/"/g,"&quot;")},'show');return false">bekijk</a></div>`:""}${openDoss?`<div class="td"><b>${openDoss}</b><span>dossiers na show nog open (eigenaar)</span><a href="#" onclick="pick(${JSON.stringify(n).replace(/"/g,"&quot;")},'close');return false">bekijk</a></div>`:""}${unres?`<div class="td"><b>${unres}</b><span>intakes in jouw agenda zonder show/no-show</span><a href="#" onclick="tab='apt';aptFilt='unres';render();return false">bekijk</a></div>`:""}${(!openNS&&!openDoss&&!unres)?`<div class="empty">Niets dat op actie wacht. 👌</div>`:""}</div>`;
-  const s2l=median(L.filter(l=>inR(l.cd,A,B)&&l.setter===n).map(l=>l.s2l));
+  const unconf=upAll.filter(a=>a.status!=="confirmed"&&!a.is_cancelled).length;
+  const todo=`<div class="todo">${unconf?`<div class="td"><b>${unconf}</b><span>komende intakes nog niet bevestigd</span><a href="#" onclick="tab='int';intScope='komend';intFilt='unconf';intWho=${n==null?"null":jq(n)};render();return false">bekijk</a></div>`:""}${openNS?`<div class="td"><b>${openNS}</b><span>no-shows van ${jou}intakes nog open — herplannen</span><a href="#" onclick="pick(${jq(key)},'show');return false">bekijk</a></div>`:""}${openDoss?`<div class="td"><b>${openDoss}</b><span>dossiers na show nog open (eigenaar)</span><a href="#" onclick="pick(${jq(key)},'close');return false">bekijk</a></div>`:""}${unres?`<div class="td"><b>${unres}</b><span>intakes ${n==null?"":"in jouw agenda "}zonder show/no-show</span><a href="#" onclick="tab='apt';aptFilt='unres';render();return false">bekijk</a></div>`:""}${(!openNS&&!openDoss&&!unres&&!unconf)?`<div class="empty">Niets dat op actie wacht. 👌</div>`:""}</div>`;
+  const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(n==null||l.setter===n)).map(l=>l.s2l));
   return `<div class="repgrid">${col}<div class="repside">
-    <div class="cmp"><h3>Verloop laatste 8 weken · ${esc(n)} <span class="chsub">klik voor de grote grafiek</span></h3><div class="smallmult two-col">${sm}</div></div>
+    <div class="cmp"><h3>Verloop laatste 8 weken · ${esc(nm)} <span class="chsub">klik op een kaartje → grafiek per dag/week/maand + namen (onderaan)</span></h3><div class="smallmult two-col">${sm}</div></div>
     <div class="two"><div class="cmp"><h3>Actie nodig</h3>${todo}</div><div class="cmp"><h3>Verliesredenen (als eigenaar) · ${lost.length}</h3>${lostH}</div></div>
-    <div class="two"><div class="cmp"><h3>Komende intakes</h3>${upH}</div><div class="cmp"><h3>Afspraken in de periode</h3><table><tr><th></th><th>Als setter</th><th>Als intaker</th></tr><tr><td>Op de agenda</td><td>${s.all.length}</td><td>${si.all.length}</td></tr><tr><td>Show</td><td>${s.show.length}</td><td>${si.show.length}</td></tr><tr><td>No-show</td><td>${s.noshow.length}</td><td>${si.noshow.length}</td></tr><tr><td>Late cancel</td><td>${s.late.length}</td><td>${si.late.length}</td></tr><tr><td>Show rate per slot</td><td><b>${fpct(s.show.length,s.show.length+s.noshow.length+s.late.length)}</b></td><td><b>${fpct(si.show.length,si.show.length+si.noshow.length+si.late.length)}</b></td></tr><tr><td>Reactietijd (mediaan)</td><td colspan="2">${fmin(s2l)}</td></tr></table></div></div>
+    <div class="two"><div class="cmp"><h3>Komende intakes</h3>${upH}</div><div class="cmp"><h3>Agenda-slots in de periode <span class="chsub">afspraken uit de GHL-agenda, als setter (jij boekte) vs als intaker (jouw agenda)</span></h3><table><tr><th></th><th>Als setter</th><th>Als intaker</th></tr><tr><td>Op de agenda</td><td>${s.all.length}</td><td>${si.all.length}</td></tr><tr><td>Show</td><td>${s.show.length}</td><td>${si.show.length}</td></tr><tr><td>No-show</td><td>${s.noshow.length}</td><td>${si.noshow.length}</td></tr><tr><td>Late cancel</td><td>${s.late.length}</td><td>${si.late.length}</td></tr><tr><td>Show rate per slot</td><td><b>${fpct(s.show.length,s.show.length+s.noshow.length+s.late.length)}</b></td><td><b>${fpct(si.show.length,si.show.length+si.noshow.length+si.late.length)}</b></td></tr><tr><td>Reactietijd (mediaan)</td><td colspan="2">${fmin(s2l)}</td></tr></table></div></div>
   </div></div>`;
 }
 
@@ -328,7 +336,6 @@ const PH={
   plan:{t:"Plan rate", ok:"Intake gepland", bad:"Verloren in de Leads-fase", d:"pd", bd:"scd", who:"setter"},
   show:{t:"Show rate", ok:"Op gesprek verschenen", bad:"Geen show", d:"id_", bd:"id_", who:"setter"},
   signS:{t:"Sign rate", ok:"Ingeschreven (van jouw geshowde intakes)", bad:"Show, maar (nog) niet getekend", d:"id_", bd:"id_", who:"setter"},
-  sign:{t:"Intake → sign rate", ok:"Ingeschreven (uit jouw gevoerde intakes)", bad:"Show in jouw agenda, (nog) niet getekend", d:"id_", bd:"id_", who:"intaker"},
   close:{t:"Close rate", ok:"Ingeschreven", bad:"Verloren na show", d:"id_", bd:"scd", who:"owner"},
   pay:{t:"Pay rate", ok:"Betaald", bad:"Getekend, nog niet betaald", d:"id_", bd:"id_", who:"owner"}};
 function pick(repKey,phase){ sel={repKey, phase}; resetDetailState(); drawCols(); drawDetail(); document.getElementById("detail").scrollIntoView({behavior:"smooth",block:"nearest"}); }
@@ -410,7 +417,7 @@ function rowsTable(rows, phase, win, tblKey){
 }
 function drawDetail(){
   const el=document.getElementById("detail");
-  if(!sel || ["adv","won","dag","apt","trend","bron","lost"].includes(tab)){ el.style.display="none"; return; }
+  if(!sel || ["adv","won","dag","apt","trend","bron","lost","int"].includes(tab)){ el.style.display="none"; return; }
   if(tab==="cmp"){ el.style.marginTop="12px"; } else el.style.marginTop="";
   const who = sel.repKey==="tot"? null : sel.repKey;
   const name = who==null? "Totaal" : who;
@@ -420,6 +427,7 @@ function drawDetail(){
   const nf=Object.keys(colF.ok).length+Object.keys(colF.bad).length;
   const okF=applyColF(ok,colDefs(sel.phase,true),"ok",-1).length, badF=applyColF(bad,colDefs(sel.phase,false),"bad",-1).length;
   document.getElementById("dhead").innerHTML=`<b>${esc(name)} · ${ph.t} (${ROL(sel.phase)})</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${ok.length} wel · ${bad.length} niet${nf?` · <a href="#" onclick="colF={ok:{},bad:{}};drawDetail();return false" style="color:var(--plan)">filters wissen (${nf})</a>`:""}</span>`;
+  document.getElementById("dchart").innerHTML=chartWidget(who, sel.phase);
   document.getElementById("dcols").innerHTML=
     `<div class="dcol"><h3><span class="pill ok">${okF!==ok.length?okF+" van "+ok.length:ok.length}</span> ${ph.ok}</h3>${rowsTable(ok,sel.phase,true,"ok")}</div>
      <div class="dcol"><h3><span class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</span> ${ph.bad}</h3>${rowsTable(bad,sel.phase,false,"bad")}</div>`;
@@ -539,9 +547,9 @@ function weekHtml(){
   const rowsDef=[
     ["✨ Nieuwe leads", d=>L.filter(l=>l.cd===d&&(who==null||l.setter===who)).length, "nieuw"],
     ["📅 Intakes gepland", d=>L.filter(l=>l.stage_position!==0&&l.pd===d&&(who==null||l.setter===who)).length, "plan"],
-    ["🪑 Intakes op agenda", d=>L.filter(l=>l.id_===d&&(who==null||l.intaker===who)).length, "show"],
-    ["✅ Shows", d=>L.filter(l=>l.id_===d&&l.is_show&&(who==null||l.intaker===who)).length, "show"],
-    ["👻 No-shows", d=>L.filter(l=>l.id_===d&&l.is_noshow&&(who==null||l.intaker===who)).length, "show"],
+    ["🪑 Intakes (gezet door)", d=>L.filter(l=>l.id_===d&&(who==null||l.setter===who)).length, "show"],
+    ["✅ Shows", d=>L.filter(l=>l.id_===d&&l.is_show&&(who==null||l.setter===who)).length, "show"],
+    ["👻 No-shows", d=>L.filter(l=>l.id_===d&&l.is_noshow&&(who==null||l.setter===who)).length, "show"],
     ["✍️ Ingeschreven", d=>L.filter(l=>l.is_signed&&l.stgd===d&&(who==null||l.owner===who)).length, "sign"],
     ["❌ Verloren", d=>L.filter(l=>l.lost&&l.scd===d&&(who==null||l.owner===who)).length, "lost"],
     ["📞 Belpogingen/taken", d=>EV.filter(e=>e.dag===d&&(e.d.ico==="📞")&&(who==null||e.rep===who)).length, "nieuw"],
