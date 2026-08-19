@@ -145,30 +145,32 @@ function initApp(){
 // setter  : plan rate en show rate (van de intakes die hij/zij inplande)
 // intaker : sign rate (intake -> ingeschreven, ongeacht wie sluit)
 // owner   : close rate (ingeschreven vs verloren van de dossiers na show) en pay rate
+let HF=null;   // uur-filter (alleen voor de per-uur weergave van de grafiekwidget)
 function funnel(who, a, b){
+  const LL = HF ? L.filter(HF) : L;
   const isS = l => who==null || l.setter===who;
   const isI = l => who==null || l.intaker===who;
   const isO = l => who==null || l.owner===who;
-  const gepland  = L.filter(l=> l.stage_position!==0 && inR(l.pd,a,b) && isS(l));
-  const verloren = L.filter(l=> l.lost_in_lead_stage && inR(l.scd,a,b) && isO(l));
+  const gepland  = LL.filter(l=> l.stage_position!==0 && inR(l.pd,a,b) && isS(l));
+  const verloren = LL.filter(l=> l.lost_in_lead_stage && inR(l.scd,a,b) && isO(l));
   if(MODE==="rep"){   // v1-logica: alles na de planfase op de eigenaar van de deal (4 rijen, geen aparte close-rij)
-    const ag=L.filter(l=> inR(l.id_,a,b) && isO(l)), sh=ag.filter(l=>l.is_show), gs=ag.filter(l=>!l.is_show), sg=sh.filter(l=>l.is_signed), ns=sh.filter(l=>!l.is_signed);
+    const ag=LL.filter(l=> inR(l.id_,a,b) && isO(l)), sh=ag.filter(l=>l.is_show), gs=ag.filter(l=>!l.is_show), sg=sh.filter(l=>l.is_signed), ns=sh.filter(l=>!l.is_signed);
     return {gepland, verloren, agenda:ag, show:sh, geenShow:gs, signS:sg, nietSignS:ns, agendaI:ag, showI:sh, sign:sg, nietSign:ns, dossiers:sh, closed:sg, closeLost:ns.filter(l=>l.lost), closeOpen:ns.filter(l=>!l.lost), signO:sg, paid:sg.filter(l=>l.is_paid), nietPaid:sg.filter(l=>!l.is_paid)};
   }
-  const agenda   = L.filter(l=> inR(l.id_,a,b) && isS(l));            // intakes op de agenda van deze setter
+  const agenda   = LL.filter(l=> inR(l.id_,a,b) && isS(l));            // intakes op de agenda van deze setter
   const show     = agenda.filter(l=> l.is_show);
   const geenShow = agenda.filter(l=> !l.is_show);
   const signS    = show.filter(l=> l.is_signed);                    // sign rate setter: van jouw shows, hoeveel ingeschreven (ongeacht wie tekent)
   const nietSignS= show.filter(l=> !l.is_signed);
-  const agendaI  = L.filter(l=> inR(l.id_,a,b) && isI(l));            // intakes gevoerd door deze intaker
+  const agendaI  = LL.filter(l=> inR(l.id_,a,b) && isI(l));            // intakes gevoerd door deze intaker
   const showI    = agendaI.filter(l=> l.is_show);
   const sign     = showI.filter(l=> l.is_signed);
   const nietSign = showI.filter(l=> !l.is_signed);
-  const dossiers = L.filter(l=> inR(l.id_,a,b) && l.is_show && isO(l)); // dossiers na show, van deze eigenaar
+  const dossiers = LL.filter(l=> inR(l.id_,a,b) && l.is_show && isO(l)); // dossiers na show, van deze eigenaar
   const closed   = dossiers.filter(l=> l.is_signed);
   const closeLost= dossiers.filter(l=> !l.is_signed && l.lost);
   const closeOpen= dossiers.filter(l=> !l.is_signed && !l.lost);
-  const signO    = L.filter(l=> inR(l.id_,a,b) && l.is_signed && isO(l));
+  const signO    = LL.filter(l=> inR(l.id_,a,b) && l.is_signed && isO(l));
   const paid     = signO.filter(l=> l.is_paid);
   const nietPaid = signO.filter(l=> !l.is_paid);
   return {gepland, verloren, agenda, show, geenShow, signS, nietSignS, agendaI, showI, sign, nietSign, dossiers, closed, closeLost, closeOpen, signO, paid, nietPaid};
@@ -187,7 +189,7 @@ let colF = {ok:{}, bad:{}};
 let fOpen = null, expand = {};
 let collapsed = new Set();
 function setRange(a,b){ A=a; B=b; sel=null; render(); }
-function resetDetailState(){ sortSt={ok:{c:1,d:-1},bad:{c:1,d:-1}}; colF={ok:{},bad:{}}; expand={}; fClose(); }
+function resetDetailState(){ chFocus=null; chStack=[]; sortSt={ok:{c:1,d:-1},bad:{c:1,d:-1}}; colF={ok:{},bad:{}}; expand={}; fClose(); }
 
 // ---- tabs ----
 function drawTabs(){
@@ -205,7 +207,7 @@ function drawTabs(){
   mk("cmp","⚖️ Vergelijk");
   mk("int","🗓 Intakes");
   mk("won","🏆 Gewonnen");
-  mk("apt","📆 Afspraken");
+  // Afspraken-tab verwijderd in v2.6 (alles staat in Intakes + Dag & Week)
   mk("trend","📈 Trend");
   mk("bron","📣 Bronnen & Ads");
   mk("lost","🚫 Verloren");
@@ -301,6 +303,7 @@ function drawCols(){
 }
 
 // ---- persoonlijke pagina ----
+let upOpen=false;
 function repPage(n){
   const f=funnel(n,A,B), s=slots(n,A,B,"setter"), si=slots(n,A,B,"intaker");
   const nm = n==null? "Iedereen" : n, key = n==null? "tot" : n, jou = n==null? "" : "jouw ";
@@ -317,8 +320,8 @@ function repPage(n){
   const top=[...rc.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6); const mx=Math.max(1,...top.map(x=>x[1]));
   const lostH=top.length? top.map(([r,c])=>`<div class="lr"><span>${esc(r)}</span><i><b style="width:${Math.round(c/mx*100)}%"></b></i><em>${c}</em></div>`).join("") : `<div class="empty">Niets verloren in deze periode.</div>`;
   // komende intakes (gezet of in agenda)
-  const upAll=AP.filter(a=>a.is_upcoming&&(n==null||a.setter===n||a.intaker===n)).sort((a,b)=>a.starts_at<b.starts_at?-1:1), up=upAll.slice(0,8);
-  const upH=(up.length? `<table><tr><th>Wanneer</th><th>Wie</th><th>${n==null?"Setter · intaker":"Rol"}</th><th>Status</th></tr>`+up.map(a=>`<tr><td>${fmt(a.sd)} ${a.hm}</td><td>${ghl(a.contact_id,a.name)}</td><td><small>${n==null?esc((a.setter||"—")+" · "+(a.intaker||"—")):(a.setter===n&&a.intaker===n?"setter + intaker":a.setter===n?"setter":"intaker")}</small></td><td>${intStatPill(a)}</td></tr>`).join("")+`</table>` : `<div class="empty">Geen komende intakes.</div>`)+`<div class="more" onclick="tab='int';intScope='komend';intWho=${n==null?"null":jq(n)};render()">🗓 alle ${upAll.length} komende intakes →</div>`;
+  const upAll=AP.filter(a=>a.is_upcoming&&(n==null||a.setter===n||a.intaker===n)).sort((a,b)=>a.starts_at<b.starts_at?-1:1), up=upOpen?upAll:upAll.slice(0,8);
+  const upH=(up.length? `<table><tr><th>Wanneer</th><th>Wie</th><th>${n==null?"Setter · intaker":"Rol"}</th><th>Status</th></tr>`+up.map(a=>`<tr><td>${fmt(a.sd)} ${a.hm}</td><td>${ghl(a.contact_id,a.name)}</td><td><small>${n==null?esc((a.setter||"—")+" · "+(a.intaker||"—")):(a.setter===n&&a.intaker===n?"setter + intaker":a.setter===n?"setter":"intaker")}</small></td><td>${intStatPill(a)}</td></tr>`).join("")+`</table>` : `<div class="empty">Geen komende intakes.</div>`)+(upAll.length>8?`<div class="more" onclick="upOpen=!upOpen;render()">${upOpen?"▴ alleen de eerste 8":"▾ toon alle "+upAll.length+" komende intakes hier"}</div>`:"")+`<div class="more" onclick="tab='int';intScope='komend';intWho=${n==null?"null":jq(n)};render()">🗓 open in Intakes-tab →</div>`;
   // open dossiers na show (eigenaar) + no-shows nog open (setter)
   const openDoss=f.closeOpen.length, openNS=f.geenShow.filter(l=>l.open).length, unres=si.unres.length;
   const unconf=upAll.filter(a=>a.status!=="confirmed"&&!a.is_cancelled).length;
@@ -545,24 +548,34 @@ function weekHtml(){
   const mon=weekKey(dagSel); const days=[0,1,2,3,4,5,6].map(i=>mon+i);
   const who=weekWho;
   const rowsDef=[
-    ["✨ Nieuwe leads", d=>L.filter(l=>l.cd===d&&(who==null||l.setter===who)).length, "nieuw"],
-    ["📅 Intakes gepland", d=>L.filter(l=>l.stage_position!==0&&l.pd===d&&(who==null||l.setter===who)).length, "plan"],
-    ["🪑 Intakes (gezet door)", d=>L.filter(l=>l.id_===d&&(who==null||l.setter===who)).length, "show"],
-    ["✅ Shows", d=>L.filter(l=>l.id_===d&&l.is_show&&(who==null||l.setter===who)).length, "show"],
-    ["👻 No-shows", d=>L.filter(l=>l.id_===d&&l.is_noshow&&(who==null||l.setter===who)).length, "show"],
-    ["✍️ Ingeschreven", d=>L.filter(l=>l.is_signed&&l.stgd===d&&(who==null||l.owner===who)).length, "sign"],
-    ["❌ Verloren", d=>L.filter(l=>l.lost&&l.scd===d&&(who==null||l.owner===who)).length, "lost"],
-    ["📞 Belpogingen/taken", d=>EV.filter(e=>e.dag===d&&(e.d.ico==="📞")&&(who==null||e.rep===who)).length, "nieuw"],
+    ["✨ Nieuwe leads", d=>L.filter(l=>l.cd===d&&(who==null||l.setter===who)), "nieuw", "binnengekomen op deze dag (setter)"],
+    ["📅 Intakes gepland", d=>L.filter(l=>l.stage_position!==0&&l.pd===d&&(who==null||l.setter===who)), "plan", "op deze dag ingepland (inplandatum, setter)"],
+    ["🪑 Intakes op de dag", d=>L.filter(l=>l.id_===d&&(who==null||l.setter===who)), "show", "intake vindt op deze dag plaats (toegerekend aan de setter)"],
+    ["✅ Shows", d=>L.filter(l=>l.id_===d&&l.is_show&&(who==null||l.setter===who)), "show", "intake op deze dag, kwam opdagen (setter)"],
+    ["👻 No-shows", d=>L.filter(l=>l.id_===d&&l.is_noshow&&(who==null||l.setter===who)), "show", "intake op deze dag, kwam niet (setter)"],
+    ["✍️ Ingeschreven", d=>L.filter(l=>l.is_signed&&l.stgd===d&&(who==null||l.owner===who)), "sign", "op deze dag getekend (eigenaar)"],
+    ["❌ Verloren", d=>L.filter(l=>l.lost&&l.scd===d&&(who==null||l.owner===who)), "lost", "op deze dag op verloren gezet (eigenaar)"],
+    ["📞 Belpogingen/taken", d=>EV.filter(e=>e.dag===d&&(e.d.ico==="📞")&&(who==null||e.rep===who)), "nieuw", "belpogingen / taken op deze dag"],
   ];
-  const tot=r=>days.reduce((a,d)=>a+r[1](d),0);
-  let h=`<div class="cmp weekcard"><div class="chhead"><div><h3 style="margin:0">Week ${isoWeek(mon)} · ${fmt(mon)} – ${fmtY(mon+6)}</h3><div class="chsub">per dag · klik een dag om hem hieronder te openen</div></div>
+  const tot=r=>days.reduce((a,d)=>a+r[1](d).length,0);
+  let h=`<div class="cmp weekcard"><div class="chhead"><div><h3 style="margin:0">Week ${isoWeek(mon)} · ${fmt(mon)} – ${fmtY(mon+6)}</h3><div class="chsub">per dag · klik een <b>getal</b> = wie zijn dat · klik een <b>dagkop</b> = die dag hieronder openen · klik het <b>weektotaal</b> = hele week</div></div>
     <div class="wonchips" style="margin:0">`+[["Team",null]].concat(REPS.map(p=>[p.n,p.n])).map(c=>`<div class="wchip sm${weekWho===c[1]?" on":""}" onclick="weekWho=${c[1]===null?"null":JSON.stringify(c[1]).replace(/"/g,"&quot;")};drawDag()">${esc(c[0])}</div>`).join("")+`</div></div>
     <table class="weektbl"><tr><th></th>`+days.map(d=>`<th class="${d===dagSel?"sel":""}${d>TODAY?" fut":""}" onclick="dagGa(${d})">${["ma","di","wo","do","vr","za","zo"][(d2s(d).getDay()+6)%7]}<br><b>${d2s(d).getDate()}</b></th>`).join("")+`<th>Week</th></tr>`;
-  for(const r of rowsDef){ const vals=days.map(r[1]); const mx=Math.max(1,...vals);
-    h+=`<tr><td class="mt">${r[0]}</td>`+vals.map((v,i)=>`<td class="${days[i]===dagSel?"sel":""}${days[i]>TODAY?" fut":""}" onclick="dagGa(${days[i]})">${v?`<b>${v}</b><i class="wbar" style="width:${Math.round(v/mx*100)}%;background:var(--wk-${r[2]})"></i>`:"<span class='z'>·</span>"}</td>`).join("")+`<td class="tot"><b>${tot(r)}</b></td></tr>`; }
-  h+=`</table></div>`;
+  rowsDef.forEach((r,ri)=>{ const vals=days.map(d=>r[1](d).length); const mx=Math.max(1,...vals);
+    h+=`<tr><td class="mt" title="${esc(r[3])}">${r[0]}</td>`+vals.map((v,i)=>`<td class="${days[i]===dagSel?"sel":""}${days[i]>TODAY?" fut":""}${v?" clk":""}${weekSel&&weekSel.r===ri&&weekSel.d===days[i]?" on":""}" onclick="${v?`weekPick(${ri},${days[i]})`:`dagGa(${days[i]})`}" title="${v?"klik: wie zijn dat":""}">${v?`<b>${v}</b><i class="wbar" style="width:${Math.round(v/mx*100)}%;background:var(--wk-${r[2]})"></i>`:"<span class='z'>·</span>"}</td>`).join("")+`<td class="tot clk${weekSel&&weekSel.r===ri&&weekSel.d===null?" on":""}" onclick="weekPick(${ri},null)" title="klik: wie zijn dat (hele week)"><b>${tot(r)}</b></td></tr>`; });
+  h+=`</table>`;
+  if(weekSel){ const r=rowsDef[weekSel.r]; if(r){ const dd=weekSel.d===null?days:[weekSel.d]; const isEv=weekSel.r===7; const items=dd.flatMap(d=>r[1](d).map(x=>({d,x})));
+    const ttl=`${r[0]} · ${weekSel.d===null?"week "+isoWeek(mon):fmtY(weekSel.d)}${who?" · "+esc(who):""} · ${items.length}`;
+    h+=`<div class="weekwie"><div class="dhead"><b>${ttl}</b><span>${esc(r[3])} <a href="#" onclick="weekSel=null;drawDag();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>`;
+    if(!items.length) h+=`<div class="empty">Niemand.</div>`;
+    else if(isEv) h+=`<table><tr><th>Dag</th><th>Tijd</th><th>Wie</th><th>Wat</th><th>Door</th></tr>`+items.map(({d,x})=>`<tr><td>${fmt(d)}</td><td>${tsHM(x.occurred_at)}</td><td>${ghl(x.contact_id,(L.find(l=>l.contact_id===x.contact_id)||{}).name||x.contact_id)}</td><td>${esc(x.d.lab||x.task_title||x.event_type)}</td><td>${esc(x.rep||"—")}</td></tr>`).join("")+`</table>`;
+    else h+=`<table><tr><th>Dag</th><th>Naam</th><th>Setter</th><th>Eigenaar</th><th>Fase</th><th>Kanaal</th>${weekSel.r===6?"<th>Reden</th>":""}</tr>`+items.map(({d,x})=>`<tr><td>${fmt(d)}</td><td>${ghl(x.contact_id,x.name)}</td><td>${esc(x.setter||"—")}</td><td>${esc(x.owner||"—")}</td><td><span class="stg${x.is_signed?" win":x.lost?" lost":""}">${esc(x.stage_name)}${x.lost&&x.stage_position!==0?" · verloren":""}</span></td><td><small>${esc(x.kanaal)}</small></td>${weekSel.r===6?`<td><small>${esc(x.lost_reason||"—")}</small></td>`:""}</tr>`).join("")+`</table>`;
+    h+=`</div>`; } }
+  h+=`</div>`;
   return h;
 }
+let weekSel=null;
+function weekPick(r,d){ weekSel=(weekSel&&weekSel.r===r&&weekSel.d===d)?null:{r,d}; if(d!==null) dagSel=Math.min(TODAY,d); drawDag(); }
 function dagGa(d){ dagSel=Math.min(TODAY,d); dagUur=null; drawDag(); }
 function dagToggle(k){ dagOpen.has(k)?dagOpen.delete(k):dagOpen.add(k); dagUur=null; drawDag(); }
 function dagPikUur(k,u){ dagUur=(dagUur&&dagUur.rep===k&&dagUur.uur===u)?null:{rep:k,uur:u}; drawDag(); }
