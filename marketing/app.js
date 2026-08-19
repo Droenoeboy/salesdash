@@ -405,7 +405,8 @@ function drawBest(){
   const s=bestSort; const col=cols.find(c=>c.k===s.k)||cols[1];
   rows.sort((x,y)=>{ const a=col.v(x),b=col.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
   const LIMN=bestAll?rows.length:40;
-  let h=`<div class="wonchips">`+[["ad","Per advertentie"],["camp","Per campagne"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
+  let h=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${bestPlat==null?" on":""}" onclick="bestPlat=null;drawBest()">Alle</div>`+["meta","google","tiktok"].map(p=>`<div class="wchip sm${bestPlat===p?" on":""}" onclick="bestPlat='${p}';drawBest()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Niveau:</span>`+[["camp","Campagne"],["adset","Advertentiegroep"],["ad","Advertentie"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
   h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`
     + rows.slice(0,LIMN).map(r=>`<tr>`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`).join("")
     + (rows.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen advertenties met leads of kosten in deze periode.</td></tr>`)+`</table></div>`;
@@ -420,7 +421,12 @@ let dSort={c:1,d:-1};
 function showDetail(key,set){ detail={key,set}; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
 function drawDetail(){
   const el=document.getElementById("detail"); if(!detail||tab!=="tree"){ el.style.display="none"; return; }
-  const n=findNode(detail.key,TREE); if(!n){ el.style.display="none"; return; }
+  let n;
+  if(detail.key==="__ALL__"){
+    const all=L.filter(l=>!l.party);
+    n={label:"Alle kanalen samen",m:metrics(all,spendIn(A,B,r=>!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B)};
+  } else { n=findNode(detail.key,TREE); }
+  if(!n){ el.style.display="none"; return; }
   const rows=n.m.S[detail.set]||[];
   const cols=[
     {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
@@ -436,13 +442,16 @@ function drawDetail(){
     {t:"Temp.",v:l=>l.temperature||"",k:l=>esc(l.temperature||"—")},
   ];
   const s=dSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
-  // ad-verdeling binnen deze set (welke advertenties komen het vaakst voor)
+  // verdeling binnen deze set: campagnes en advertenties die het vaakst voorkomen
   const byAd=new Map(); for(const l of rows){ const k=l.adObj?(l.adObj.adName||l.adObj.adId):(l.camp?"(campagne: "+l.camp.name+")":"(geen advertentie bekend)"); byAd.set(k,(byAd.get(k)||0)+1); }
   const top=[...byAd.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const byCamp=new Map(); for(const l of rows){ const k=(l.camp?l.camp.name:PN(l.platform)); byCamp.set(k,(byCamp.get(k)||0)+1); }
+  const topC=[...byCamp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
   el.style.display="block";
   el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${MODE} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>
     <div class="dbody"><div class="two dtwo"><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.slice(0,300).map(l=>`<tr>`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>300?`<div class="more">eerste 300 van ${sorted.length}</div>`:""}</div>
-    <div class="cmp" style="align-self:start"><h3>Welke advertenties komen het vaakst voor</h3>${top.length?top.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/top[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div></div></div>`;
+    <div style="align-self:start;display:flex;flex-direction:column;gap:12px"><div class="cmp"><h3>Uit welke campagnes komen ze</h3>${topC.length?topC.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/topC[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div>
+    <div class="cmp"><h3>Welke advertenties komen het vaakst voor</h3>${top.length?top.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/top[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div></div></div></div>`;
 }
 
 // ---- trend ----
@@ -452,11 +461,16 @@ function drawTrend(){
   const w=document.getElementById("trendwrap"); const bk=buckets(trendBy); const lab=([a])=>trendBy==="week"?"wk "+isoWeek(a):MND[d2s(a).getMonth()]+" "+String(d2s(a).getFullYear()).slice(2); const labels=bk.map(lab);
   const plats=["meta","google","tiktok"]; const cw=Math.max(320,(w.clientWidth||900)-34);
   const rowsFor=p=>bk.map(([a,b])=>{ const ls=L.filter(l=>(p==null||l.platform===p)&&(PARTY||!l.party)); const sp=spendIn(a,b,r=>(p==null||r.platform===p)&&(PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party)); return metrics(ls,sp,a,b); });
+  const TROWS=rowsFor(null);
   const [mk,mt,unit]=TM.find(x=>x[0]===trendMetric)||TM[0];
-  const series=[{name:"Totaal",color:"var(--txt)",rows:rowsFor(null),width:3,showVals:true}].concat((trendPlat?[trendPlat]:plats).map(p=>({name:PN(p),color:PC(p),rows:rowsFor(p),width:1.8,opacity:.85})));
+  const series=[{name:"Totaal",color:"var(--txt)",rows:TROWS,width:3,showVals:true}].concat((trendPlat?[trendPlat]:plats).map(p=>({name:PN(p),color:PC(p),rows:rowsFor(p),width:1.8,opacity:.85})));
   for(const s of series){ s.values=s.rows.map(m=>{ const v=m[mk]; return v==null?null:(unit==="€"?Math.round(v):unit==="%"?v:v); }); s.tips=s.rows.map(m=>`${m.sg} inschr · ${m.n} leads · ${eur0(m.spend)}`); }
   const pctMode=unit==="%"; const S=series; const tot=S[0]; const last=tot.values.length-1;
-  let h=`<div class="wonchips">`+TM.map(x=>`<div class="wchip sm${trendMetric===x[0]?" on":""}" onclick="trendMetric='${x[0]}';drawTrend()">${x[1]}</div>`).join("")+`<span style="flex:1"></span>`+[["week","Per week"],["maand","Per maand"]].map(x=>`<div class="wchip sm${trendBy===x[0]?" on":""}" onclick="trendBy='${x[0]}';drawTrend()">${x[1]}</div>`).join("")+`</div>`;
+  // de vier belangrijkste trends in één blik (klik = groot bekijken)
+  const MINIS=[["spend","Kosten","€"],["cpl","Kosten per lead","€"],["sg","Inschrijvingen","#"],["cpk","Kosten per klant","€"]];
+  let h=`<div class="minigrid">`+MINIS.map(([mk2,mt2,u2])=>{ const vals=TROWS.map(m=>{const v=m[mk2]; return v==null?null:(u2==="€"?Math.round(v):v);}); const S2=[{name:mt2,color:"var(--plan)",rows:TROWS,values:vals,tips:TROWS.map(m=>`${m.sg} inschr · ${m.n} leads · ${eur0(m.spend)}`),width:2.2}]; const l2=vals.length-1;
+    return `<div class="cmp mini${trendMetric===mk2?" on":""}" onclick="trendMetric='${mk2}';drawTrend()" title="klik om groot te bekijken"><div class="chhead" style="margin-bottom:0"><h3 style="margin:0;font-size:12.5px">${mt2} <span class="chsub">per ${trendBy}</span></h3><b style="font-size:16px">${vals[l2]==null?"—":(u2==="€"?eur0(vals[l2]):vals[l2])}</b></div>${svgLine(S2,{labels,h:84,w:300})}</div>`; }).join("")+`</div>`;
+  h+=`<div class="wonchips">`+TM.map(x=>`<div class="wchip sm${trendMetric===x[0]?" on":""}" onclick="trendMetric='${x[0]}';drawTrend()">${x[1]}</div>`).join("")+`<span style="flex:1"></span>`+[["week","Per week"],["maand","Per maand"]].map(x=>`<div class="wchip sm${trendBy===x[0]?" on":""}" onclick="trendBy='${x[0]}';drawTrend()">${x[1]}</div>`).join("")+`</div>`;
   h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${trendPlat==null?" on":""}" onclick="trendPlat=null;drawTrend()">Alle</div>`+plats.map(p=>`<div class="wchip sm${trendPlat===p?" on":""}" onclick="trendPlat='${p}';drawTrend()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
   h+=`<div class="cmp"><div class="chhead"><div><h3 style="margin:0">${mt} · per ${trendBy==="week"?"ISO-week":"maand"}</h3><div class="chsub">${labels[0]} t/m ${labels[last]} · laatste punt = lopend</div></div><div class="chnow"><b>${tot.values[last]==null?"—":(unit==="€"?eur0(tot.values[last]):unit==="%"?r1(tot.values[last])+"%":tot.values[last])}</b><span>totaal, ${labels[last]}</span></div></div>${svgLine(S,{pct:pctMode,labels,markLast:true,h:240,w:cw})}${legend(S)}</div>`;
   // tabel
@@ -483,7 +497,7 @@ function adviceFor(a,b){
   }
   return out;
 }
-let advAll=false, advOpen=new Set();
+let advAll=false, advOpen=new Set(), advType="all";
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
 function drawAdvice(){
   const w=document.getElementById("advwrap");
@@ -501,8 +515,12 @@ function drawAdvice(){
   const ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻"}, LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven"};
   const sev=ad=> ad.rank>=1500 ? "hi" : ad.rank>=500 ? "mid" : "lo";
   const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
-  const LIM=advAll?list.length:12;
-  let h=note+`<div class="advrows">`+(list.length?list.slice(0,LIM).map((ad,i)=>{ const sv=sev(ad); const key=ad.type+"|"+ad.label; const opn=advOpen.has(key);
+  const CNT={}; for(const ad of list) CNT[ad.type]=(CNT[ad.type]||0)+1;
+  const shown = advType==="all" ? list : list.filter(ad=>ad.type===advType);
+  note+=`<div class="wonchips"><span class="lbl">Soort advies:</span><div class="wchip sm${advType==="all"?" on":""}" onclick="advType='all';drawAdvice()">Alles <span class="n">${list.length}</span></div>`
+    +Object.keys(ICON).filter(t=>CNT[t]).map(t=>`<div class="wchip sm${advType===t?" on":""}" onclick="advType='${t}';drawAdvice()">${ICON[t]} ${LAB[t]} <span class="n">${CNT[t]}</span></div>`).join("")+`</div>`;
+  const LIM=advAll?shown.length:12;
+  let h=note+`<div class="advrows">`+(shown.length?shown.slice(0,LIM).map((ad,i)=>{ const sv=sev(ad); const key=ad.type+"|"+ad.label; const opn=advOpen.has(key);
     return `<div class="advrow ${sv}${opn?" open":""}" onclick="advTog(${jq(key)})">`
       +`<span class="rank">${i+1}</span>`
       +`<span class="sevb ${sv}">${SEVLAB[sv]}</span>`
