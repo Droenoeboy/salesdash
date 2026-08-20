@@ -75,20 +75,29 @@
   .okbtn[disabled]{opacity:.4;cursor:default}
   .note{color:var(--mut2);font-size:11.5px;line-height:1.5}
   .empty{color:var(--mut);padding:14px;text-align:center}
+  a{color:var(--txt);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px} a:hover{text-decoration-color:var(--plan)}
+  .gate{position:fixed;inset:0;background:var(--bg);z-index:99;display:flex;align-items:center;justify-content:center}
+  .gatebox{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px 30px;text-align:center;width:100%;max-width:340px}
+  .gatebox h2{margin:0 0 6px;font-size:17px} .gatebox p{margin:0 0 14px;color:var(--mut);font-size:13px}
+  .gatebox input{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--txt);border-radius:12px;padding:11px 14px;font-size:15px;outline:none;text-align:center;margin-bottom:10px}
+  .gatebox button{width:100%;border:none;background:var(--sel-bg);color:var(--sel-tx);border-radius:12px;padding:11px;font-weight:700;cursor:pointer;font-size:14px}
+  .gfout{color:var(--red-tx);font-size:12.5px;margin-top:10px;min-height:16px}
+  #gen{color:var(--mut2)}
   @media(max-width:860px){ .wlx{grid-template-columns:1fr} td{max-width:150px} }
 </style>
 </head>
 <body>
-<div class="demo">🧪 DEMO-DATA — dit dashboard is nog niet gekoppeld aan Odoo. Alle namen en bedragen zijn verzonnen.</div>
+
 <header>
   <h1>DPAC · Finance — debiteuren</h1>
-  <div class="sub">werklijst voor vandaag · straks rechtstreeks uit Odoo (facturen, betalingen, afspraken)</div>
+  <div class="sub">werklijst voor vandaag · rechtstreeks uit Odoo <span id="gen"></span></div>
 </header>
+<div id="gate" class="gate"><div class="gatebox"><h2>DPAC · Finance</h2><p>Voer de toegangscode in</p><input id="gcode" type="password" autocomplete="off" onkeydown="if(event.key==='Enter')gCheck()"><button onclick="gCheck()">Openen</button><div id="gfout" class="gfout"></div></div></div>
 <div class="tabsrow" id="tabs"></div>
 <main>
   <div class="kpis" id="kpis"></div>
   <div id="view"></div>
 </main>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
