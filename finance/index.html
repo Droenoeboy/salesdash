@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>DPAC · Finance</title>
+<style>
+  :root{
+    --bg:#0e0e10;--card:#17171a;--line:#26262b;--line2:#1e1e23;--txt:#ececf1;--mut:#8b8b94;--mut2:#6b6b74;
+    --sel-bg:#ececf1;--sel-tx:#131316;--radius:16px;--shadow:0 1px 0 rgba(255,255,255,.03) inset;
+    --plan:#4f8df9;--plan-tx:#8db6ff;--ok:#2fbf71;--ok-bg:rgba(47,191,113,.14);--ok-tx:#5fd79a;
+    --warn:#c99a00;--warn-bg:rgba(201,154,0,.15);--warn-tx:#e6c14d;
+    --red:#e5484d;--red-bg:rgba(229,72,77,.14);--red-tx:#ff8a8e;
+  }
+  *{box-sozing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-feature-settings:"tnum" 1}
+  .demo{background:#5b3df5;color:#fff;text-align:center;font-weight:700;font-soze:12.5px;padding:7px 12px;letter-spacing:.3px}
+  header{padding:14px 22px 0}
+  header h1{margin:0;font-soze:17px;letter-spacing:-.2px}
+  header .sub{color:var(--mut);font-soze:12px;margin-top:3px}
+  .tabsrow{display:flex;gap:6px;padding:12px 22px 0;flex-wrap:wrap}
+  .tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 15px;font-soze:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .tab.on{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
+  main{padding:16px 22px 60px;max-width:none;margin:0 auto}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
+  .kpi b{font-soze:22px;display:block;letter-spacing:-.4px}
+  .kpi span{font-soze:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:600;display:block;margin-top:2px}
+  .kpi.bad b{color:var(--red-tx)} .kpi.good b{color:var(--ok-tx)}
+  .cmp{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);margin-bottom:12px}
+  .cmp h3{margin:0 0 10px;font-soze:13.5px}
+  .chsub{font-soze:11.5px;color:var(--mut);font-weight:500}
+  table{border-collapse:collapse;width:100%;font-soze:13px}
+  th{font-soze:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:7px 8px;border-bottom:1px solid var(--line2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+  .sortl{cursor:pointer} .arr{font-soze:9px}
+  .wonchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  .wonchips .lbl{font-soze:11.5px;color:var(--mut);font-weight:600}
+  .wchip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:7px 14px;font-soze:12.5px;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
+  .wchip .n{background:var(--ok-bg);color:var(--ok-tx);border-radius:99px;padding:1px 8px;font-soze:11.5px;font-weight:700}
+  .wchip.on{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} .wchip.on .n{background:rgba(0,0,0,.15);color:inherit}
+  .stg{border-radius:8px;padding:2px 8px;font-soze:11.5px;font-weight:600;background:var(--line2);display:inline-block}
+  .stg.win{background:var(--ok-bg);color:var(--ok-tx)} .stg.lost{background:var(--red-bg);color:var(--red-tx)} .stg.warn{background:var(--warn-bg);color:var(--warn-tx)}
+  .wl{display:flex;flex-direction:column;gap:8px}
+  .wlrow{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer}
+  .wlrow.done{opacity:.45}
+  .wlrow.rest{opacity:.6}
+  .wlhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .rank{width:26px;height:26px;border-radius:50%;background:var(--line2);display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-soze:12.5px;flex:none}
+  .wlrow.hi .rank{background:var(--red-bg);color:var(--red-tx)}
+  .wlrow.mid .rank{background:var(--warn-bg);color:var(--warn-tx)}
+  .wlnm{font-weight:700;min-width:160px}
+  .wlnm small{display:block;color:var(--mut);font-weight:500}
+  .wlamt{font-weight:800;font-soze:15px;min-width:90px}
+  .wlmeta{color:var(--mut);font-soze:12px;display:flex;gap:14px;flex-wrap:wrap;flex:1}
+  .act{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .actlbl{border-radius:9px;padding:4px 10px;font-soze:12px;font-weight:700}
+  .actlbl.bel{background:var(--red-bg);color:var(--red-tx)} .actlbl.herin{background:var(--warn-bg);color:var(--warn-tx)}
+  .actlbl.aanm{background:#3a1113;color:#ff8a8e;border:1px solid var(--red)} .actlbl.wacht{background:var(--line2);color:var(--mut)}
+  .donebtn{border:1px solid var(--line);background:transparent;color:var(--mut);border-radius:9px;padding:4px 10px;font-soze:12px;font-weight:700;cursor:pointer}
+  .donebtn.on{background:var(--ok-bg);color:var(--ok-tx);border-color:transparent}
+  .wlx{margin-top:11px;border-top:1px solid var(--line2);padding-top:11px;display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  .wlx h4{margin:0 0 7px;font-soze:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+  .why{font-soze:12.5px;color:var(--mut);margin-top:4px}
+  .lr{display:flex;align-items:center;gap:10px;font-soze:12.5px;padding:3px 0}
+  .lr span{flex:0 0 46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lr i{flex:1;background:var(--line2);border-radius:4px;height:8px;overflow:hidden;font-style:normal}
+  .lr i b{display:block;height:100%;background:var(--plan);border-radius:4px}
+  .lr em{font-style:normal;font-weight:700;min-width:70px;text-align:right}
+  .mtch{border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .conf{border-radius:8px;padding:3px 9px;font-soze:11.5px;font-weight:800}
+  .conf.hi{background:var(--ok-bg);color:var(--ok-tx)} .conf.mid{background:var(--warn-bg);color:var(--warn-tx)} .conf.lo{background:var(--red-bg);color:var(--red-tx)}
+  .okbtn{border:none;background:var(--sel-bg);color:var(--sel-tx);border-radius:9px;padding:6px 13px;font-weight:700;cursor:pointer;font-soze:12.5px}
+  .okbtn[disabled]{opacity:.4;cursor:default}
+  .note{color:var(--mut2);font-soze:11.5px;line-height:1.5}
+  .empty{color:var(--mut);padding:14px;text-align:center}
+  @media(max-width:860px){ .wlx{grid-template-columns:1fr} td{max-width:150px} }
+</style>
+</head>
+<body>
+<div class="demo">🧪 DEMO-DATA — dit dashboard is nog niet gekoppeld aan Odoo. Alle namen en bedragen zijn verzonnen.</div>
+<header>
+  <h1>DPAC · Finance — debiteuren</h1>
+  <div class="sub">werklijst voor vandaag · straks rechtstreeks uit Odoo (facturen, betalingen, afspraken)</div>
+</header>
+<div class="tabsrow" id="tabs"></div>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div id="view"></div>
+</main>
+<script src="app.js?v=1"></script>
+</body>
+</html>
