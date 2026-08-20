@@ -392,7 +392,8 @@ function drawTreeInner(){
 function findNode(key,ns){ for(const n of ns){ if(n.key===key) return n; const f=findNode(key,n.children); if(f) return f; } return null; }
 
 // ---- beste ads ----
-let bestSort={k:"score",d:-1}, bestAll=false, bestLvl="ad", bestOpen=new Set();
+let bestSort={k:"score",d:-1}, bestAll=false, bestLvl="ad", bestOpen=new Set(), bestCamps=new Set(), bestfOpen=false;
+function bestCampTog(v){ bestCamps.has(v)?bestCamps.delete(v):bestCamps.add(v); drawBest(); }
 function bestTog(k){ bestOpen.has(k)?bestOpen.delete(k):bestOpen.add(k); drawBest(); }
 // Prestatiescore 0–100: (1) kosten per klant t.o.v. het plafond — laag = veel punten (max 60);
 // (2) zekerheid: hoe meer klanten, hoe betrouwbaarder (max 20); (3) funnel-rendement: intakes
@@ -440,6 +441,8 @@ function drawBestInner(){
       if(m.n<1&&m.spend<0.5) continue; rows.push({label:c.name,camp:"",campName:c.name,adsetName:"",platform:c.platform,m,score:perfScore(m)}); }
   }
   if(bestPlat) rows=rows.filter(r=>r.platform===bestPlat);
+  const preCamp=rows;
+  if(bestLvl!=="camp"&&bestCamps.size) rows=rows.filter(r=>bestCamps.has(r.campName));
   const cols=[
     {k:"label",t:bestLvl==="ad"?"Advertentie":bestLvl==="adset"?"Advertentiegroep":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<div class="adnm" title="${esc(r.label)}${r.camp?" — "+esc(r.camp):""}"><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</b>${r.camp?`<small>${esc(r.camp)}</small>`:""}</div>`,cls:"nmw"},
     {k:"score",t:"Prestatie",v:r=>r.score,f:r=>scoreCell(r.score),tip:"0–100: kosten per klant laag (max 60) + genoeg klanten om erop te vertrouwen (max 20) + intakes en shows per uitgegeven euro (max 20)"},
@@ -456,9 +459,14 @@ function drawBestInner(){
   const s=bestSort; const col=cols.find(c=>c.k===s.k)||cols[1];
   rows.sort((x,y)=>{ const a=col.v(x),b=col.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
   const LIMN=bestAll?rows.length:40;
-  let h=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${bestPlat==null?" on":""}" onclick="bestPlat=null;drawBest()">Alle</div>`+["meta","google","tiktok"].map(p=>`<div class="wchip sm${bestPlat===p?" on":""}" onclick="bestPlat='${p}';drawBest()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
-  h+=`<div class="wonchips"><span class="lbl">Niveau:</span>`+[["camp","Campagne"],["adset","Advertentiegroep"],["ad","Advertentie"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
-  h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`
+  let h=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${bestPlat==null?" on":""}" onclick="bestPlat=null;bestCamps=new Set();bestfOpen=false;drawBest()">Alle</div>`+["meta","google","tiktok"].map(p=>`<div class="wchip sm${bestPlat===p?" on":""}" onclick="bestPlat='${p}';bestCamps=new Set();bestfOpen=false;drawBest()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Niveau:</span>`+[["camp","Campagne"],["adset","Advertentiegroep"],["ad","Advertentie"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';bestCamps=new Set();bestfOpen=false;drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
+  let bfPanel="";
+  if(bestLvl!=="camp"&&bestfOpen){ const cnt=new Map(); preCamp.forEach(r=>cnt.set(r.campName,(cnt.get(r.campName)||0)+1));
+    bfPanel=`<div class="wonchips" style="margin:0 0 8px"><span class="lbl">Filter campagne:</span><div class="wchip sm${bestCamps.size?"":" on"}" onclick="bestCamps=new Set();drawBest()">Alles <span class="n">${preCamp.length}</span></div>`
+      +[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([vv,c2])=>`<div class="wchip sm${bestCamps.has(vv)?" on":""}" onclick="bestCampTog(${jq(vv)})" title="${esc(vv)}"><span style="display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">${esc(vv)}</span> <span class="n">${c2}</span></div>`).join("")+`</div>`; }
+  h+=bfPanel;
+  h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span>${c.k==="label"&&bestLvl!=="camp"?`<span class="fbtn${bestCamps.size?" on":""}" title="filter op campagne (met aantallen)" onclick="event.stopPropagation();bestfOpen=!bestfOpen;drawBest()">⏷</span>`:""}</th>`).join("")+`</tr>`
     + rows.slice(0,LIMN).map(r=>{ const bk=bestLvl+"|"+r.label+"|"+r.camp; const opn=bestOpen.has(bk);
       return `<tr class="clkrow${opn?" onrow":""}" onclick="bestTog(${jq(bk)})" title="klik voor de volledige opbouw">`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`
         +(opn?`<tr class="bestx"><td colspan="${cols.length}"><div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div>${r.adsetName?`<div><small>Advertentiegroep</small><b>${esc(r.adsetName)}</b></div>`:""}${bestLvl==="ad"?`<div><small>Advertentie</small><b>${esc(r.label)}</b></div>`:""}<div><small>Kosten</small><b>${eur0(r.m.spend)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div>${r.m.cpk!=null?`<div><small>Kosten / klant</small><b>${eur0(r.m.cpk)}</b></div>`:""}</div>${(()=>{const [al,at]=adAdvice(r.m);return `<div class="bxadv"><small>Advies voor ${bestLvl==="ad"?"deze advertentie":bestLvl==="adset"?"deze advertentiegroep":"deze campagne"} (gekozen periode)</small><b>${al}</b> <span>${at}</span></div>`;})()}</td></tr>`:""); }).join("")
@@ -601,7 +609,9 @@ function drawAdvice(){
 }
 
 // ---- inschrijvingen ----
-let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null, sgMode="sign", sgNF=false;
+let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null, sgMode="sign", sgNF=false, sgFilt={}, sgfCol=null;
+function sgfToggle(i,v){ if(!sgFilt[i]) sgFilt[i]=new Set(); const st=sgFilt[i]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete sgFilt[i]; drawSign(); }
+function sgfClear(i){ delete sgFilt[i]; drawSign(); }
 const SGP={meta_fb:["Facebook","#1877f2"],meta_ig:["Instagram","#d62976"],meta_x:["Meta · plaatsing onbekend","#5856d6"],google:["Google","#1f6fd8"],tiktok:["TikTok","#0e9aa7"],niet_betaald:["Niet betaald (organisch/direct)","#8f845e"],onbekend:["Onbekend","#8e8e93"]};
 function sgKey(l){ if(l.platform!=="meta") return SGP[l.platform]?l.platform:"onbekend"; const p=(l.placement||"").toLowerCase(); if(p.indexOf("insta")>=0) return "meta_ig"; if(p.indexOf("facebook")>=0||/(^|[^a-z])fb([^a-z]|$)/.test(p)) return "meta_fb"; return "meta_x"; }
 function drawSign(){ keepScroll(document.getElementById("signwrap"),drawSignInner); }
@@ -627,7 +637,7 @@ function drawSignInner(){
     g.split=g.platform==="meta"?[fb?"Facebook "+fb:"",ig?"Instagram "+ig:"",(g.n-fb-ig)?"plaatsing onbekend "+(g.n-fb-ig):""].filter(Boolean).join(" · "):""; }
   const camps=[...cg.values()];
   // modus-knoppen
-  let h=`<div class="wonchips"><span class="lbl">Wat wil je zien:</span>`+[["sign","🧾 Inschrijvingen"],["shows","👀 Shows"],["gepland","🗓 Intakes gepland"]].map(x=>`<div class="wchip${sgMode===x[0]?" on":""}" onclick="sgMode='${x[0]}';sgNF=false;drawSign()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">${sgMode==="sign"?"":"snel zien of een advertentie op korte termijn werkt"}</span></div>`;
+  let h=`<div class="wonchips"><span class="lbl">Wat wil je zien:</span>`+[["sign","🧾 Inschrijvingen"],["shows","👀 Shows"],["gepland","🗓 Intakes gepland"]].map(x=>`<div class="wchip${sgMode===x[0]?" on":""}" onclick="sgMode='${x[0]}';sgNF=false;sgFilt={};sgfCol=null;drawSign()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">${sgMode==="sign"?"":"snel zien of een advertentie op korte termijn werkt"}</span></div>`;
   // KPI's van deze pagina
   const cycL=rows.filter(l=>l.cd>=0&&md(l)>=l.cd); const cycAvg=cycL.length?Math.round(cycL.reduce((t,l)=>t+(md(l)-l.cd),0)/cycL.length):null;
   const geenForm=sgMode==="sign"?rows.length-rows.filter(l=>l.signed_via==="formulier").length:0;
@@ -670,17 +680,26 @@ function drawSignInner(){
     {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
     ...(sgMode==="sign"?[{t:"Waarde",v:l=>l.value,k:l=>eur0(l.value)}]:[]),
     {t:"Kosten deze "+RES1,v:l=>{const g=cg.get(l.ckey); return g&&g.cpk!=null?g.cpk:null;},k:l=>{const g=cg.get(l.ckey); return g&&g.cpk!=null?`<span title="kosten per ${RES1} van deze campagne in de gekozen periode">${eur0(g.cpk)}</span>`:"—";}},
-    {t:"Eigenaar",v:l=>l.owner||"",k:l=>`<b>${esc(l.owner||"—")}</b>`},
+    {t:"Eigenaar",v:l=>l.owner||"",k:l=>`<b>${esc(l.owner||"—")}</b>`,fv:l=>l.owner||"—"},
     {t:"Dagen sinds lead",v:l=>l.cd>=0?md(l)-l.cd:null,k:l=>l.cd>=0?`${md(l)-l.cd} d <small>${fmt(l.cd)}</small>`:"—"},
-    {t:"Platform",v:l=>sgKey(l),k:l=>{const kk=sgKey(l); return `<span class="dot" style="background:${SGP[kk][1]}"></span>${esc(SGP[kk][0])}`;}},
-    {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<span class="campfull"><small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small></span>`,cls:"nmw"},
-    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`},
-    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||"—")}</small>`},
-    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—")},
+    {t:"Platform",v:l=>sgKey(l),k:l=>{const kk=sgKey(l); return `<span class="dot" style="background:${SGP[kk][1]}"></span>${esc(SGP[kk][0])}`;},fv:l=>SGP[sgKey(l)][0]},
+    {t:"Campagne",v:l=>l.camp?l.camp.name:"",k:l=>`<span class="campfull"><small>${esc(l.camp?l.camp.name:(l.utm_campaign||"—"))}</small></span>`,cls:"nmw",fv:l=>l.camp?l.camp.name:(l.utm_campaign||"—")},
+    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`,fv:l=>l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—")},
+    {t:"Bron",v:l=>l.bron,k:l=>`<small class="${l.hard?"hardb":"softb"}">${esc(BRON[l.bron]||"—")}</small>`,fv:l=>BRON[l.bron]||"—"},
+    {t:"Setter",v:l=>l.setter||"",k:l=>esc(l.setter||"—"),fv:l=>l.setter||"—"},
     ...(sgMode==="sign"?[{t:"All Star",v:l=>l.asm?1:0,k:l=>l.asm?`⭐️ ${l.asd>=0?fmt(l.asd):""}`:"—"}]:[])];
   const s=sgSort; const sc=cols[Math.min(s.c,cols.length-1)];
-  const sorted=[...rows].sort((x,y)=>{ const a=sc.v(x),b=sc.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
-  h+=`<div class="cmp" style="margin-top:12px"><h3>Alle ${MLAB.toLowerCase()}${sgPlat?` · ${esc(SGP[sgPlat][0])}`:""}</h3><div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="sgSort.c===${i}?sgSort.d=-sgSort.d:(sgSort={c:${i},d:1});drawSign()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.map(l=>`<tr>`+cols.map(c=>`<td class="${c.cls||""}">${c.k(l)}</td>`).join("")+`</tr>`).join("")+`${sorted.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen ${MLAB.toLowerCase()} in deze periode.</td></tr>`}</table></div></div>`;
+  const FE=Object.entries(sgFilt).filter(([i])=>cols[+i]&&cols[+i].fv);
+  const rowsF=rows.filter(l=>FE.every(([i,st])=>st.has(cols[+i].fv(l))));
+  const sorted=[...rowsF].sort((x,y)=>{ const a=sc.v(x),b=sc.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
+  let sgfPanel="";
+  if(sgfCol!=null&&cols[sgfCol]&&cols[sgfCol].fv){ const fc=cols[sgfCol];
+    const base=rows.filter(l=>FE.every(([i,st])=>+i===sgfCol||st.has(cols[+i].fv(l))));
+    const cnt=new Map(); base.forEach(l=>{ const vv=fc.fv(l); cnt.set(vv,(cnt.get(vv)||0)+1); });
+    const sel2=sgFilt[sgfCol];
+    sgfPanel=`<div class="wonchips" style="margin:8px 0 4px"><span class="lbl">Filter ${fc.t}:</span><div class="wchip sm${sel2?"":" on"}" onclick="sgfClear(${sgfCol})">Alles <span class="n">${base.length}</span></div>`
+      +[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([vv,c2])=>`<div class="wchip sm${sel2&&sel2.has(vv)?" on":""}" onclick="sgfToggle(${sgfCol},${jq(vv)})" title="${esc(vv)}"><span style="display:inline-block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">${esc(vv)}</span> <span class="n">${c2}</span></div>`).join("")+`</div>`; }
+  h+=`<div class="cmp" style="margin-top:12px"><h3>Alle ${MLAB.toLowerCase()}${sgPlat?` · ${esc(SGP[sgPlat][0])}`:""}${sorted.length!==rows.length?` · <span style="color:var(--plan)">${sorted.length} van ${rows.length} (gefilterd)</span> <a href="#" onclick="sgFilt={};sgfCol=null;drawSign();return false" style="color:var(--plan);font-size:12px">filters wissen ✕</a>`:""}</h3>${sgfPanel}<div style="overflow:auto"><table><tr>`+cols.map((c,i)=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="sgSort.c===${i}?sgSort.d=-sgSort.d:(sgSort={c:${i},d:1});drawSign()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span>${c.fv?`<span class="fbtn${sgFilt[i]?" on":""}" title="filter op ${c.t} (met aantallen)" onclick="sgfCol=sgfCol===${i}?null:${i};drawSign()">⏷</span>`:""}</th>`).join("")+`</tr>`+sorted.map(l=>`<tr>`+cols.map(c=>`<td class="${c.cls||""}">${c.k(l)}</td>`).join("")+`</tr>`).join("")+`${sorted.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen ${MLAB.toLowerCase()}${Object.keys(sgFilt).length?" met dit filter":""} in deze periode.</td></tr>`}</table></div></div>`;
   // All Star apart
   if(sgMode==="sign") h+=`<div class="cmp" id="asmblok" style="margin-top:12px"><h3>⭐️ All Star Management (upsell) · ${asm.length} <span class="chsub">apart gehouden — telt niet mee in de PA-cijfers hierboven</span></h3>${asm.length?`<table><tr><th>Datum</th><th>Naam</th><th>Variant</th><th>Waarde</th><th>Betaaloptie</th></tr>${asm.map(f=>`<tr><td>${fmt(f.d)}</td><td>${ghl(f.contact_id,f.name)}</td><td>${esc(f.variant||"—")}</td><td>${eur0(f.value)}</td><td><small>${esc(f.pay||"—")}</small></td></tr>`).join("")}</table>`:`<div class="empty">Geen All Star-inschrijvingen in deze periode.</div>`}</div>`;
   h+=`<p class="note">${sgMode==="sign"?`Tekendatum = datum van het inschrijfformulier (GHL). Waarde uit de betaaloptie: € 6.800 (termijnen of factuur) · € 6.300 (direct afrekenen — € 500 korting, klopt dus) · € 6.595 (€ 205 korting). ⚠︎ = Agreement Signed zonder gevonden formulier; datum = fasewissel.`:sgMode==="shows"?`Shows op intakedatum in de periode — zo zie je op korte termijn welke advertentie mensen levert die ook echt komen opdagen.`:`Intakes gepland op inplandatum in de periode — de snelste indicator of een advertentie werkt.`} Facebook/Instagram-splitsing komt uit de plaatsing die GHL meekreeg; kosten zijn per campagne (Meta splitst kosten niet per plaatsing in onze data).</p>`;
