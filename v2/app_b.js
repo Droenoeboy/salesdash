@@ -409,12 +409,10 @@ let askOpen=new Set();
 function askTog(k){ askOpen.has(k)?askOpen.delete(k):askOpen.add(k); drawAsk(); }
 function drawAsk(){
   const aw=document.getElementById("advwrap"); const I=insights(); const r1=v=>(v+"").replace(".",",");
-  const presets=[["Top 5 opvallende zaken",""],["Waar lekt de funnel?","funnel"],["Wie moet ik coachen?","coach"],["Welke ads presteren slecht?","ads"],["Waarom verliezen we leads?","verlies reden"],["Wat is de trend?","trend"]];
-  let h=`<div class="askbox"><div class="askrow"><span class="askic">💬</span><input id="askq" value="${esc(askQ)}" placeholder="Vraag iets over deze periode… bijv. 'top 5 opvallende zaken laatste 30 dagen'" onkeydown="if(event.key==='Enter')askRun()"><button onclick="askRun()">Vraag</button></div>
-    <div class="askpre">${presets.map(p=>`<span class="chip" onclick="askRun(${JSON.stringify(p[0]+" "+p[1]).replace(/"/g,"&quot;")})">${p[0]}</span>`).join("")}<span style="flex:1"></span><button id="pakbtn" class="chip" onclick="askPak()">📋 Kopieer datapakket voor Claude</button></div></div>`;
-  const list = (askFilter==="all"? I.items : I.items.filter(i=>i.cat===askFilter)).slice(0,6);
+  let h="";
+  const list = (askFilter==="all"? I.items : I.items.filter(i=>i.cat===askFilter)).slice(0,10);
   const catLab={rep:"per persoon",funnel:"funnel",lost:"verliezen",bron:"bronnen & ads",trend:"trend"};
-  h+=`<div class="askhead"><b>${askQ?esc(askQ):"Top opvallende zaken"}</b><span>${fmtY(A)} t/m ${fmtY(B)}${askFilter!=="all"?" · focus: "+catLab[askFilter]:""} · ${list.length} van ${I.items.length} signalen</span></div>`;
+  h+=`<div class="askhead"><b>⚡ Adviezen</b><span>${fmtY(A)} t/m ${fmtY(B)}${askFilter!=="all"?" · focus: "+catLab[askFilter]:""} · ${list.length} van ${I.items.length} signalen · klik een rij voor uitleg en actie</span><span style="flex:1"></span><button id="pakbtn" class="chip" onclick="askPak()">📋 Kopieer datapakket voor Claude</button></div>`;
   const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Signaal"};
   h+=`<div class="advrows">`+(list.length? list.map((it,i)=>{ const key=it.cat+"|"+it.t; const opn=askOpen.has(key);
     return `<div class="advrow ${it.tag}${opn?" open":""}" onclick="askTog(${jq(key)})">`
@@ -511,9 +509,6 @@ function drawInt(){
   // per dag
   const days=[...new Set(list.map(x=>x.sd))];
   if(!days.length) h+=`<div class="cmp"><div class="empty">Geen intakes${intFilt!=="all"?" met deze status":""}${who?" voor "+esc(who):""}${intScope==="komend"?" vanaf vandaag":" in deze periode"}.</div></div>`;
-  // totaal per setter (in huidige scope + status)
-  const totS=names.map(n=>[n,list.filter(x=>x.setter===n).length]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]);
-  if(totS.length) h+=`<div class="cmp" style="padding:10px 16px"><b>Setters in deze ${intScope==="komend"?"lijst (komend)":"periode"}:</b> ${totS.map(([n,c])=>`<span class="wchip sm" style="margin-left:6px;display:inline-flex" onclick="intWho=${jq(n)};drawInt()"><span class="dot" style="background:${repCol(n)}"></span>${esc(n)} <b>${c}</b></span>`).join("")}${who?` · <a href="#" onclick="intWho=null;drawInt();return false">filter wissen</a>`:""}</div>`;
   const IC=[
     {t:"Tijd",v:x=>x.hm,k:x=>`<b>${x.hm}</b>`},
     {t:"Naam",v:x=>x.name.toLowerCase(),k:x=>ghl(x.contact_id,x.name)},
@@ -525,11 +520,13 @@ function drawInt(){
     {t:"Lead-fase",v:x=>x.lead_stage||"",k:x=>x.lead_stage?`<span class="stg${x.lead_status==="lost"?" lost":""}">${esc(x.lead_stage)}${x.lead_status==="lost"?" · verloren":""}</span>`:"—"},
   ];
   for(const d of days.slice(0,60)){ let xs=list.filter(x=>x.sd===d); const c=xs.filter(x=>x.status==="confirmed"&&!x.is_cancelled).length, u=xs.filter(F.unconf).length, sh=xs.filter(x=>x.is_show).length, ns=xs.filter(x=>x.is_noshow).length;
-    const perS=names.map(n=>[n,xs.filter(x=>x.setter===n).length]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).map(([n,c2])=>`${esc(n)} <b>${c2}</b>`).join(" · ");
-    const sub = (d>=TODAY ? `${xs.length} intake${xs.length===1?"":"s"} · ${c} bevestigd${u?` · <b class="warnt">${u} nog niet bevestigd</b>`:""}` : `${xs.length} intake${xs.length===1?"":"s"} · ${sh} show · ${ns} no-show`)+(perS?` · setters: ${perS}`:"");
+    const dayAll=base.filter(F[intFilt]||F.all).filter(x=>x.sd===d);
+    const perS=names.map(n=>[n,dayAll.filter(x=>x.setter===n).length]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]);
+    const chips=perS.length?`<span class="daysetters">`+perS.map(([n,c2])=>`<span class="wchip${who===n?" on":""}" onclick="intWho=intWho===${jq(n)}?null:${jq(n)};drawInt()" title="klik: alleen ${esc(n)} tonen (nog een keer klikken = filter weg)"><span class="dot" style="background:${repCol(n)}"></span>${esc(n)} <b>${c2}</b></span>`).join("")+`</span>`:"";
+    const sub = d>=TODAY ? `${xs.length} intake${xs.length===1?"":"s"} · ${c} bevestigd${u?` · <b class="warnt">${u} nog niet bevestigd</b>`:""}` : `${xs.length} intake${xs.length===1?"":"s"} · ${sh} show · ${ns} no-show`;
     const sK="i"+d; const st=intSort[sK]||{c:0,d:1};
     xs=[...xs].sort((x,y)=>{ const a=IC[st.c].v(x), b=IC[st.c].v(y); return (a<b?-1:a>b?1:0)*st.d; });
-    h+=`<div class="cmp daycard${d===TODAY?" today":""}"><div class="dayhd"><b>${d===TODAY?"Vandaag · ":d===TODAY+1?"Morgen · ":""}${DAGN[d2s(d).getDay()]} ${fmtY(d)}</b><span>${sub}</span></div>
+    h+=`<div class="cmp daycard${d===TODAY?" today":""}"><div class="dayhd"><b>${d===TODAY?"Vandaag · ":d===TODAY+1?"Morgen · ":""}${DAGN[d2s(d).getDay()]} ${fmtY(d)}</b><span>${sub}</span>${chips}</div>
       <table><tr>`+IC.map((cD,i)=>`<th><span class="sortl" onclick="(intSort[${jq(sK)}]=intSort[${jq(sK)}]&&intSort[${jq(sK)}].c===${i}?{c:${i},d:-intSort[${jq(sK)}].d}:{c:${i},d:1});drawInt()">${cD.t} <span class="arr">${st.c===i?(st.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+
       xs.map(x=>`<tr>`+IC.map(cD=>`<td>${cD.k(x)}</td>`).join("")+`</tr>`).join("")+`</table></div>`; }
   if(days.length>60) h+=`<div class="more">eerste 60 dagen getoond — kies een kortere periode</div>`;
