@@ -291,7 +291,10 @@ function drawKpis(){
   const party=spendIn(A,B,r=>(CAMPS.get(ck(r.platform,r.cid))||{}).party);
   const asm=L.filter(l=>l.asm&&l.asd>=A&&l.asd<=B).length;
   const dlt=(v,p,fmtF,lowGood)=>{ if(v==null||p==null) return ""; const d=v-p; const cls= d===0?"eq":((d>0)!==!!lowGood?"up":"dn"); return `<i class="dlt ${cls}" title="vorige periode (${fmtY(pA)} t/m ${fmtY(pB)}): ${fmtF(p)}">${d>0?"▲ ":d<0?"▼ ":"= "}${fmtF(Math.abs(d))}</i>`; };
-  const cpkCls=m.cpk==null?"":(m.cpk<=MAXCPK()*0.85?"good":m.cpk>MAXCPK()*1.25?"bad":"warn");
+  const PAID=p=>p==="meta"||p==="google"||p==="tiktok";
+  const paidSg=m.S.sign.filter(l=>PAID(l.platform)).length, paidSgP=pm.S.sign.filter(l=>PAID(l.platform)).length;
+  const cpkPaid=paidSg&&m.spend?m.spend/paidSg:null, cpkPaidP=paidSgP&&pm.spend?pm.spend/paidSgP:null;
+  const cpkCls=cpkPaid==null?"":(cpkPaid<=MAXCPK()*0.85?"good":cpkPaid>MAXCPK()*1.25?"bad":"warn");
   const items=[
     [eur0(m.spend),"Advertentiekosten",`excl. party/vacature (${eur0(party.spend)})`,dlt(m.spend,pm.spend,eur0,true)],
     [m.n,"Leads binnengekomen",null,dlt(m.n,pm.n,v=>v)],
@@ -299,7 +302,7 @@ function drawKpis(){
     [m.g,"Intake gepland",m.plan!=null?`${r1(m.plan)}% van de leads · klik voor de namen`:null,dlt(m.g,pm.g,v=>v),"","gepland"],
     [m.sh,"Shows",m.show!=null?`${r1(m.show)}% van de intakes · klik voor de namen`:null,dlt(m.sh,pm.sh,v=>v),"","shows"],
     [m.sg,"Inschrijvingen",(MODE==="cohort"?"uit dit cohort":"op tekendatum in periode")+" · klik voor de namen",dlt(m.sg,pm.sg,v=>v),"","sign"],
-    [m.cpk==null?"—":eur0(m.cpk),"Kosten per klant",`plafond ${eur0(MAXCPK())} (25% van ${eur0(OMZET())})`,dlt(m.cpk,pm.cpk,eur0,true),cpkCls],
+    [cpkPaid==null?"—":eur0(cpkPaid),"Kosten per klant (betaald)",`${paidSg} betaalde klant${paidSg===1?"":"en"} · blended ${m.cpk==null?"—":eur0(m.cpk)} (alle ${m.sg}) · plafond ${eur0(MAXCPK())}`,dlt(cpkPaid,cpkPaidP,eur0,true),cpkCls],
     [m.pctOmzet==null?"—":r1(m.pctOmzet)+"%","% van omzet per student",m.roas!=null?`ROAS ${r1(m.roas)}×`:null,""],
     [eur0(m.omzet),"Omzet uit inschrijvingen",asm?`+ ${asm} All Star-upsell${asm===1?"":"s"}`:null,dlt(m.omzet,pm.omzet,eur0)],
   ];
@@ -310,7 +313,7 @@ function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dfCol=n
 // ---- tabs ----
 function drawTabs(){
   const el=document.getElementById("tabs"); el.innerHTML="";
-  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","🧭 Wat moet ik veranderen"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
+  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","⚡ Advies"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
   const mb=document.getElementById("modebar"); mb.innerHTML="";   // één telling: cohort — leads (en alles wat eruit voortkomt) tellen bij de periode waarin de lead binnenkwam
 }
 
@@ -557,7 +560,7 @@ function adviceFor(a,b){
   }
   return out;
 }
-let advAll=false, advOpen=new Set(), advType="all";
+let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
 function drawAdvice(){
   const w=document.getElementById("advwrap");
@@ -576,9 +579,12 @@ function drawAdvice(){
   const sev=ad=> ad.rank>=1500 ? "hi" : ad.rank>=500 ? "mid" : "lo";
   const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
   const CNT={}; for(const ad of list) CNT[ad.type]=(CNT[ad.type]||0)+1;
-  const shown = advType==="all" ? list : list.filter(ad=>ad.type===advType);
+  const PCNT={}; for(const ad of list) PCNT[ad.platform]=(PCNT[ad.platform]||0)+1;
+  let shown = advType==="all" ? list : list.filter(ad=>ad.type===advType);
+  if(advPlat) shown=shown.filter(ad=>ad.platform===advPlat);
   note+=`<div class="wonchips"><span class="lbl">Soort advies:</span><div class="wchip sm${advType==="all"?" on":""}" onclick="advType='all';drawAdvice()">Alles <span class="n">${list.length}</span></div>`
     +Object.keys(ICON).filter(t=>CNT[t]).map(t=>`<div class="wchip sm${advType===t?" on":""}" onclick="advType='${t}';drawAdvice()">${ICON[t]} ${LAB[t]} <span class="n">${CNT[t]}</span></div>`).join("")+`</div>`;
+  note+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${advPlat==null?" on":""}" onclick="advPlat=null;drawAdvice()">Alle <span class="n">${list.length}</span></div>`+["meta","google","tiktok"].filter(p=>PCNT[p]).map(p=>`<div class="wchip sm${advPlat===p?" on":""}" onclick="advPlat='${p}';drawAdvice()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]}</span></div>`).join("")+`</div>`;
   const LIM=advAll?shown.length:12;
   let h=note+`<div class="advrows">`+(shown.length?shown.slice(0,LIM).map((ad,i)=>{ const sv=sev(ad); const key=ad.type+"|"+ad.label; const opn=advOpen.has(key);
     return `<div class="advrow ${sv}${opn?" open":""}" onclick="advTog(${jq(key)})">`
