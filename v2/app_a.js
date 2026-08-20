@@ -213,7 +213,7 @@ function drawTabs(){
   mk("bron","📣 Bronnen & Ads");
   mk("lost","🚫 Verloren");
   mk("dag","📅 Dag & Week");
-  mk("adv","💬 Vraag");
+  mk("adv","⚡ Adviezen");
   const sw=document.createElement("div"); sw.className="modesw"; sw.title="Rollen = elke rate op de persoon die er echt over gaat (setter / intaker / eigenaar). Per rep = de oude v1-telling: plan op de setter, show/sign/pay op de eigenaar van de deal.";
   sw.innerHTML=`<span class="${MODE==="rol"?"on":""}" onclick="setMode('rol')">Rollen</span><span class="${MODE==="rep"?"on":""}" onclick="setMode('rep')">Per rep (v1)</span>`;
   const mb=document.getElementById("modebar"); mb.innerHTML=""; mb.appendChild(sw);
@@ -225,7 +225,7 @@ function persoonMenu(anchor){
   el.innerHTML=`<div class="fi fall">Kies een persoon</div><div class="fi${tab==="ov"?" on":""}" onclick="tab='ov';sel=null;fClose();render()"><span>Σ Iedereen · overzichtspagina</span></div>`+REPS.map(p=>{ const f=funnel(p.n,A,B); const beh=f.gepland.length+f.verloren.length; return `<div class="fi${tab==="p"+p.n?" on":""}" onclick="tab=${JSON.stringify("p"+p.n).replace(/"/g,"&quot;")};sel=null;fClose();render()"><span><span class="dot" style="background:${RCOL[p.n]};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px"></span>${esc(p.n)}</span><b>${beh} · ${f.agenda.length} int.</b></div>`; }).join("");
   const r=anchor.getBoundingClientRect(); el.style.display="block"; el.style.left=Math.min(r.left, window.innerWidth-240)+"px"; el.style.top=(r.bottom+6)+"px";
 }
-const ROL = ph => MODE==="rep" ? (ph==="plan"?"setter":"eigenaar") : ({plan:"setter",show:"setter",signS:"setter",sign:"intaker",close:"eigenaar",pay:"eigenaar"})[ph];
+const ROL = ph => ph==="l2s" ? "cohort" : MODE==="rep" ? (ph==="plan"?"setter":"eigenaar") : ({plan:"setter",show:"setter",signS:"setter",sign:"intaker",close:"eigenaar",pay:"eigenaar"})[ph];
 const jq = s => JSON.stringify(s).replace(/"/g,"&quot;");
 const repOf = () => (tab.startsWith("p")? tab.slice(1) : null);
 
@@ -280,10 +280,11 @@ function colHtml(who, name, color, tot){
     ${rowHtml("p","Plan rate",ROL("plan"),f.gepland.length,behandeld,`${f.verloren.length} verloren`,"plan",repKey)}
     ${MODE==="rep"?`<div class="grp">Eigenaar <i>· v1: show, sign en pay op de deal-eigenaar</i></div>`:""}
     ${rowHtml("h","Show rate",ROL("show"),f.show.length,f.agenda.length,`${f.geenShow.length} geen show${openGS?` · ${openGS} nog open`:""}`,"show",repKey)}
-    ${rowHtml("s","Sign rate",ROL("signS"),f.signS.length,f.show.length,`${f.nietSignS.length} (nog) niet${f.nietSignS.filter(l=>l.open).length?` · ${f.nietSignS.filter(l=>l.open).length} open`:""}`,"signS",repKey)}
+    ${rowHtml("s","Sign rate",ROL("signS"),f.signS.length,f.show.length,(o=>o?`${f.nietSignS.length} (nog) niet · ${o} open`:`${f.nietSignS.length} niet`)(f.nietSignS.filter(l=>l.open).length),"signS",repKey)}
     ${MODE==="rep"?"":`<div class="grp">Eigenaar <i>· hoe beweeg jij dossiers?</i></div>`}
     ${MODE==="rep"?"":rowHtml("c","Close rate",ROL("close"),f.closed.length,f.closed.length+f.closeLost.length,`${f.closeLost.length} verloren${f.closeOpen.length?` · ${f.closeOpen.length} open`:""}`,"close",repKey)}
     ${rowHtml("b","Pay rate",ROL("pay"),f.paid.length,f.signO.length,`${f.nietPaid.length} nog niet`,"pay",repKey)}
+    ${who==null?(co=>{const cs=co.filter(l=>l.is_signed).length,op=co.filter(l=>!l.is_signed&&!l.lost).length;return `<div class="grp">Periode <i>· binnengekomen leads → getekend</i></div>`+rowHtml("i","Lead → sign","cohort",cs,co.length,`${co.length-cs} niet getekend${op?` · ${op} open`:""}`,"l2s",repKey);})(L.filter(l=>inR(l.cd,A,B))):""}
   </div>`;
 }
 function drawCols(){
@@ -341,10 +342,12 @@ const PH={
   show:{t:"Show rate", ok:"Op gesprek verschenen", bad:"Geen show", d:"id_", bd:"id_", who:"setter"},
   signS:{t:"Sign rate", ok:"Ingeschreven (van jouw geshowde intakes)", bad:"Show, maar (nog) niet getekend", d:"id_", bd:"id_", who:"setter"},
   close:{t:"Close rate", ok:"Ingeschreven", bad:"Verloren na show", d:"id_", bd:"scd", who:"owner"},
-  pay:{t:"Pay rate", ok:"Betaald", bad:"Getekend, nog niet betaald", d:"id_", bd:"id_", who:"owner"}};
+  pay:{t:"Pay rate", ok:"Betaald", bad:"Getekend, nog niet betaald", d:"id_", bd:"id_", who:"owner"},
+  l2s:{t:"Lead → sign", ok:"Getekend (lead kwam binnen in deze periode)", bad:"(nog) niet getekend", d:"stgd", bd:"cd", who:"setter"}};
 function pick(repKey,phase){ sel={repKey, phase}; resetDetailState(); drawCols(); drawDetail(); document.getElementById("detail").scrollIntoView({behavior:"smooth",block:"nearest"}); }
 function sortDetail(tbl,c){ const s=sortSt[tbl]; if(s.c===c) s.d=-s.d; else {s.c=c; s.d=1;} fClose(); drawDetail(); }
 function selRows(f){
+  if(sel.phase==="l2s"){ const w=sel.repKey==="tot"?null:sel.repKey; const co=L.filter(l=>inR(l.cd,A,B)&&(w==null||l.setter===w)); return [co.filter(l=>l.is_signed), co.filter(l=>!l.is_signed)]; }
   if(sel.phase==="plan") return [f.gepland, f.verloren];
   if(sel.phase==="show") return [f.show, f.geenShow];
   if(sel.phase==="signS") return [f.signS, f.nietSignS];
@@ -368,6 +371,7 @@ function colDefs(phase,win){
   cols.push({t:"Kanaal", v:l=>l.kanaal||"", k:l=>l.kanaal||"—", f:true});
   if(phase==="plan") cols.push({t:"Reactietijd", v:l=>l.s2l==null?1e9:l.s2l, k:l=>fmin(l.s2l), f:false});
   if(phase==="plan"&&!win) cols.push({t:"Dagen tot verlies", v:l=>l.dagenPijp==null?-1:l.dagenPijp, k:l=>l.dagenPijp==null?"—":l.dagenPijp+" d", f:false});
+  if(!win){ const ri=cols.findIndex(c=>c.t==="Reden"); if(ri>2){ const [rc]=cols.splice(ri,1); cols.splice(2,0,rc); } }   // verloren-kolom: reden meteen na de datum
   return cols;
 }
 function applyColF(rows,cols,tbl,skipCol){
@@ -434,7 +438,7 @@ function drawDetail(){
   document.getElementById("dchart").innerHTML = tab==="tot" ? "" : chartWidget(who, sel.phase);   // homepage: geen grafiekblok, alleen wel/niet-kolommen
   document.getElementById("dcols").innerHTML=
     `<div class="dcol"><h3><span class="pill ok">${okF!==ok.length?okF+" van "+ok.length:ok.length}</span> ${ph.ok}</h3>${rowsTable(ok,sel.phase,true,"ok")}</div>
-     <div class="dcol"><h3><span class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</span> ${ph.bad}</h3>${rowsTable(bad,sel.phase,false,"bad")}</div>`;
+     <div class="dcol"><h3><span class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</span> ${bad.length&&!bad.some(l=>l.open)?ph.bad.replace("(nog) ",""):ph.bad}</h3>${rowsTable(bad,sel.phase,false,"bad")}</div>`;
 }
 
 // ---- 🏆 gewonnen ----
@@ -446,7 +450,7 @@ function drawWon(){
   const chips=[["all","Alle eigenaren",all.length]].concat([...perRep.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>[k,k,n]));
   const rows = wonRep===null? all : all.filter(l=>(l.owner||"—")===wonRep);
   const cols=[
-    {t:"Intakedatum", v:l=>l.id_, k:l=>l.id_>=0?fmt(l.id_):"—"},
+    {t:"Inschrijfdatum", v:l=>l.stgd, k:l=>l.stgd>=0?fmt(l.stgd):"—"},
     {t:"Naam", v:l=>l.name.toLowerCase(), k:l=>ghl(l.contact_id,l.name)},
     {t:"Setter", v:l=>l.setter, k:l=>esc(l.setter||"—")},
     {t:"Intaker", v:l=>l.intaker, k:l=>esc(l.intaker||"—")},
@@ -465,7 +469,7 @@ function drawWon(){
   if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen ingeschreven deals in deze periode.</td></tr>`;
   const paid=rows.filter(l=>l.is_paid), som=rows.reduce((a,l)=>a+(l.paid_amount>1?l.paid_amount:0),0), def=rows.filter(l=>l.is_signed_definitive).length;
   h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""}</div></div>
-  <p class="note">Telling op intakedatum binnen de gekozen periode (zelfde cohort als de sign rate). Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
+  <p class="note">Telling op intakedatum binnen de gekozen periode (zelfde cohort als de sign rate); de kolom Inschrijfdatum toont wanneer er getekend is. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
   ww.innerHTML=h;
 }
 
