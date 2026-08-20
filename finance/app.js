@@ -7,6 +7,7 @@ const DATA_URL="https://dpac.app.n8n.cloud/webhook/dpac-finance-data";
 const ODOO="https://audio-dojo1.odoo.com";
 const RECON_URL=ODOO+"/odoo/accounting/13/reconciliation";   // Bankaflettering-view (dagboek Bank)
 const MOLLIE_URL="https://my.mollie.com/dashboard/";
+const ACT_URL="https://dpac.app.n8n.cloud/webhook/dpac-finance-actions";
 const JID_PA=8, JID_ASM=16;
 const eur0=v=>"€ "+Math.round(v).toLocaleString("nl-NL");
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -83,6 +84,18 @@ const bucket=d=>d.late<=0?"0":d.late<=30?"1-30":d.late<=60?"31-60":"60+";
 const scoped=()=>INV.filter(i=>scope==="alles"?true:(scope==="pa"?i.jid===JID_PA:i.jid===JID_ASM));
 const scopeChips=()=>`<div class="wonchips"><span class="lbl">Administratie:</span>`+[["pa","🎹 Producer Academie"],["asm","⭐️ All Star Mgmt"],["alles","Alles"]].map(x=>`<div class="wchip${scope===x[0]?" on":""}" onclick="scope='${x[0]}';render()">${x[1]} <span class="n">${INV.filter(i=>x[0]==="alles"?true:(x[0]==="pa"?i.jid===JID_PA:i.jid===JID_ASM)).length}</span></div>`).join("")+`</div>`;
 function reconGo(term){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(term); }catch(e){} window.open(RECON_URL,"_blank"); }
+let busySet=new Set();
+async function setPartner(lineId,pid,ev){
+  if(ev)ev.stopPropagation();
+  if(busySet.has(lineId))return; busySet.add(lineId); render();
+  try{
+    const r=await fetch(ACT_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"set_partner",line_id:lineId,partner_id:pid})});
+    const j=await r.json();
+    if(j&&j.ok){ const t=BANK.find(b=>b.id===lineId); if(t){ t.pid=pid; t.pname=j.partner||t.pname; } }
+    else alert("Partner zetten mislukt: "+((j&&j.error)||"onbekende fout"));
+  }catch(e){ alert("Partner zetten mislukt (netwerk)"); }
+  busySet.delete(lineId); render();
+}
 
 // ---- render ----
 function render(){
@@ -200,8 +213,8 @@ function afletHtml(){
         <span class="act"><span class="okbtn" onclick="event.stopPropagation();reconGo(${JSON.stringify(achternaam(d.nm)).replace(/"/g,"&quot;")})">🔗 Bankaflettering</span></span>
       </div>
       <div class="why">Als deze betalingen kloppen, is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)} — check vóór je herinnert.</div>
-      ${opn?`<div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>`<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${x.t.pid?"":' · <span class="stg lost">partner instellen</span>'}<br><span class="chsub" title="${esc(x.t.ref||"")}" style="display:inline-block;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">"${esc(x.t.ref||"—")}"</span><br><span class="chsub">${x.why.join(" · ")}</span></span></div>`).join("")}</div>
-      <div><h4>Facturen van ${esc(d.nm)}</h4><table><tr><th>Nr</th><th>Bedrag</th><th>Open</th><th>Status</th></tr>${d.inv.map(i=>`<tr><td onclick="event.stopPropagation()">${olink("account.move",i.id,esc(i.name||"—"))}</td><td>${eur0(i.total)}</td><td><b>${i.open>0?eur0(i.open):"✓"}</b></td><td>${psPill(i)}</td></tr>`).join("")}</table><div class="note" style="margin-top:8px">Zo letter je af: knop hierboven → plak de gekopieerde naam in het zoekveld "Transactie" → koppel de betaling aan de factuur (en stel de partner in als die leeg is).</div></div></div>`:""}
+      ${opn?`<div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>`<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${x.t.pid?' · <span class="stg win">partner staat erop</span>':""}<br><span class="chsub" title="${esc(x.t.ref||"")}" style="display:inline-block;max-width:480px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">"${esc(x.t.ref||"—")}"</span><br><span class="chsub">${x.why.join(" · ")}</span></span>${!x.t.pid&&d.pid?`<span class="act"><button class="okbtn" onclick="setPartner(${x.t.id},${d.pid},event)" ${busySet.has(x.t.id)?"disabled":""}>${busySet.has(x.t.id)?"⏳ bezig…":"👤 Zet "+esc(achternaam(d.nm))+" als partner in Odoo"}</button></span>`:""}</div>`).join("")}</div>
+      <div><h4>Facturen van ${esc(d.nm)}</h4><table><tr><th>Nr</th><th>Bedrag</th><th>Open</th><th>Status</th></tr>${d.inv.map(i=>`<tr><td onclick="event.stopPropagation()">${olink("account.move",i.id,esc(i.name||"—"))}</td><td>${eur0(i.total)}</td><td><b>${i.open>0?eur0(i.open):"✓"}</b></td><td>${psPill(i)}</td></tr>`).join("")}</table><div class="note" style="margin-top:8px">Werkwijze: 1) klik "Zet … als partner in Odoo" bij de betalingen hierboven — dat schrijft de klant direct op de banktransactie, zonder Odoo-gezoek. 2) open daarna de Bankaflettering (knop rechtsboven): Odoo herkent de klant nu zelf en toont direct een Afletteren-knop met de juiste factuur.</div></div></div>`:""}
     </div>`;
   }).join("")+`</div></div>`;
   h+=`<div class="cmp"><h3>🟣 Mollie-uitbetalingen (bundels) · ${mollie.length} · ${eur0(mollie.reduce((s,t)=>s+ +t.amount,0))} <span class="chsub">één Mollie-storting bevat meerdere klantbetalingen — uitsplitsen kan alleen in Mollie</span></h3>
