@@ -132,11 +132,10 @@ function wlHtml(){
   let list=DEBS.filter(d=>d.open>0).sort((a,b)=>b.score-a.score);
   if(bktF)list=list.filter(d=>bucket(d)===bktF);
   const acts=list.filter(d=>d.act!=="wacht"), rest=list.filter(d=>d.act==="wacht");
-  h+=`<div class="cmp"><h3>Vandaag achteraan <span class="chsub">hoogste prioriteit eerst · klik een rij voor de facturen · namen en factuurnummers openen in Odoo</span></h3><div class="wl">`;
+  h+=`<div class="cmp"><h3>Vandaag achteraan <span class="chsub">hoogste prioriteit eerst · klik een rij</span></h3><div class="wl">`;
   if(!acts.length)h+=`<div class="empty">Niets te doen${bktF?" in dit filter":""}. 🎉</div>`;
   h+=acts.map((d,i)=>row(d,i+1,false)).join("")+`</div></div>`;
   if(rest.length)h+=`<div class="cmp"><h3>Nog niet vervallen <span class="chsub">geen actie nodig</span></h3><div class="wl">`+rest.map(d=>row(d,null,true)).join("")+`</div></div>`;
-  h+=`<p class="note">Prioriteit = openstaand bedrag × hoe lang over de vervaldatum. Let op vóór je herinneringen stuurt: check op de Afletteren-tab of er nog niet-afgeletterde betalingen van deze leerling liggen — anders herinner je iemand die al betaald heeft.</p>`;
   return h;
 }
 function row(d,rank,rest){
@@ -205,7 +204,7 @@ function afletHtml(){
   const claimed=new Set(); withPay.forEach(c=>c.cand.forEach(x=>claimed.add(x.t.id)));
   const mollie=BANK.filter(t=>!t.rec&&isMollie(t));
   const rest=BANK.filter(t=>!t.rec&&!isMollie(t)&&!isIntern(t)&&!claimed.has(t.id)&&!doneTx.has(t.id));
-  let h=`<div class="cmp"><h3>Per leerling: betalingen die nog afgeletterd moeten worden · ${withPay.length} leerlingen <span class="chsub">alleen Producer Academie · klik een leerling voor de details · de knop opent de Bankaflettering-view in Odoo en kopieert de zoekterm</span></h3>`;
+  let h=`<div class="cmp"><h3>Afletteren per leerling · ${withPay.length} <span class="chsub">bedrag = openstaand volgens Odoo · klik een naam</span></h3>`;
   if(!withPay.length)h+=`<div class="empty">Geen onafgeletterde betalingen te koppelen aan leerlingen. 👌</div>`;
   h+=`<div class="wl">`+withPay.map(c=>{
     const d=c.d,k="a"+(d.pid||d.nm),opn=afOpen.has(k);
@@ -214,18 +213,15 @@ function afletHtml(){
       <div class="wlhead"><span class="rank">€</span>
         <span class="wlnm" onclick="event.stopPropagation()">${olink("res.partner",d.pid,esc(d.nm))}</span>
         <span class="wlamt">${eur0(d.open)}</span>
-        <span class="wlmeta"><span>openstaand volgens Odoo</span><span>${c.cand.length} mogelijke betaling${c.cand.length===1?"":"en"} gevonden (samen ${eur0(som)})</span>${c.cand.some(x=>!x.t.pid)?`<span><span class="stg lost">naam ontbreekt op betaling</span></span>`:""}</span>
-        <span class="act"><span class="okbtn" onclick="event.stopPropagation();reconGo(${JSON.stringify(achternaam(d.nm)).replace(/"/g,"&quot;")})">🔗 Bankaflettering</span></span>
+        <span class="wlmeta"><span>${c.cand.length} betaling${c.cand.length===1?"":"en"}</span></span>
       </div>
-      <div class="why">Als deze betalingen kloppen, is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)} — check vóór je herinnert.</div>
-      ${opn?`<div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>{const h2=ibanHist(x.t);const tt=(x.t.ref||"")+(h2.length?"  |  eerder via deze rekening: "+h2.map(v=>eur0(v.amount)+" op "+fmt(v.date)+(v.rec?" (afgeletterd"+(v.pname?" op "+v.pname:"")+")":" (nog open)")).join(", "):"");return `<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span title="${esc(tt)}"><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${payNaam(x.t)?` · van ${esc(payNaam(x.t))}`:""}${x.t.pid?' · <span class="stg win">naam staat al op de betaling</span>':""}<br><span class="chsub">${x.why.map(shortWhy).join(" · ")}${h2.length?` · 🔎 ${h2.length} eerdere betaling${h2.length===1?"":"en"} via deze rekening`:""}</span></span><span class="act"><span class="okbtn" onclick="event.stopPropagation();reconGo(${JSON.stringify(payNaam(x.t)||achternaam(d.nm)).replace(/"/g,"&quot;")})">🔗 Bekijk in Odoo</span></span></div>`;}).join("")}</div>
+      ${opn?`<div class="why">${c.cand.length} mogelijke betaling${c.cand.length===1?"":"en"} gevonden (samen ${eur0(som)}) — als die kloppen is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)}.</div><div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>{const h2=ibanHist(x.t);const tt=(x.t.ref||"")+(h2.length?"  |  eerder via deze rekening: "+h2.map(v=>eur0(v.amount)+" op "+fmt(v.date)+(v.rec?" (afgeletterd"+(v.pname?" op "+v.pname:"")+")":" (nog open)")).join(", "):"");return `<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span title="${esc(tt)}"><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${payNaam(x.t)?` · van ${esc(payNaam(x.t))}`:""}${x.t.pid?' · <span class="stg win">naam staat al op de betaling</span>':""}<br><span class="chsub">${x.why.map(shortWhy).join(" · ")}${h2.length?` · 🔎 ${h2.length} eerdere betaling${h2.length===1?"":"en"} via deze rekening`:""}</span></span><span class="act"><span class="okbtn" onclick="event.stopPropagation();reconGo(${JSON.stringify(payNaam(x.t)||achternaam(d.nm)).replace(/"/g,"&quot;")})">🔗 Bekijk in Odoo</span></span></div>`;}).join("")}</div>
       <div><h4>Facturen van ${esc(d.nm)}</h4><table><tr><th>Nr</th><th>Bedrag</th><th>Open</th><th>Status</th></tr>${d.inv.map(i=>`<tr><td onclick="event.stopPropagation()">${olink("account.move",i.id,esc(i.name||"—"))}</td><td>${eur0(i.total)}</td><td><b>${i.open>0?eur0(i.open):"✓"}</b></td><td>${psPill(i)}</td></tr>`).join("")}</table><div class="note" style="margin-top:8px">Klopt een betaling? Klik "Bekijk in Odoo" — de naam van de betaler staat dan op je klembord; plak die in het zoekveld, zet daar zelf de klant op de betaling en klik Afletteren. Dit dashboard boekt niets. Hover over een betaling voor de volledige omschrijving.</div></div></div>`:""}
     </div>`;
   }).join("")+`</div></div>`;
-  h+=`<div class="cmp"><h3>🟣 Mollie-uitbetalingen (bundels) · ${mollie.length} · ${eur0(mollie.reduce((s,t)=>s+ +t.amount,0))} <span class="chsub">één Mollie-storting bevat meerdere klantbetalingen — uitsplitsen kan alleen in Mollie</span></h3>
+  h+=`<div class="cmp"><h3>🟣 Mollie-uitbetalingen (bundels) · ${mollie.length} · ${eur0(mollie.reduce((s,t)=>s+ +t.amount,0))} <span class="chsub">uitsplitsen kan alleen in Mollie</span></h3>
     ${mollie.slice(0,10).map(t=>`<div class="lr"><span>${eur0(t.amount)} · ${fmt(t.date)} · <span class="chsub">${esc(String(t.ref||"").match(/REF [^ ]+/)?.[0]||"Mollie")}</span></span></div>`).join("")}${mollie.length>10?`<div class="chsub" style="margin:4px 0 8px">… en ${mollie.length-10} meer</div>`:""}
-    <div style="margin-top:8px"><a class="okbtn" style="text-decoration:none" href="${MOLLIE_URL}" target="_blank">🔗 Open Mollie-dashboard</a></div>
-    <p class="note">Wil je dat deze bundels hier automatisch uitgesplitst worden per leerling? Zet dan een Mollie API-key in n8n (Mollie → Developers → API-keys) — dan halen we per uitbetaling de losse betalingen op en matchen ze vanzelf.</p></div>`;
+    <div style="margin-top:8px"><a class="okbtn" style="text-decoration:none" href="${MOLLIE_URL}" target="_blank">🔗 Open Mollie-dashboard</a></div></div>`;
   h+=`<div class="cmp"><h3>❓ Overige niet-afgeletterde betalingen · ${rest.length} <span class="chsub">geen leerling herkend — handmatig bekijken</span></h3>
     ${rest.slice(0,afAll?rest.length:25).map(t=>`<div class="mtch"><span class="conf lo">onbekend</span><span><b>${eur0(t.amount)}</b> · ${fmt(t.date)}<br><span class="chsub" title="${esc(t.ref||"")}" style="display:inline-block;max-width:640px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">"${esc(t.ref||"—")}"</span></span><span class="act"><span class="okbtn" onclick="reconGo(${JSON.stringify(String((norm((BANK.find(b=>b.id===t.id)||{}).ref||"").match(/naam: ([^o]+?) (?:omschrijving|kenmerk)/)?.[1]||"").trim().split(" ").slice(-1)[0]||"")).replace(/"/g,"&quot;")})">🔗 Bankaflettering</span></span></div>`).join("")}
     ${rest.length>25&&!afAll?`<div style="text-align:center;margin:10px 0"><span class="wchip" style="display:inline-flex" onclick="afAll=true;render()">Toon alle ${rest.length}</span></div>`:""}</div>`;
