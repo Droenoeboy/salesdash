@@ -445,7 +445,7 @@ function drawDetail(){
 let wonRep=null, wonSort={c:0,d:-1};
 function drawWon(){
   const ww=document.getElementById("wonwrap");
-  const all=L.filter(l=> l.is_signed && inR(l.id_,A,B));
+  const all=L.filter(l=> l.is_signed && inR(l.stgd,A,B));
   const perRep=new Map(); for(const l of all){ const k=l.owner||"—"; perRep.set(k,(perRep.get(k)||0)+1); }
   const chips=[["all","Alle eigenaren",all.length]].concat([...perRep.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>[k,k,n]));
   const rows = wonRep===null? all : all.filter(l=>(l.owner||"—")===wonRep);
@@ -469,7 +469,7 @@ function drawWon(){
   if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen ingeschreven deals in deze periode.</td></tr>`;
   const paid=rows.filter(l=>l.is_paid), som=rows.reduce((a,l)=>a+(l.paid_amount>1?l.paid_amount:0),0), def=rows.filter(l=>l.is_signed_definitive).length;
   h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""}</div></div>
-  <p class="note">Telling op intakedatum binnen de gekozen periode (zelfde cohort als de sign rate); de kolom Inschrijfdatum toont wanneer er getekend is. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
+  <p class="note">Telling op inschrijfdatum (de dag van tekenen) binnen de gekozen periode — alleen deze tab; de KPI-kaarten en rates blijven op cohort tellen. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
   ww.innerHTML=h;
 }
 
