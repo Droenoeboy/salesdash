@@ -46,6 +46,7 @@ function gCheck(){ gTry(document.getElementById("gcode").value.trim(),false); }
 // ---- model ----
 const IBAN_RE=/\b[A-Z]{2}\d{2}[A-Z]{4}[0-9A-Z]{6,}\b/;
 const norm=s=>String(s||"").toLowerCase();
+const nrmS=s=>String(s||"").toLowerCase().replace(/[^a-zÀ-ɏ]+/gi," ").replace(/\s+/g," ").trim(); // woorden met spaties, voor woordgrens-matching
 const isMollie=t=>norm(t.ref).includes("mollie")||norm(t.pname).includes("mollie");
 const isIntern=t=>norm(t.pname).includes("producer academie");
 let IBANMAP=new Map();
@@ -182,16 +183,17 @@ function payCands(pid,pname){
     if(pid&&t.pid===pid){sc+=60;why.push("Odoo herkent deze klant al op de betaling");}
     if(pid&&t.iban&&IBANMAP.has(t.iban)&&IBANMAP.get(t.iban).pid===pid){sc+=55;why.push("zelfde rekeningnummer als eerdere afgeletterde betaling");}
     const ref=norm(t.ref);
-    const ln=norm(achternaam(pname));
-    if(ln.length>=4&&(ref.includes(ln)||norm(t.pname).includes(ln))){sc+=30;why.push("achternaam komt overeen (mogelijk ouder/familie)");}
-    const fn=norm(String(pname||"").trim().split(" ")[0]);
-    if(fn.length>=4&&ref.includes(fn)){sc+=14;why.push("voornaam in omschrijving");}
+    const refS=" "+nrmS(t.ref)+" ", pnS=" "+nrmS(t.pname)+" ";
+    const lnp=nrmS(String(pname||"").trim().split(" ").slice(1).join(" ")); // volledige achternaam incl. tussenvoegsels
+    if(lnp.length>=4&&(refS.includes(" "+lnp+" ")||pnS.includes(" "+lnp+" "))){sc+=30;why.push("achternaam komt overeen (mogelijk ouder/familie)");}
+    const fn=nrmS(String(pname||"").trim().split(" ")[0]);
+    if(fn.length>=4&&refS.includes(" "+fn+" ")){sc+=14;why.push("voornaam in omschrijving");}
     for(const i of INV){ if(i.pid===pid&&i.name&&ref.includes(norm(i.name))){sc+=60;why.push("factuurnummer "+i.name+" in omschrijving");break;} }
-    if(sc>=25){
+    if(sc>0){
       const open=INV.filter(i=>i.pid===pid).reduce((s,i)=>s+i.open,0);
       if(Math.abs(+t.amount-open)<1){sc+=20;why.push("bedrag = precies het openstaande saldo");}
       else{ const tots=INV.filter(i=>i.pid===pid).map(i=>+i.total); for(const tt of tots){ for(const n of [2,4,5,8,10]){ if(Math.abs(+t.amount-tt/n)<2){sc+=10;why.push("bedrag lijkt een termijn (1/"+n+" van "+eur0(tt)+")");break;} } } }
-      out.push({t,sc,why});
+      if(sc>=55||why.length>=2) out.push({t,sc,why}); // ≥2 onafhankelijke signalen, of één ijzersterk signaal (partner/IBAN/factuurnr)
     }
   }
   out.sort((a,b)=>b.sc-a.sc);
@@ -200,7 +202,7 @@ function payCands(pid,pname){
 function afletHtml(){
   const paDebs=calcDebs(INV.filter(i=>i.jid===JID_PA));
   const cards=paDebs.map(d=>({d,cand:payCands(d.pid,d.nm)}));
-  const withPay=cards.filter(c=>c.cand.length).sort((a,b)=>b.cand.reduce((s,x)=>s+ +x.t.amount,0)-a.cand.reduce((s,x)=>s+ +x.t.amount,0));
+  const withPay=cards.filter(c=>c.cand.length).sort((a,b)=>b.d.open-a.d.open);
   const claimed=new Set(); withPay.forEach(c=>c.cand.forEach(x=>claimed.add(x.t.id)));
   const mollie=BANK.filter(t=>!t.rec&&isMollie(t));
   const rest=BANK.filter(t=>!t.rec&&!isMollie(t)&&!isIntern(t)&&!claimed.has(t.id)&&!doneTx.has(t.id));
@@ -212,8 +214,8 @@ function afletHtml(){
     return `<div class="wlrow ${d.open>0?"mid":""}" onclick="afTog(${JSON.stringify(k).replace(/"/g,"&quot;")})">
       <div class="wlhead"><span class="rank">€</span>
         <span class="wlnm" onclick="event.stopPropagation()">${olink("res.partner",d.pid,esc(d.nm))}</span>
-        <span class="wlamt">${eur0(som)}</span>
-        <span class="wlmeta"><span>${c.cand.length} betaling${c.cand.length===1?"":"en"} gevonden</span><span>openstaand volgens Odoo: <b>${eur0(d.open)}</b></span>${c.cand.some(x=>!x.t.pid)?`<span><span class="stg lost">partner ontbreekt op betaling</span></span>`:""}</span>
+        <span class="wlamt">${eur0(d.open)}</span>
+        <span class="wlmeta"><span>openstaand volgens Odoo</span><span>${c.cand.length} mogelijke betaling${c.cand.length===1?"":"en"} gevonden (samen ${eur0(som)})</span>${c.cand.some(x=>!x.t.pid)?`<span><span class="stg lost">naam ontbreekt op betaling</span></span>`:""}</span>
         <span class="act"><span class="okbtn" onclick="event.stopPropagation();reconGo(${JSON.stringify(achternaam(d.nm)).replace(/"/g,"&quot;")})">🔗 Bankaflettering</span></span>
       </div>
       <div class="why">Als deze betalingen kloppen, is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)} — check vóór je herinnert.</div>
