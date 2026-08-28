@@ -468,7 +468,7 @@ function drawWon(){
   for(const l of sorted) h+="<tr>"+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+"</tr>";
   if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen ingeschreven deals in deze periode.</td></tr>`;
   const paid=rows.filter(l=>l.is_paid), som=rows.reduce((a,l)=>a+(l.paid_amount>1?l.paid_amount:0),0), def=rows.filter(l=>l.is_signed_definitive).length;
-  h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""}</div></div>
+  h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""} <span class="chsub">· code v3.2 · formulierdatum bekend voor ${L.filter(x=>x.is_signed&&x.insd>=0).length}/${L.filter(x=>x.is_signed).length} getekende deals</span></div></div>
   <p class="note">Telling op inschrijfdatum (de dag waarop het inschrijfformulier is ingevuld; zelfde telling als het CRM) binnen de gekozen periode — alleen deze tab; de KPI-kaarten en rates blijven op cohort tellen. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
   ww.innerHTML=h;
 }
