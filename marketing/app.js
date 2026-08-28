@@ -262,7 +262,7 @@ function buildTree(a,b){
         for(const ak of akeys){ const adsIn=ADS.filter(x=>x.platform===p&&x.cid===cid&&(x.adsetId||"")===ak); if(!adsIn.length) continue;
           const al=cl.filter(l=>l.adObj&&(l.adObj.adsetId||"")===ak); const asp=spendAds(a,b,x=>x.platform===p&&x.cid===cid&&(x.adsetId||"")===ak);
           if(!al.length&&asp.spend<0.5) continue;
-          const an={key:"s:"+k+"|"+ak,level:2,label:adsIn[0].adsetName||(ak?("adset "+ak):"(zonder adset)"),platform:p,cid,leads:al,sp:asp,children:[]};
+          const an={key:"s:"+k+"|"+ak,level:2,label:adsIn[0].adsetName||(ak?("adset "+ak):"(zonder adset)"),platform:p,cid,sid:ak,leads:al,sp:asp,children:[]};
           for(const x of adsIn){ const xl=cl.filter(l=>l.adObj===x); const xsp=spendAds(a,b,y=>y===x); if(!xl.length&&xsp.spend<0.5) continue;
             an.children.push({key:"a:"+x.i,level:3,label:x.adName||(x.adId?("ad "+x.adId):"(zonder advertentie)"),platform:p,cid,leads:xl,sp:xsp,children:[],leaf:true,ad:x}); }
           cn.children.push(an); }
@@ -313,7 +313,7 @@ function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dfCol=n
 // ---- tabs ----
 function drawTabs(){
   const el=document.getElementById("tabs"); el.innerHTML="";
-  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","⚡ Advies"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
+  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","⚡ Advies"],["fol","✔️ Opgevolgd"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
   const mb=document.getElementById("modebar"); mb.innerHTML="";   // één telling: cohort — leads (en alles wat eruit voortkomt) tellen bij de periode waarin de lead binnenkwam
 }
 
@@ -556,23 +556,22 @@ function drawTrend(){
 function adviceFor(a,b){
   const days=b-a+1; const out=[];
   const nodes=buildTree(a,b); nodes.forEach(n=>decorate(n,a,b));
-  const units=[]; for(const p of nodes){ if(!PLAT[p.platform]||p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.noCamp) continue; const subs=c.children.filter(x=>x.key.startsWith("s:")&&x.children.length); if(subs.length>1) for(const s of subs) units.push({node:s,label:c.label+" → "+s.label,platform:p.platform,cid:c.cid}); units.push({node:c,label:c.label,platform:p.platform,cid:c.cid}); } }
+  const units=[]; for(const p of nodes){ if(!PLAT[p.platform]||p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.noCamp) continue; const subs=c.children.filter(x=>x.key.startsWith("s:")&&x.children.length); if(subs.length>1) for(const s of subs) units.push({node:s,label:c.label+" → "+s.label,platform:p.platform,cid:c.cid,sid:s.sid||""}); units.push({node:c,label:c.label,platform:p.platform,cid:c.cid,sid:null}); } }
   for(const u of units){ const m=u.node.m; const spend=m.spend, leads=m.n, shows=m.sh, sg=m.sg; if(spend<250&&leads<5) continue;
     const rec=spendIn(Math.max(a,b-13),b,r=>r.cid===u.cid&&r.platform===u.platform).spend; if(!(rec>0)) continue; /* alleen campagnes die de laatste 14 dagen nog draaien */ if(/^\((geen|campagne niet|niet toewijsbaar)/.test(u.label)) continue;
     const kpd=spend/days, cpk=sg?spend/sg:null, isrV=u.platform==="google"?isr(a,b,u.cid):null; const MX=MAXCPK();
     if(cpk!=null&&cpk<MX*0.85&&(sg>=2||spend>=800)){ const mult=isrV?Math.min(2,Math.max(1.25,0.62/isrV)):1.35; const extra=kpd*(mult-1); const exL=leads*(mult-1)*0.65; const exK=exL*(sg/leads||0);
-      out.push({type:"opschalen",label:u.label,platform:u.platform,w:extra*30,txt:`Kosten per klant ${eur0(cpk)} (< ${eur0(MX*0.85)}). Schaal budget ×${r1(mult)} (+${eur0(extra)}/dag): ≈ +${r1(exL)} leads en +${r1(exK)} klanten per periode.${isrV?` Zoekvertoningsaandeel ${Math.round(isrV*100)}% → er is ruimte.`:""}`,m}); }
-    if(sg===0&&shows===0&&spend>400) out.push({type:"stoppen",label:u.label,platform:u.platform,w:kpd*30,txt:`${eur0(spend)} uitgegeven, ${leads} leads, geen enkele show en geen inschrijving. Pauzeer of herbouw.`,m});
-    else if(sg===0&&shows>0&&spend>400) out.push({type:"halveren",label:u.label,platform:u.platform,w:kpd*15,txt:`${eur0(spend)} uitgegeven, ${shows} show${shows===1?"":"s"} maar nog geen inschrijving. Halveer het budget tot de eerste klant binnen is.`,m});
-    if(cpk!=null&&cpk>MX*1.25){ const doel=sg*MX/days; out.push({type:"terugschroeven",label:u.label,platform:u.platform,w:(spend-sg*MX)/days*30,txt:`Kosten per klant ${eur0(cpk)} (> ${eur0(MX*1.25)}). Terug naar ≈ ${eur0(doel)}/dag (nu ${eur0(kpd)}/dag) of de kwaliteit van de leads verbeteren.`,m}); }
+      out.push({type:"opschalen",label:u.label,platform:u.platform,cid:u.cid,sid:u.sid,w:extra*30,txt:`Kosten per klant ${eur0(cpk)} (< ${eur0(MX*0.85)}). Schaal budget ×${r1(mult)} (+${eur0(extra)}/dag): ≈ +${r1(exL)} leads en +${r1(exK)} klanten per periode.${isrV?` Zoekvertoningsaandeel ${Math.round(isrV*100)}% → er is ruimte.`:""}`,m}); }
+    if(sg===0&&shows===0&&spend>400) out.push({type:"stoppen",label:u.label,platform:u.platform,cid:u.cid,sid:u.sid,w:kpd*30,txt:`${eur0(spend)} uitgegeven, ${leads} leads, geen enkele show en geen inschrijving. Pauzeer of herbouw.`,m});
+    else if(sg===0&&shows>0&&spend>400) out.push({type:"halveren",label:u.label,platform:u.platform,cid:u.cid,sid:u.sid,w:kpd*15,txt:`${eur0(spend)} uitgegeven, ${shows} show${shows===1?"":"s"} maar nog geen inschrijving. Halveer het budget tot de eerste klant binnen is.`,m});
+    if(cpk!=null&&cpk>MX*1.25){ const doel=sg*MX/days; out.push({type:"terugschroeven",label:u.label,platform:u.platform,cid:u.cid,sid:u.sid,w:(spend-sg*MX)/days*30,txt:`Kosten per klant ${eur0(cpk)} (> ${eur0(MX*1.25)}). Terug naar ≈ ${eur0(doel)}/dag (nu ${eur0(kpd)}/dag) of de kwaliteit van de leads verbeteren.`,m}); }
   }
   return out;
 }
 let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
-function drawAdvice(){
-  const w=document.getElementById("advwrap");
-  let a=A,b=B, note=""; if(b-a+1<21){ a=b-29; note=`<div class="warnbox">De gekozen periode is korter dan 21 dagen — adviezen zijn berekend over de laatste 30 dagen (${fmtY(a)} t/m ${fmtY(b)}).</div>`; }
+// gedeelde lijst-bouw (Advies-tab én Opgevolgd-tab): rank incl. maandhistorie + jaar-adviezen + dedupe per label
+function advList(a,b){
   const cur=adviceFor(a,b);
   // maandhistorie dit jaar: in welke maanden vuurde dezelfde regel
   const months=[]; for(let d=monthKey(NOW); d>=monthKey(s2d(new Date(d2s(NOW).getFullYear(),0,1))); d=monthKey(d-1)) months.push([d,Math.min(monthKey(d+32)-1,NOW)]);
@@ -582,7 +581,12 @@ function drawAdvice(){
   const all=cur.concat(year).map(ad=>{ const ms=hist.get(ad.type+"|"+ad.label)||[]; const n=ms.length; return {...ad,months:ms,rank:ad.w*(1+0.25*Math.max(0,n-1))}; });
   // dedupe per label: hoogste rang
   const best=new Map(); for(const ad of all){ const k=ad.label; if(!best.has(k)||best.get(k).rank<ad.rank) best.set(k,ad); }
-  const list=[...best.values()].sort((x,y)=>y.rank-x.rank);
+  return [...best.values()].sort((x,y)=>y.rank-x.rank);
+}
+function drawAdvice(){
+  const w=document.getElementById("advwrap");
+  let a=A,b=B, note=""; if(b-a+1<21){ a=b-29; note=`<div class="warnbox">De gekozen periode is korter dan 21 dagen — adviezen zijn berekend over de laatste 30 dagen (${fmtY(a)} t/m ${fmtY(b)}).</div>`; }
+  const list=advList(a,b);
   const ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻"}, LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven"};
   const sev=ad=> ad.rank>=1500 ? "hi" : ad.rank>=500 ? "mid" : "lo";
   const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
@@ -604,7 +608,50 @@ function drawAdvice(){
       +(opn?`<div class="advx"><p>${esc(ad.txt)}</p><div class="doen">${ad.months.length?`Geldt al ${ad.months.length} maand${ad.months.length===1?"":"en"} (${ad.months.map(m=>MND[d2s(m).getMonth()]).join(", ")})`:"Nieuw dit moment"}${ad.buiten?" · valt buiten de gekozen periode maar staat nog open":""}</div></div>`:"")
       +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Geen regels die vuren in deze periode (te weinig kosten of leads per campagne).</span></div>`)+`</div>`
     +(shown.length>12?`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="advAll=!advAll;drawAdvice()">${advAll?"Toon alleen de top 12":"Toon alle "+shown.length+" adviezen"}</span></div>`:"");
-  h+=`<p class="note">Regels (uit het marketingdocument, drempels in <code>dpac.definitions</code>): <b>opschalen</b> als kosten/klant &lt; 85% van ${eur0(MAXCPK())} en (≥ 2 klanten of ≥ € 800); <b>stoppen</b> als 0 shows, 0 klanten en &gt; € 400; <b>halveren</b> als wel shows maar 0 klanten en &gt; € 400; <b>terugschroeven</b> als kosten/klant &gt; 125% van het plafond. Gewicht = € per maand op het spel; adviezen die al meerdere maanden gelden stijgen (+25% per extra maand); adviezen uit het hele jaar die nu niet vuren tellen ×0,6. Per campagne/adset één advies (hoogste rang). Er wordt <b>niets automatisch gewijzigd</b> — jij voert uit. Status "doorgevoerd" bijhouden volgt in de volgende versie (tabel mkt_advies).</p>`;
+  h+=`<p class="note">Regels (uit het marketingdocument, drempels in <code>dpac.definitions</code>): <b>opschalen</b> als kosten/klant &lt; 85% van ${eur0(MAXCPK())} en (≥ 2 klanten of ≥ € 800); <b>stoppen</b> als 0 shows, 0 klanten en &gt; € 400; <b>halveren</b> als wel shows maar 0 klanten en &gt; € 400; <b>terugschroeven</b> als kosten/klant &gt; 125% van het plafond. Gewicht = € per maand op het spel; adviezen die al meerdere maanden gelden stijgen (+25% per extra maand); adviezen uit het hele jaar die nu niet vuren tellen ×0,6. Per campagne/adset één advies (hoogste rang). Er wordt <b>niets automatisch gewijzigd</b> — jij voert uit. Of een advies is opgevolgd zie je op het tabblad <b>✔️ Opgevolgd</b>.</p>`;
+  w.innerHTML=h;
+}
+
+// ---- opgevolgd: is elk advies daadwerkelijk uitgevoerd? (dagbudget laatste 7 dagen vs de 7 dagen ervoor) ----
+let folOpen=new Set(), folSt="all";
+function folTog(k){ folOpen.has(k)?folOpen.delete(k):folOpen.add(k); drawFollow(); }
+function drawFollow(){
+  const w=document.getElementById("folwrap");
+  let a=A,b=B, note=""; if(b-a+1<21){ a=b-29; note=`<div class="warnbox">De gekozen periode is korter dan 21 dagen — de adviezen zelf zijn berekend over de laatste 30 dagen (${fmtY(a)} t/m ${fmtY(b)}).</div>`; }
+  const vA=NOW-13, vB=NOW-7, nA2=NOW-6, nB2=NOW;   // vóór-week en ná-week
+  const dayOf=(x,y,ad)=>( ad.sid!=null
+      ? spendAds(x,y,z=>z.platform===ad.platform&&z.cid===ad.cid&&(z.adsetId||"")===ad.sid).spend
+      : spendIn(x,y,r=>r.platform===ad.platform&&(r.cid||"")===ad.cid).spend )/(y-x+1);
+  const list=advList(a,b);
+  // adviezen die vorige week nog golden en nu niet meer, tonen we ook (meestal: opgevolgd)
+  const prev=advList(a-7,b-7).filter(p=>!list.some(c=>c.label===p.label)).map(p=>({...p,vervallen:true}));
+  const rows=list.concat(prev).map(ad=>{
+    const v=dayOf(vA,vB,ad), n=dayOf(nA2,nB2,ad); let st,uitleg;
+    if(v<1&&n<1){ if(ad.type==="opschalen"){ st="ey"; uitleg="Vrijwel geen kosten in de afgelopen twee weken — nog niets om te beoordelen."; }
+      else { st="ok"; uitleg="Er gaat al twee weken vrijwel geen budget meer naartoe — staat uit."; } }
+    else if(ad.type==="stoppen"){ st = n<Math.max(1,v*0.1)?"ok" : n<=v*0.6?"mid" : "no"; uitleg = st==="ok"?"Budget is (vrijwel) naar nul — gestopt.":st==="mid"?"Budget is flink verlaagd, maar staat nog niet uit.":"Budget loopt gewoon door."; }
+    else if(ad.type==="halveren"){ st = n<=v*0.6?"ok" : n<=v*0.8?"mid" : "no"; uitleg = st==="ok"?"Budget is (ruim) gehalveerd.":st==="mid"?"Budget is verlaagd, maar nog geen halvering.":"Budget is niet verlaagd."; }
+    else if(ad.type==="terugschroeven"){ st = n<=v*0.8?"ok" : n<=v*0.95?"mid" : "no"; uitleg = st==="ok"?"Budget is duidelijk teruggeschroefd.":st==="mid"?"Budget is een beetje verlaagd.":"Budget is niet teruggeschroefd."; }
+    else { st = v<1?"ey" : n>=v*1.2?"ok" : n>=v*1.05?"mid" : "no"; uitleg = st==="ey"?"Vrijwel geen kosten in de vóór-week — nog niets om te beoordelen.":st==="ok"?"Budget is duidelijk opgeschaald.":st==="mid"?"Budget is iets verhoogd, maar nog geen echte opschaling.":"Budget is niet verhoogd."; }
+    return {...ad,v,n,st,uitleg};
+  });
+  const ORD={no:0,mid:1,ok:2,ey:3};
+  rows.sort((x,y)=> ORD[x.st]-ORD[y.st] || y.rank-x.rank);
+  const ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻"}, LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven"};
+  const STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
+  const CLS={no:"hi",mid:"mid",ok:"ok",ey:"ey"};
+  const CNT={}; for(const r of rows) CNT[r.st]=(CNT[r.st]||0)+1;
+  note+=`<div class="wonchips"><span class="lbl">Status:</span><div class="wchip sm${folSt==="all"?" on":""}" onclick="folSt='all';drawFollow()">Alles <span class="n">${rows.length}</span></div>`
+    +["no","mid","ok","ey"].filter(s=>CNT[s]).map(s=>`<div class="wchip sm${folSt===s?" on":""}" onclick="folSt='${s}';drawFollow()">${STL[s][0]} ${STL[s][1]} <span class="n">${CNT[s]}</span></div>`).join("")+`</div>`;
+  const shown = folSt==="all" ? rows : rows.filter(r=>r.st===folSt);
+  let h=note+`<div class="advrows">`+(shown.length?shown.map(r=>{ const key=r.type+"|"+r.label; const opn=folOpen.has(key); const cls=CLS[r.st];
+    return `<div class="advrow ${cls}${opn?" open":""}" onclick="folTog(${jq(key)})">`
+      +`<span class="sevb ${cls}">${STL[r.st][0]} ${STL[r.st][1]}</span>`
+      +`<span class="advmain"><b>${ICON[r.type]} ${LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</span>`
+      +`<span class="advw">${eur0(r.v)}/dag → <b>${eur0(r.n)}</b>/dag</span><i class="chev${opn?" open":""}"></i>`
+      +(opn?`<div class="advx"><p>${esc(r.txt)}</p><div class="doen">${r.uitleg}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div></div>`:"")
+      +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Niets te tonen — geen adviezen in deze periode.</span></div>`)+`</div>`;
+  h+=`<p class="note">Automatisch beoordeeld, je hoeft niets bij te houden: per advies wordt het gemiddelde dagbudget van de <b>laatste 7 dagen</b> (${fmtY(nA2)} t/m ${fmtY(nB2)}) vergeleken met de <b>7 dagen ervoor</b> (${fmtY(vA)} t/m ${fmtY(vB)}). Stoppen telt als doorgevoerd bij ± € 0/dag, halveren bij ≤ 60%, terugschroeven bij ≤ 80%, opschalen bij ≥ 120% van het oude dagbudget. Loop hier wekelijks doorheen: ❌ bovenaan is wat nog moet gebeuren.</p>`;
   w.innerHTML=h;
 }
 
@@ -737,9 +784,9 @@ function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
   drawTabs(); drawKpis();
   document.getElementById("kpis").style.display = tab==="tree"?"":"none";
-  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",sign:"signwrap",data:"datawrap"};
+  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",fol:"folwrap",sign:"signwrap",data:"datawrap"};
   for(const k in ids) document.getElementById(ids[k]).style.display = tab===k?"block":"none";
-  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
+  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="fol") drawFollow(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
   drawDetail();
   if(window.parent!==window){ try{ window.parent.postMessage({dpacMkt:"h",h:document.body.scrollHeight},"*"); }catch(e){} }
 }
