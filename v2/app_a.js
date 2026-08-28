@@ -92,7 +92,7 @@ function initApp(){
   L=objs(D.lead_cols, D.leads); AP=objs(D.appt_cols, D.appointments); EV=objs(D.event_cols, D.events);
   for(const l of L){
     l.name=cap(l.contact_name); l.cd=dOf(l.created_on); l.pd=dOf(l.planned_on); l.id_=dOf(l.intake_on); l.payd=dOf(l.paid_on);
-    l.scd=dOf(l.status_changed_on); l.stgd=dOf(l.stage_changed_on);
+    l.scd=dOf(l.status_changed_on); l.stgd=dOf(l.stage_changed_on); l.insd=dOf(l.signed_form_on); l.insE=l.insd>=0?l.insd:l.stgd; // inschrijfdatum = PA-formulier, val terug op fasewissel
     l.setter=l.setter_name||""; l.owner=l.owner_short||"";
     l.is_show=!!l.is_show; l.is_noshow=!!l.is_noshow; l.is_signed=!!l.is_signed; l.is_paid=!!l.is_paid; l.has_planned=!!l.has_planned; l.lost_in_lead_stage=!!l.lost_in_lead_stage;
     l.lost=l.status==="lost"; l.open=l.status==="open"; l.paid_amount=+l.paid_amount||0;
@@ -445,18 +445,18 @@ function drawDetail(){
 let wonRep=null, wonSort={c:0,d:-1};
 function drawWon(){
   const ww=document.getElementById("wonwrap");
-  const all=L.filter(l=> l.is_signed && inR(l.stgd,A,B));
+  const all=L.filter(l=> l.is_signed && inR(l.insE,A,B));
   const perRep=new Map(); for(const l of all){ const k=l.owner||"—"; perRep.set(k,(perRep.get(k)||0)+1); }
   const chips=[["all","Alle eigenaren",all.length]].concat([...perRep.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>[k,k,n]));
   const rows = wonRep===null? all : all.filter(l=>(l.owner||"—")===wonRep);
   const cols=[
-    {t:"Inschrijfdatum", v:l=>l.stgd, k:l=>l.stgd>=0?fmt(l.stgd):"—"},
+    {t:"Inschrijfdatum", v:l=>l.insE, k:l=>l.insE>=0?fmt(l.insE):"—"},
     {t:"Naam", v:l=>l.name.toLowerCase(), k:l=>ghl(l.contact_id,l.name)},
     {t:"Setter", v:l=>l.setter, k:l=>esc(l.setter||"—")},
     {t:"Intaker", v:l=>l.intaker, k:l=>esc(l.intaker||"—")},
     {t:"Eigenaar", v:l=>l.owner, k:l=>esc(l.owner||"—")},
     {t:"Fase", v:l=>l.stage_position, k:l=>`<span class="stg win">${esc(l.stage_name)}</span>${l.lost?' <span class="stg lost">verloren</span>':""}`},
-    {t:"Definitief", v:l=>l.is_signed_definitive?1:0, k:l=>l.is_signed_definitive?"✅":(l.stgd>=0?`bedenktermijn t/m ${fmt(l.stgd+ (+DEFS.cooling_off_days||14))}`:"—")},
+    {t:"Definitief", v:l=>l.is_signed_definitive?1:0, k:l=>l.is_signed_definitive?"✅":(l.insE>=0?`bedenktermijn t/m ${fmt(l.insE+ (+DEFS.cooling_off_days||14))}`:"—")},
     {t:"Betaald", v:l=>l.paid_amount, k:l=>l.paid_amount>1?("<b>"+eur(l.paid_amount)+"</b>"):(l.paid_check?"✅":"—")},
     {t:"Betaaldatum", v:l=>l.payd, k:l=>l.payd>=0?fmt(l.payd):"—"},
     {t:"Bron", v:l=>l.utm_source||"", k:l=>esc(l.utm_source||"—")},
@@ -469,7 +469,7 @@ function drawWon(){
   if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen ingeschreven deals in deze periode.</td></tr>`;
   const paid=rows.filter(l=>l.is_paid), som=rows.reduce((a,l)=>a+(l.paid_amount>1?l.paid_amount:0),0), def=rows.filter(l=>l.is_signed_definitive).length;
   h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""}</div></div>
-  <p class="note">Telling op inschrijfdatum (de dag van tekenen) binnen de gekozen periode — alleen deze tab; de KPI-kaarten en rates blijven op cohort tellen. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
+  <p class="note">Telling op inschrijfdatum (de dag waarop het inschrijfformulier is ingevuld; zelfde telling als het CRM) binnen de gekozen periode — alleen deze tab; de KPI-kaarten en rates blijven op cohort tellen. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
   ww.innerHTML=h;
 }
 
@@ -558,7 +558,7 @@ function weekHtml(){
     ["🪑 Intakes op de dag", d=>L.filter(l=>l.id_===d&&(who==null||l.setter===who)), "show", "intake vindt op deze dag plaats (toegerekend aan de setter)"],
     ["✅ Shows", d=>L.filter(l=>l.id_===d&&l.is_show&&(who==null||l.setter===who)), "show", "intake op deze dag, kwam opdagen (setter)"],
     ["👻 No-shows", d=>L.filter(l=>l.id_===d&&l.is_noshow&&(who==null||l.setter===who)), "show", "intake op deze dag, kwam niet (setter)"],
-    ["✍️ Ingeschreven", d=>L.filter(l=>l.is_signed&&l.stgd===d&&(who==null||l.owner===who)), "sign", "op deze dag getekend (eigenaar)"],
+    ["✍️ Ingeschreven", d=>L.filter(l=>l.is_signed&&l.insE===d&&(who==null||l.owner===who)), "sign", "op deze dag ingeschreven (eigenaar)"],
     ["❌ Verloren", d=>L.filter(l=>l.lost&&l.scd===d&&(who==null||l.owner===who)), "lost", "op deze dag op verloren gezet (eigenaar)"],
     ["📞 Belpogingen/taken", d=>EV.filter(e=>e.dag===d&&(e.d.ico==="📞")&&(who==null||e.rep===who)), "nieuw", "belpogingen / taken op deze dag"],
   ];
@@ -590,7 +590,7 @@ function drawDag(){
   const wd=d2s(dagSel).toLocaleDateString("nl-NL",{weekday:"long"});
   const evts=EV.filter(e=>e.dag===dagSel);
   const crm=new Map(); const add=(rep,key,x)=>{ rep=rep||"(zonder rep)"; if(!crm.has(rep)) crm.set(rep,{gepland:[],agenda:[],show:[],verloren:[],sign:[]}); crm.get(rep)[key].push(x); };
-  for(const l of L){ if(l.stage_position!==0&&l.pd===dagSel) add(l.setter,"gepland",l); if(l.id_===dagSel){ add(l.intaker,"agenda",l); if(l.is_show) add(l.intaker,"show",l);} if(l.lost&&l.scd===dagSel) add(l.owner,"verloren",l); if(l.is_signed&&l.stgd===dagSel) add(l.owner,"sign",l); }
+  for(const l of L){ if(l.stage_position!==0&&l.pd===dagSel) add(l.setter,"gepland",l); if(l.id_===dagSel){ add(l.intaker,"agenda",l); if(l.is_show) add(l.intaker,"show",l);} if(l.lost&&l.scd===dagSel) add(l.owner,"verloren",l); if(l.is_signed&&l.insE===dagSel) add(l.owner,"sign",l); }
   const per=new Map(); for(const e of evts){ const k=e.rep||"(zonder rep)"; if(!per.has(k)) per.set(k,[]); per.get(k).push(e); }
   const keys=[...new Set([...per.keys(),...crm.keys()])];
   const w=k=>(per.get(k)||[]).length+(crm.has(k)?Object.values(crm.get(k)).reduce((s,a)=>s+a.length,0):0);
