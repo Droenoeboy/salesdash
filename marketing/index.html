@@ -427,9 +427,11 @@ td.warn,.warn{color:#f5c84c}
 .advrows{display:flex;flex-direction:column;gap:8px}
 .advrow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:var(--shadow);flex-wrap:wrap}
 .advrow.hi{border-left-color:#e04b4b}.advrow.mid{border-left-color:#e08a00}.advrow.lo{border-left-color:#c9b94a}
+.advrow.ok{border-left-color:#31a24c}.advrow.ey{border-left-color:#8e8e93}
 .advrow .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--sel-bg);color:var(--sel-tx2);font-weight:800;font-size:13px;flex:none}
 .sevb{font-size:10px;font-weight:800;border-radius:99px;padding:3px 9px;text-transform:uppercase;letter-spacing:.3px;flex:none}
 .sevb.hi{background:rgba(224,75,75,.16);color:#e04b4b}.sevb.mid{background:rgba(224,138,0,.16);color:#e08a00}.sevb.lo{background:rgba(201,185,74,.18);color:#a08f2c}
+.sevb.ok{background:rgba(49,162,76,.16);color:#2a8f43}.sevb.ey{background:rgba(142,142,147,.16);color:#6d6d72}
 .advmain{font-size:13.5px;min-width:200px;flex:1 1 240px;line-height:1.35}
 .advmain .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 4px;vertical-align:middle}
 .advdata{font-size:11.5px;color:var(--mut);white-space:nowrap}
@@ -542,11 +544,12 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
   <div class="detail" id="detail" style="display:none"></div>
   <div id="trendwrap" style="display:none"></div>
   <div id="advwrap" style="display:none"></div>
+  <div id="folwrap" style="display:none"></div>
   <div id="signwrap" style="display:none"></div>
   <div id="datawrap" style="display:none"></div>
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
