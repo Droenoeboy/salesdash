@@ -13,7 +13,7 @@ const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","de
 const MNDF=["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
 const PAL=["#1f6fd8","#1a9a3d","#dc2a1e","#c99a00","#8f845e","#5856d6","#0e0e0f","#2c8f9b"];
 
-let D=null, GCODE="", L=[], AP=[], EV=[], DEFS={}, STAGES=[], P=[], REPS=[], RCOL={}, PAY_MIN=1000;
+let D=null, GCODE="", L=[], AP=[], EV=[], DEFS={}, STAGES=[], P=[], REPS=[], REPS_ALL=[], REPS_UNK=[], RCOL={}, PAY_MIN=1000;
 let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false;
 let MODE="rol";   // "rol" = rolzuiver (v2) · "rep" = per rep zoals v1 (plan op setter, rest op eigenaar)
 let THEME="dark"; try{ THEME=localStorage.dpacTheme||"dark"; }catch(e){}
@@ -131,8 +131,11 @@ function initApp(){
   for(const l of L){ if(l.pd>=0&&l.stage_position!==0) add(l.setter,1); if(l.id_>=0){ add(l.intaker,1); add(l.owner,.5);} if(l.lost&&l.stage_position===0) add(l.owner,.2); }
   for(const a of AP){ add(a.setter,.5); add(a.intaker,.5); }
   P=[...act.keys()];
-  REPS=P.map(n=>({n,a:act.get(n)})).filter(p=>p.a>=3).sort((a,b)=>b.a-a.a);
+  REPS_ALL=P.map(n=>({n,a:act.get(n)})).filter(p=>p.a>=3).sort((a,b)=>b.a-a.a);
+  REPS_UNK=REPS_ALL.filter(p=>isRawId(p.n));          // GHL user-id zonder naam (verwijderde/oude accounts) — nooit als kaart
+  REPS=REPS_ALL.filter(p=>!isRawId(p.n));
   REPS.forEach((p,k)=>RCOL[p.n]=PAL[k%PAL.length]);
+  teamLoad();
   const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate()));
   const g=new Date(D.gen); NOW=TODAY;
   document.getElementById("gen").textContent=isNaN(g)?"—":(g.getDate()+" "+MND[g.getMonth()]+" "+String(g.getHours()).padStart(2,"0")+":"+String(g.getMinutes()).padStart(2,"0"));
@@ -189,6 +192,36 @@ let sortSt = {ok:{c:1,d:-1}, bad:{c:1,d:-1}};
 let colF = {ok:{}, bad:{}};
 let fOpen = null, expand = {};
 let collapsed = new Set();
+// ---- teamkiezer (welke kaarten tonen) — onthouden in localStorage + URL ?reps= ----
+let teamSel=null;   // Set van namen; null = nog niet geladen
+const TEAM_KEY="salesdash_reps";
+function isRawId(n){ return /^[A-Za-z0-9]{18,24}$/.test(String(n||"")) && !/\s/.test(String(n)); }
+function teamLoad(){
+  const known=new Set(REPS.map(p=>p.n)); let sel=null;
+  try{ const u=new URL(location.href).searchParams.get("reps"); if(u!==null){ sel=new Set(u.split(",").map(x=>decodeURIComponent(x).trim()).filter(x=>known.has(x))); } }catch(e){}
+  if(!sel){ try{ const raw=localStorage.getItem(TEAM_KEY); if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)) sel=new Set(arr.filter(x=>known.has(x))); } }catch(e){} }
+  if(!sel) sel=new Set(known);   // eerste bezoek: iedereen met activiteit; vink zelf af wie niet hoort
+  teamSel=sel; teamSave(false);
+}
+function teamSave(url){
+  try{ localStorage.setItem(TEAM_KEY, JSON.stringify([...teamSel])); }catch(e){}
+  if(url!==false){ try{ const u=new URL(location.href); u.searchParams.set("reps",[...teamSel].join(",")); history.replaceState(null,"",u.toString()); }catch(e){} }
+}
+function teamOn(n){ return !teamSel || teamSel.has(n); }
+function teamToggle(n){ if(!teamSel) teamSel=new Set(REPS.map(p=>p.n)); teamSel.has(n)? teamSel.delete(n) : teamSel.add(n); teamSave(); drawCols(); }
+function teamAll(){ teamSel=new Set(REPS.map(p=>p.n)); teamSave(); drawCols(); }
+function teamNone(){ teamSel=new Set(); teamSave(); drawCols(); }
+function teamChipsHtml(){
+  const chips=REPS.map(p=>{ const f=funnel(p.n,A,B); const beh=f.gepland.length+f.verloren.length; return `<div class="wchip sm${teamOn(p.n)?" on":""}" onclick="teamToggle(${jq(p.n)})"><span class="dot" style="background:${RCOL[p.n]};display:inline-block;width:8px;height:8px;border-radius:50%"></span>${esc(p.n)}<span class="n">${beh}</span></div>`; }).join("");
+  return `<div class="wonchips teamchips" style="flex:0 0 100%;margin:0 0 2px"><span class="lbl">Team:</span>${chips}<div class="wchip sm" onclick="teamAll()">alles</div><div class="wchip sm" onclick="teamNone()">niemand</div></div>`;
+}
+function unkColHtml(){
+  if(!REPS_UNK.length) return "";
+  const names=new Set(REPS_UNK.map(p=>p.n)); let n=0;
+  for(const l of L){ if(names.has(l.setter)||names.has(l.owner)||names.has(l.intaker)) n++; }
+  const tip="Deals/leads die aan een oud of verwijderd GHL-account hangen ("+REPS_UNK.length+" account"+(REPS_UNK.length===1?"":"s")+"). Niet meer in de gebruikerslijst; tellen wel mee in Totaal.";
+  return `<div class="fcol mini" style="cursor:default;opacity:.7" title="${esc(tip)}"><div class="ava" style="background:var(--line);color:var(--mut)">?</div><div style="writing-mode:vertical-rl;font-size:11.5px;color:var(--mut);white-space:nowrap">Overig / oude accounts · ${n}</div></div>`;
+}
 function setRange(a,b){ A=a; B=b; sel=null; render(); }
 function resetDetailState(){ chFocus=null; chStack=[]; sortSt={ok:{c:1,d:-1},bad:{c:1,d:-1}}; colF={ok:{},bad:{}}; expand={}; fClose(); }
 
@@ -300,7 +333,7 @@ function drawCols(){
   if(tab==="dag"){ dw.style.display="block"; drawDag(); return; }
   if(tab==="apt"){ pw.style.display="block"; drawApt(); return; }
   if(tab==="int"){ iw.style.display="block"; drawInt(); return; }
-  if(tab==="tot"){ el.style.display="flex"; el.innerHTML=colHtml(null,"Totaal","#1a2233",true)+REPS.map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join(""); return; }
+  if(tab==="tot"){ el.style.display="flex"; el.style.flexWrap="wrap"; el.innerHTML=teamChipsHtml()+colHtml(null,"Totaal","#1a2233",true)+REPS.filter(p=>teamOn(p.n)).map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join("")+unkColHtml(); return; }
   if(tab==="ov"){ el.style.display="block"; el.innerHTML=repPage(null); return; }
   const n=repOf(); el.style.display="block"; el.innerHTML=repPage(n);
 }
