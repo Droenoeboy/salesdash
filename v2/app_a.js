@@ -118,9 +118,16 @@ function initApp(){
   const evByC=new Map(); for(const e of EV){ if(!e.contact_id) continue; if(!evByC.has(e.contact_id)) evByC.set(e.contact_id,[]); evByC.get(e.contact_id).push(e); }
   const CONTACT_EV=new Set(["task.signal","legacy.taak","legacy.belpoging_2","legacy.belpoging_3","legacy.belpoging_4","appointment.signal","legacy.intake_ingepland","legacy.intake_gepland","stage_change.signal"]);
   const EV_START = EV.length? Math.min(...EV.map(e=>new Date(e.occurred_at).getTime()).filter(t=>!isNaN(t))) : Infinity;   // reactietijd alleen voor leads die binnenkwamen sinds het eventlog draait
-  for(const l of L){ l.s2l=null; l.s2b=null;
+  // speed-to-lead v3.5: alleen menselijke acties tellen — de fasewissel naar "Leads" is de lead zelf die binnenvalt (0 min, geen eigenaar) en telt niet
+  const isTouch = e => e.event_type==="stage_change.signal" ? ((e.stage_name||"")!=="Leads") : CONTACT_EV.has(e.event_type);
+  // werkvenster per dag (Europe/Amsterdam): van de eerste tot de laatste menselijke actie van het team; leads die daarbuiten binnenkomen ('s nachts) tellen niet mee
+  const dayKey = t => new Date(t).toLocaleDateString("sv-SE",{timeZone:"Europe/Amsterdam"});
+  const WIN=new Map(); for(const e of EV){ if(!isTouch(e)) continue; const t=new Date(e.occurred_at).getTime(); if(isNaN(t)) continue; const k=dayKey(t); const w=WIN.get(k); if(!w) WIN.set(k,{a:t,b:t}); else { if(t<w.a) w.a=t; if(t>w.b) w.b=t; } }
+  const inWork = t => { const w=WIN.get(dayKey(t)); return !!w && t>=w.a && t<=w.b; };
+  for(const l of L){ l.s2l=null; l.s2b=null; l.s2lOut=false;
     if(l.created_at){ const t0=new Date(l.created_at).getTime(); if(!isNaN(t0)){
-      const evs= t0<EV_START ? [] :(evByC.get(l.contact_id)||[]).filter(e=>CONTACT_EV.has(e.event_type)).map(e=>new Date(e.occurred_at).getTime()).filter(t=>t>t0);
+      if(t0>=EV_START && !inWork(t0)) l.s2lOut=true;   // buiten werkvenster: niet meegeteld
+      const evs= (t0<EV_START || l.s2lOut) ? [] :(evByC.get(l.contact_id)||[]).filter(isTouch).map(e=>new Date(e.occurred_at).getTime()).filter(t=>t>t0);
       if(evs.length) l.s2l=Math.round((Math.min(...evs)-t0)/6e4);
       const bk=(byC.get(l.contact_id)||[]).length? AP.filter(a=>a.contact_id===l.contact_id&&a.booked_at).map(a=>new Date(a.booked_at).getTime()).filter(t=>t>t0) : [];
       if(bk.length) l.s2b=Math.round((Math.min(...bk)-t0)/36e5*10)/10;   // uren tot 1e boeking
@@ -271,12 +278,12 @@ function drawKpis(){
   const len=B-A+1, pA=A-len, pB=A-1, pf=funnel(who,pA,pB);   // zelfde lengte, direct ervoor
   const prevFirst = who==null ? L.filter(l=>inR(l.cd,pA,pB)).length : pf.gepland.length+pf.verloren.length;
   const dlt=(n,p)=>{ if(p==null) return ""; const d=n-p; const cls=d>0?"up":d<0?"dn":"eq"; return `<i class="dlt ${cls}" title="vorige periode van ${len} dagen (${fmtY(pA)} t/m ${fmtY(pB)}): ${p}">${d>0?"▲ +"+d:d<0?"▼ "+d:"= "+p}</i>`; };
-  const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2l!=null).length;
+  const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2l!=null).length, nOut=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2lOut).length;
   const insN=(x,y)=>L.filter(l=>l.is_signed&&inR(l.insE,x,y)&&(who==null||l.owner===who)).length; const ins=insN(A,B), pins=insN(pA,pB);
   const s2b=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2b)), n2b=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2b!=null).length;
   const items=[[first[0],first[1],null,dlt(first[0],prevFirst)],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length)],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length)],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length)],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length)],[ins,who?"Ingeschreven · eigenaar":"Ingeschreven","geteld op inschrijfdatum (formulier) — zelfde telling als de Gewonnen-tab en het CRM",dlt(ins,pins)],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length)],
     [held?fpct(s.show.length,held):"—","Show rate per slot",`${s.show.length} show · ${s.noshow.length} no-show · ${s.late.length} late cancel${s.unres.length?` · ${s.unres.length} zonder uitkomst`:""}`,""],
-    [fmin(s2l),"Reactietijd (mediaan)",`Tijd van binnenkomst lead tot het eerste geregistreerde contactmoment (taak/belpoging/afspraak/fasewissel) — bekend voor ${n2l} leads uit deze periode (alleen sinds het live-eventlog draait). Tijd tot eerste intake-boeking: mediaan ${s2b==null?"—":(s2b+"").replace(".",",")+" uur"} (${n2b} leads).`,s2b!=null?`<i class="dlt eq">${(s2b+"").replace(".",",")} u tot boeking</i>`:""]];
+    [fmin(s2l),"Reactietijd (mediaan)",`Tijd van binnenkomst lead tot de eerste menselijke actie (taak/belpoging/afspraak/fasewissel; de binnenkomst zelf telt niet) — bekend voor ${n2l} leads uit deze periode (alleen sinds het live-eventlog draait). ${nOut} lead${nOut===1?"":"s"} buiten het werkvenster (’s nachts/weekend, vóór de eerste of na de laatste actie van de dag) niet meegeteld. Tijd tot eerste intake-boeking: mediaan ${s2b==null?"—":(s2b+"").replace(".",",")+" uur"} (${n2b} leads).`,s2b!=null?`<i class="dlt eq">${(s2b+"").replace(".",",")} u tot boeking</i>`:""]];
   k.innerHTML=items.map(x=>`<div class="kpi" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[3]||""}</div>`).join("");
 }
 
