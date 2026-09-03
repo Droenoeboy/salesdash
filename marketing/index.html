@@ -523,8 +523,9 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
 .dbody .more{padding:8px;text-align:center;color:var(--plan);font-size:12.5px} .dbody .more .sm{cursor:pointer}
 .folchk{display:flex;align-items:center;flex:none} .folchk input{width:17px;height:17px;cursor:pointer;accent-color:var(--green);margin:0}
 .advrow.man{border-left-color:#7a6ee0} .sevb.man{background:rgba(122,110,224,.16);color:#6a5fd0}
-.advrow.done .advmain{opacity:.6;text-decoration:line-through}
 .notetag{font-size:11px;color:var(--plan-tx);background:var(--plan-bg);border-radius:99px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+.folnote-in{flex:0 1 230px;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:12px;background:var(--bg);color:var(--txt)} .folnote-in:focus{outline:none;border-color:var(--plan)} .folnote-in.has{border-color:var(--plan);background:var(--plan-bg)}
+.advrow.done{background:linear-gradient(90deg,rgba(26,154,61,.10),transparent 60%)} .advrow.done .folchk input{accent-color:var(--green)}
 .folnote{display:flex;gap:10px;align-items:center;margin-top:8px} .folnote span{font-size:11.5px;color:var(--mut);white-space:nowrap} .folnote input{flex:1;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:12.5px;background:var(--bg);color:var(--txt)} .folnote input:focus{outline:none;border-color:var(--plan)}
 .rbtn.sm2{padding:6px 12px;font-size:12px;border-radius:10px} .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} .rbtn.pri:hover{filter:brightness(1.1)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:none;align-items:center;justify-content:center;padding:20px}
@@ -538,7 +539,7 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
 .aierr{color:var(--close-tx);font-size:12.5px;margin:-4px 0 10px 4px}
 .aiout .aitxt{font-size:13px;line-height:1.6;white-space:pre-wrap} .aiout h4{margin:10px 0 4px;font-size:13px}
 @media(max-width:900px){.modalgrid{grid-template-columns:1fr} .brktbl .barc{display:none} .dsum{min-width:88px}}
-html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .obar{background:#2a2a2d} html[data-theme="dark"] .fpill{background:#1a2740;border-color:#2e4a78;color:#9cc0f5} html[data-theme="dark"] .brktbl tr.on td{background:#1a2740} html[data-theme="dark"] .brktbl tr:not(:first-child):hover td{background:#1c1c1f} html[data-theme="dark"] .folnote input,html[data-theme="dark"] .modalgrid textarea{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .aibar{border-color:#2a2a2d} html[data-theme="dark"] .notetag{background:#1a2740;color:#9cc0f5} html[data-theme="dark"] .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
+html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .obar{background:#2a2a2d} html[data-theme="dark"] .fpill{background:#1a2740;border-color:#2e4a78;color:#9cc0f5} html[data-theme="dark"] .brktbl tr.on td{background:#1a2740} html[data-theme="dark"] .brktbl tr:not(:first-child):hover td{background:#1c1c1f} html[data-theme="dark"] .folnote input,html[data-theme="dark"] .folnote-in,html[data-theme="dark"] .modalgrid textarea{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .folnote-in.has{background:#1a2740;border-color:#2e4a78} html[data-theme="dark"] .advrow.done{background:linear-gradient(90deg,rgba(49,162,76,.16),transparent 60%)} html[data-theme="dark"] .aibar{border-color:#2a2a2d} html[data-theme="dark"] .notetag{background:#1a2740;color:#9cc0f5} html[data-theme="dark"] .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
 </style>
 </head>
 <body>
@@ -587,6 +588,6 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
