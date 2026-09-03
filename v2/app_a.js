@@ -281,7 +281,7 @@ function drawKpis(){
   const len=B-A+1, pA=A-len, pB=A-1, pf=funnel(who,pA,pB);   // zelfde lengte, direct ervoor
   const prevFirst = who==null ? L.filter(l=>inR(l.cd,pA,pB)).length : pf.gepland.length+pf.verloren.length;
   const dlt=(n,p)=>{ if(p==null) return ""; const d=n-p; const cls=d>0?"up":d<0?"dn":"eq"; return `<i class="dlt ${cls}" title="vorige periode van ${len} dagen (${fmtY(pA)} t/m ${fmtY(pB)}): ${p}">${d>0?"▲ +"+d:d<0?"▼ "+d:"= "+p}</i>`; };
-  const s2lWho=l=>who==null||((l.s2lBy||l.setter)===who); const s2l=median(L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2l!=null).length, nOut=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2lOut).length;
+  const s2lWho=l=>who==null||(((l.s2lBy||l.setter)===who)&&!(l.s2lHow||"").startsWith("gok"));   // per persoon alleen zekere/zeer waarschijnlijke toewijzing; gok telt alleen in Team const s2l=median(L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2l!=null).length, nOut=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2lOut).length;
   const insN=(x,y)=>L.filter(l=>l.is_signed&&inR(l.insE,x,y)&&(who==null||l.owner===who)).length; const ins=insN(A,B), pins=insN(pA,pB);
   const s2b=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2b)), n2b=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2b!=null).length;
   const items=[[first[0],first[1],null,dlt(first[0],prevFirst)],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length)],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length)],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length)],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length)],[ins,who?"Ingeschreven · eigenaar":"Ingeschreven","geteld op inschrijfdatum (formulier) — zelfde telling als de Gewonnen-tab en het CRM",dlt(ins,pins)],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length)],
@@ -372,7 +372,7 @@ function repPage(n){
   const openDoss=f.closeOpen.length, openNS=f.geenShow.filter(l=>l.open).length, unres=si.unres.length;
   const unconf=upAll.filter(a=>a.status!=="confirmed"&&!a.is_cancelled).length;
   const todo=`<div class="todo">${unconf?`<div class="td"><b>${unconf}</b><span>komende intakes nog niet bevestigd</span><a href="#" onclick="tab='int';intScope='komend';intFilt='unconf';intWho=${n==null?"null":jq(n)};render();return false">bekijk</a></div>`:""}${openNS?`<div class="td"><b>${openNS}</b><span>no-shows van ${jou}intakes nog open — herplannen</span><a href="#" onclick="pick(${jq(key)},'show');return false">bekijk</a></div>`:""}${openDoss?`<div class="td"><b>${openDoss}</b><span>dossiers na show nog open (eigenaar)</span><a href="#" onclick="pick(${jq(key)},'close');return false">bekijk</a></div>`:""}${unres?`<div class="td"><b>${unres}</b><span>intakes ${n==null?"":"in jouw agenda "}zonder show/no-show</span><a href="#" onclick="tab='apt';aptFilt='unres';render();return false">bekijk</a></div>`:""}${(!openNS&&!openDoss&&!unres&&!unconf)?`<div class="empty">Niets dat op actie wacht. 👌</div>`:""}</div>`;
-  const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(n==null||(l.s2lBy||l.setter)===n)).map(l=>l.s2l));
+  const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(n==null||(((l.s2lBy||l.setter)===n)&&!(l.s2lHow||"").startsWith("gok")))).map(l=>l.s2l));
   return `<div class="repgrid">${col}<div class="repside">
     <div class="cmp"><h3>Verloop laatste 8 weken · ${esc(nm)} <span class="chsub">klik op een kaartje → grafiek per dag/week/maand + namen (onderaan)</span></h3><div class="smallmult two-col">${sm}</div></div>
     <div class="two"><div class="cmp"><h3>Actie nodig</h3>${todo}</div><div class="cmp"><h3>Verliesredenen (als eigenaar) · ${lost.length}</h3>${lostH}</div></div>
@@ -413,7 +413,7 @@ function colDefs(phase,win){
   if(phase==="show") cols.push({t:"Poging", v:l=>l.attempt||0, k:l=>l.attempt?String(l.attempt)+"e":"—", f:true});
   if(phase==="pay") cols.push({t:"Betaald", v:l=>l.paid_amount, k:l=>l.paid_amount>1?eur(l.paid_amount):(l.paid_check?"✅":"—"), f:true});
   cols.push({t:"Kanaal", v:l=>l.kanaal||"", k:l=>l.kanaal||"—", f:true});
-  if(phase==="plan") cols.push({t:"Reactietijd", v:l=>l.s2l==null?1e9:l.s2l, k:l=>l.s2lOut?"buiten venster":(fmin(l.s2l)+(l.s2lBy?" · "+esc(l.s2lBy):"")), f:false});
+  if(phase==="plan") cols.push({t:"Reactietijd", v:l=>l.s2l==null?1e9:l.s2l, k:l=>l.s2lOut?"buiten venster":(fmin(l.s2l)+(l.s2lBy?" · "+esc(l.s2lBy)+((l.s2lHow||"").startsWith("gok")?" (gok)":(l.s2lHow||"").startsWith("zeer")?" (~)":""):"")), f:false});
   if(phase==="plan"&&!win) cols.push({t:"Dagen tot verlies", v:l=>l.dagenPijp==null?-1:l.dagenPijp, k:l=>l.dagenPijp==null?"—":l.dagenPijp+" d", f:false});
   if(!win){ const ri=cols.findIndex(c=>c.t==="Reden"); if(ri>2){ const [rc]=cols.splice(ri,1); cols.splice(2,0,rc); } }   // verloren-kolom: reden meteen na de datum
   return cols;
