@@ -59,7 +59,7 @@ function drawCmp(){
     {t:"Show rate", sub:ROL("show"), g:x=>({v:rate(x.f.show.length,x.f.agenda.length), n:x.f.show.length, d:x.f.agenda.length}), phase:"show", min:+(DEFS.min_volume_show||8)},
     {t:"Show rate per slot", sub:"agenda-afspraken, als setter", g:x=>{ const d=x.s.show.length+x.s.noshow.length+x.s.late.length; return {v:rate(x.s.show.length,d), n:x.s.show.length, d}; }, min:+(DEFS.min_volume_show||8)},
     {t:"Sign rate", sub:ROL("signS")+" · van jouw shows, wie ook tekent", g:x=>({v:rate(x.f.signS.length,x.f.show.length), n:x.f.signS.length, d:x.f.show.length}), phase:"signS", min:+(DEFS.min_volume_sign||5)},
-    {t:"Reactietijd", sub:"mediaan, als setter", g:(x,c)=>{ const m=median(L.filter(l=>inR(l.cd,A,B)&&(c.n==null||l.setter===c.n)).map(l=>l.s2l)); return {v:m, txt:fmin(m)}; }, num:true, rank:true, lowGood:true},
+    {t:"Reactietijd", sub:"mediaan, wie als eerste handelde", g:(x,c)=>{ const m=median(L.filter(l=>inR(l.cd,A,B)&&(c.n==null||(l.s2lBy||l.setter)===c.n)).map(l=>l.s2l)); return {v:m, txt:fmin(m)}; }, num:true, rank:true, lowGood:true},
     {t:"Verloren in Leads-fase", sub:"als eigenaar (wie op verloren sleept)", g:x=>({v:x.f.verloren.length}), num:true, phase:"plan", lowGood:true},
     {hdr:"Eigenaar · hoe beweeg jij dossiers?"},
     ...(MODE==="rep"?[]:[{t:"Dossiers na show", sub:"in bezit, op intakedatum", g:x=>({v:x.f.dossiers.length}), num:true, phase:"close"}]),
