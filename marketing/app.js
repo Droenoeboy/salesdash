@@ -813,66 +813,77 @@ function drawAdvice(){
   w.innerHTML=h;
 }
 
-// ---- opgevolgd: is elk advies daadwerkelijk uitgevoerd? (dagbudget laatste 7 dagen vs de 7 dagen ervoor) ----
+// ---- opgevolgd: is elk advies daadwerkelijk uitgevoerd? (ingesteld budget/aan-uit uit het platform; terugval = besteding) ----
 let folOpen=new Set(), folSt="all";
 function folTog(k){ folOpen.has(k)?folOpen.delete(k):folOpen.add(k); drawFollow(); }
-function drawFollow(){
-  const w=document.getElementById("folwrap");
-  let note="";
-  const vA=NOW-14, vB=NOW-8, nA2=NOW-7, nB2=NOW-1;   // vóór-week en ná-week, t/m gisteren (vandaag is nog een halve dag)
-  const dayOf=(x,y,ad)=>( ad.sid!=null
-      ? spendAds(x,y,z=>z.platform===ad.platform&&z.cid===ad.cid&&(z.adsetId||"")===ad.sid).spend
-      : spendIn(x,y,r=>r.platform===ad.platform&&(r.cid||"")===ad.cid).spend )/(y-x+1);
+function folRows(){
   const list=advList(0);
   // adviezen die vorige week nog golden en nu niet meer, tonen we ook (meestal: opgevolgd)
-  const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label)).map(p=>({...p,vervallen:true}));
-  const rows=list.concat(prev).map(ad=>{
-    const v=dayOf(vA,vB,ad), n=dayOf(nA2,nB2,ad); let st,uitleg,disp=null;
-    const sn=stNowOf(ad), sp2=stPrevOf(ad), ch=stChange(ad);
-    const uitNu=stUit(ad); const bNow=sn?sn.budget:null;
-    const bRef=(sp2&&sp2.budget!=null)?sp2.budget:(v>=1?v:null);
-    if(sn&&(uitNu||bNow!=null)){
-      disp=`${bRef!=null?eur0(bRef):"—"} → <b>${uitNu?"uit":eur0(bNow)+"/dag"}</b> ingesteld`;
-      if(ad.type==="opschalen"){ st = uitNu?"no" : bRef==null?"ey" : bNow>=bRef*1.2?"ok" : bNow>=bRef*1.05?"mid" : "no";
-        uitleg = uitNu?"Deze staat nu uit — terwijl het advies juist opschalen was.":st==="ok"?"Ingesteld budget is duidelijk verhoogd.":st==="mid"?"Ingesteld budget is iets verhoogd, nog geen echte opschaling.":st==="ey"?"Geen eerder budget bekend om mee te vergelijken.":"Ingesteld budget is niet verhoogd."; }
-      else if(uitNu||bNow===0){ st="ok"; uitleg="Staat uit in het advertentieplatform."; }
-      else if(bRef==null){ st="ey"; uitleg="Nog geen eerder ingesteld budget om mee te vergelijken — de budgetmeting loopt sinds kort."; }
-      else { const r=bNow/bRef;
-        if(ad.type==="stoppen"){ st = r<=0.1?"ok" : r<=0.6?"mid" : "no"; uitleg = st==="ok"?"Ingesteld budget (vrijwel) naar nul.":st==="mid"?"Ingesteld budget flink verlaagd, maar staat nog aan.":"Ingesteld budget staat nog gewoon aan."; }
-        else if(ad.type==="halveren"){ st = r<=0.6?"ok" : r<=0.8?"mid" : "no"; uitleg = st==="ok"?"Ingesteld budget is (ruim) gehalveerd.":st==="mid"?"Ingesteld budget is verlaagd, nog geen halvering.":"Ingesteld budget is niet verlaagd."; }
-        else { st = r<=0.8?"ok" : r<=0.95?"mid" : "no"; uitleg = st==="ok"?"Ingesteld budget is duidelijk teruggeschroefd.":st==="mid"?"Ingesteld budget is een beetje verlaagd.":"Ingesteld budget is niet teruggeschroefd."; } }
-      uitleg+=" Gemeten op het ingestelde budget in het platform — wijzigingen zijn hier dezelfde dag zichtbaar.";
-    } else {
-      disp=`${eur0(v)}/dag → <b>${eur0(n)}/dag</b> besteed`;
-      if(v<1&&n<1){ if(ad.type==="opschalen"){ st="ey"; uitleg="Vrijwel geen kosten in de afgelopen twee weken — nog niets om te beoordelen."; }
-        else { st="ok"; uitleg="Er gaat al twee weken vrijwel geen budget meer naartoe — staat uit."; } }
-      else if(ad.type==="stoppen"){ st = n<Math.max(1,v*0.1)?"ok" : n<=v*0.6?"mid" : "no"; uitleg = st==="ok"?"Budget is (vrijwel) naar nul — gestopt.":st==="mid"?"Budget is flink verlaagd, maar staat nog niet uit.":"Budget loopt gewoon door."; }
-      else if(ad.type==="halveren"){ st = n<=v*0.6?"ok" : n<=v*0.8?"mid" : "no"; uitleg = st==="ok"?"Budget is (ruim) gehalveerd.":st==="mid"?"Budget is verlaagd, maar nog geen halvering.":"Budget is niet verlaagd."; }
-      else if(ad.type==="terugschroeven"){ st = n<=v*0.8?"ok" : n<=v*0.95?"mid" : "no"; uitleg = st==="ok"?"Budget is duidelijk teruggeschroefd.":st==="mid"?"Budget is een beetje verlaagd.":"Budget is niet teruggeschroefd."; }
-      else { st = v<1?"ey" : n>=v*1.2?"ok" : n>=v*1.05?"mid" : "no"; uitleg = st==="ey"?"Vrijwel geen kosten in de vóór-week — nog niets om te beoordelen.":st==="ok"?"Budget is duidelijk opgeschaald.":st==="mid"?"Budget is iets verhoogd, maar nog geen echte opschaling.":"Budget is niet verhoogd."; }
-    }
-    return {...ad,v,n,st,uitleg,disp,ch};
-  });
-  const ORD={no:0,mid:1,ok:2,ey:3};
+  const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label&&c.type===p.type)).map(p=>({...p,vervallen:true}));
+  const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const F=folGet(ad);
+    let disp; if(V.src==="manual") disp=F.done?"afgevinkt":"zelf afvinken";
+    else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
+    else if(V.bRef==null) disp="—";
+    else disp=`${eur0(V.bRef)} → <b>${eur0(V.bNow)}/dag</b> ${V.src==="status"?"ingesteld":"besteed"}${V.tgt!=null?` <small>doel ≈ ${eur0(V.tgt)}</small>`:""}`;
+    let st=V.st; if(F.done&&st!=="ok"){ st="ok"; }
+    return {...ad,V,st,uitleg:V.uitleg+(F.done&&V.st!=="ok"?" Door jullie handmatig afgevinkt.":""),disp,ch,F}; });
+  const ORD={no:0,mid:1,man:2,ok:3,ey:4};
   rows.sort((x,y)=> ORD[x.st]-ORD[y.st] || y.rank-x.rank);
-  const ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻"}, LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven"};
-  const STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
-  const CLS={no:"hi",mid:"mid",ok:"ok",ey:"ey"};
+  return rows;
+}
+const FOL_STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],man:["☐","Zelf afvinken"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
+function drawFollow(){
+  const w=document.getElementById("folwrap");
+  const rows=folRows();
+  const CLS={no:"hi",mid:"mid",man:"man",ok:"ok",ey:"ey"};
   const CNT={}; for(const r of rows) CNT[r.st]=(CNT[r.st]||0)+1;
-  note+=`<div class="wonchips"><span class="lbl">Status:</span><div class="wchip sm${folSt==="all"?" on":""}" onclick="folSt='all';drawFollow()">Alles <span class="n">${rows.length}</span></div>`
-    +["no","mid","ok","ey"].filter(s=>CNT[s]).map(s=>`<div class="wchip sm${folSt===s?" on":""}" onclick="folSt='${s}';drawFollow()">${STL[s][0]} ${STL[s][1]} <span class="n">${CNT[s]}</span></div>`).join("")+`</div>`;
+  const nDone=rows.filter(r=>r.F.done).length, nNote=rows.filter(r=>r.F.note).length;
+  let note=`<div class="wonchips"><span class="lbl">Status:</span><div class="wchip sm${folSt==="all"?" on":""}" onclick="folSt='all';drawFollow()">Alles <span class="n">${rows.length}</span></div>`
+    +["no","mid","man","ok","ey"].filter(s=>CNT[s]).map(s=>`<div class="wchip sm${folSt===s?" on":""}" onclick="folSt='${s}';drawFollow()">${FOL_STL[s][0]} ${FOL_STL[s][1]} <span class="n">${CNT[s]}</span></div>`).join("")
+    +`<span style="flex:1"></span><button class="rbtn sm2 pri" onclick="folReport()" title="Maakt een Slack-klare tekst met alles wat nog moet gebeuren, jullie notities en een vrij veld voor extra punten">📋 Rapport voor media buyer</button></div>`;
   const shown = folSt==="all" ? rows : rows.filter(r=>r.st===folSt);
-  let h=note+`<div class="advrows">`+(shown.length?shown.map(r=>{ const key=r.type+"|"+r.label; const opn=folOpen.has(key); const cls=CLS[r.st];
-    return `<div class="advrow ${cls}${opn?" open":""}" onclick="folTog(${jq(key)})">`
-      +`<span class="sevb ${cls}">${STL[r.st][0]} ${STL[r.st][1]}</span>`
-      +`<span class="advmain"><b>${ICON[r.type]} ${LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</span>`
+  let h=note+`<div class="advrows">`+(shown.length?shown.map(r=>{ const key=folKey(r); const opn=folOpen.has(key); const cls=CLS[r.st];
+    return `<div class="advrow ${cls}${opn?" open":""}${r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
+      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken: dit is gedaan / besproken"><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
+      +`<span class="sevb ${cls}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`
+      +`<span class="advmain"><b>${ADV_ICON[r.type]} ${ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}${r.F.note?` <span class="notetag" title="${esc(r.F.note)}">✎ notitie</span>`:""}</span>`
       +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span><i class="chev${opn?" open":""}"></i>`
-      +(opn?`<div class="advx"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div></div>`:"")
+      +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div>`
+        +`<div class="folnote"><span>Notitie voor het rapport</span><input type="text" value="${esc(r.F.note||"")}" placeholder="bv. bewust laten lopen tot vrijdag, of: Ger checkt de doelgroep" onchange="folNote(${jq(key)},this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"></div></div>`:"")
       +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Niets te tonen — geen adviezen in deze periode.</span></div>`)+`</div>`;
-  h+=`<p class="note">Automatisch beoordeeld, je hoeft niets bij te houden. Waar mogelijk kijkt dit naar het <b>ingestelde budget en de aan/uit-status</b> in het advertentieplatform zelf (dagelijkse meting om 06:25) — dan is een wijziging hier <b>dezelfde dag</b> zichtbaar, met de datum erbij. Waar (nog) geen budgetmeting is, geldt de terugval: gemiddeld besteed per dag, laatste 7 volle dagen (${fmtY(nA2)} t/m ${fmtY(nB2)}) vs de 7 dagen ervoor. Doorgevoerd = stoppen bij uit/± € 0, halveren bij ≤ 60%, terugschroeven bij ≤ 80%, opschalen bij ≥ 120%. Loop hier dagelijks doorheen: ❌ bovenaan is wat nog moet gebeuren; bij ✅ staat wanneer het is doorgevoerd.</p>`;
+  h+=`<p class="note">Automatisch beoordeeld op het <b>ingestelde budget en de aan/uit-status</b> in het advertentieplatform (dagelijkse meting om 06:25 — een wijziging is dezelfde dag zichtbaar, met datum). Waar die meting ontbreekt geldt de terugval: besteding per dag, laatste 7 volle dagen. <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit; <b>Deels</b> = een kwart tot driekwart; <b>Niet doorgevoerd</b> = ongewijzigd (binnen ±10%, max € 5 — dat is ruis) of tegengesteld. Formulier-, targeting- en tracking-acties (⚠️ ⏱) zijn niet automatisch meetbaar — die vink je zelf af. ☑ + notitie bewaart de browser; <b>📋 Rapport</b> zet alles wat open staat in één Slack-bericht voor de media buyer.${nDone||nNote?` Nu ${nDone} afgevinkt, ${nNote} met notitie.`:""}</p>`;
   w.innerHTML=h;
 }
-
+// ---- rapport voor de media buyer (Slack-klare tekst) ----
+function folReportText(rows){
+  const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW);
+  let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const todo=rows.filter(r=>r.st==="no"||r.st==="mid"||r.st==="man"), done=rows.filter(r=>r.st==="ok"), wait=rows.filter(r=>r.st==="ey");
+  const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}* — ${r.label}`;
+    if(V.src!=="manual"&&V.bRef!=null){ s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+eur0(V.tgt)+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
+    s+=`\n   _${r.txt.replace(/\s+/g," ").slice(0,220)}${r.txt.length>220?"…":""}_`;
+    if(r.F.note) s+=`\n   📝 ${r.F.note}`;
+    return s; };
+  const byPlat=list=>["meta","google","tiktok"].map(p=>{ const ls=list.filter(r=>r.platform===p); return ls.length?`*${PN(p)}*\n`+ls.map(line).join("\n"):""; }).filter(Boolean).join("\n\n");
+  let out=`*Marketing · acties voor deze week* — ${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
+  out+= todo.length? `*Nog te doen (${todo.length})*\n\n`+byPlat(todo) : "*Nog te doen*: niets open — alles is doorgevoerd. 👌";
+  if(extra.trim()) out+=`\n\n*Extra punten*\n${extra.trim()}`;
+  if(done.length) out+=`\n\n*Al doorgevoerd (${done.length})* ✅\n`+done.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}${r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` — 📝 ${r.F.note}`:""}`).join("\n");
+  if(wait.length) out+=`\n\n*Nog niet te beoordelen (${wait.length})* ⏳\n`+wait.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}`).join("\n");
+  return out;
+}
+function folReport(){
+  const rows=folRows(); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  let m=document.getElementById("folmodal"); if(!m){ m=document.createElement("div"); m.id="folmodal"; m.className="modal"; document.body.appendChild(m); }
+  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📋 Rapport voor de media buyer</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+    <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="4" placeholder="bv. nieuwe video's van Emiel klaar donderdag · TikTok-formulier 'juiste UTM' aan GHL koppelen · …" oninput="folExtra(this.value);folReportRefresh()">${esc(extra)}</textarea></div>
+    <div><label>Bericht (bewerkbaar — Slack-opmaak)</label><textarea id="foltxt" rows="18" oninput="this.dataset.edited=1">${esc(folReportText(rows))}</textarea></div></div>
+    <div class="modalft"><span class="lbl" id="folcopied"></span><button class="rbtn sm2" onclick="folReportRefresh(true)">↺ Opnieuw genereren</button><button class="rbtn sm2 pri" onclick="folCopy()">Kopieer voor Slack</button></div></div>`;
+  m.style.display="flex"; m.onclick=folReportClose;
+}
+function folReportRefresh(force){ const ta=document.getElementById("foltxt"); if(!ta) return; if(force||!ta.dataset.edited) ta.value=folReportText(folRows()); }
+function folReportClose(){ const m=document.getElementById("folmodal"); if(m) m.style.display="none"; }
+async function folCopy(){ const ta=document.getElementById("foltxt"); const lb=document.getElementById("folcopied"); try{ await navigator.clipboard.writeText(ta.value); lb.textContent="gekopieerd — plak in Slack"; }catch(e){ ta.select(); document.execCommand("copy"); lb.textContent="gekopieerd (fallback)"; } setTimeout(()=>{ if(lb) lb.textContent=""; },3000); }
 // ---- inschrijvingen ----
 let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null, sgMode="sign", sgNF=false, sgFilt={}, sgfCol=null;
 function sgfToggle(i,v){ if(!sgFilt[i]) sgFilt[i]=new Set(); const st=sgFilt[i]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete sgFilt[i]; drawSign(); }
