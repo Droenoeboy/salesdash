@@ -205,7 +205,7 @@ function initApp(){
   STDATA=(D.entity_status||[]).map(r=>({d:dOf(r[0]),key:r[1]+"|"+r[2]+"|"+(r[3]||""),platform:r[1],cid:r[2],sid:r[3]||"",level:r[4],status:r[5],budget:r[6]==null?null:+r[6],name:r[7]}));
   STNOW=new Map(); STPREV=new Map();
   for(const r of STDATA){ const a2=STNOW.get(r.key); if(!a2||r.d>a2.d) STNOW.set(r.key,r); if(r.d<=NOW-7){ const b2=STPREV.get(r.key); if(!b2||r.d>b2.d) STPREV.set(r.key,r); } }
-  A=NOW-29; B=NOW;
+  A=NOW-29; B=NOW; memoReset();
   render();
 }
 // huidige/vorige ingestelde stand + wanneer die voor het laatst wijzigde
@@ -588,9 +588,17 @@ function drawTrend(){
 }
 
 // ---- adviezen ----
+// Geheugen voor zware berekeningen (boom per venster, adviezen, oordelen). Wordt geleegd bij nieuwe data (initApp) en bij de party-schakelaar.
+let MEMO={tree:new Map(),adv:new Map(),list:new Map(),ver:new Map()};
+function memoReset(){ MEMO={tree:new Map(),adv:new Map(),list:new Map(),ver:new Map()}; }
+function treeMemo(a,b){ const k=a+"|"+b+"|"+(PARTY?1:0); let t=MEMO.tree.get(k); if(!t){ t=buildTree(a,b); t.forEach(n=>decorate(n,a,b)); MEMO.tree.set(k,t); } return t; }
 function adviceFor(a,b,recRef){
-  const days=b-a+1; const out=[]; const RB=recRef||b;
-  const nodes=buildTree(a,b); nodes.forEach(n=>decorate(n,a,b));
+  const RB=recRef||b; const mk="f|"+a+"|"+b+"|"+RB+"|"+(PARTY?1:0); if(MEMO.adv.has(mk)) return MEMO.adv.get(mk);
+  const out=adviceForCalc(a,b,RB); MEMO.adv.set(mk,out); return out;
+}
+function adviceForCalc(a,b,RB){
+  const days=b-a+1; const out=[];
+  const nodes=treeMemo(a,b);
   const units=[]; for(const p of nodes){ if(!PLAT[p.platform]||p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.noCamp) continue; const att=c.leads.length? c.leads.filter(l=>l.adObj).length/c.leads.length : 1; const subs=c.children.filter(x=>x.key.startsWith("s:")&&x.children.length); if(p.platform!=="google"&&subs.length>1) for(const s of subs) units.push({node:s,label:c.label+" → "+s.label,cname:c.label,sname:s.label,platform:p.platform,cid:c.cid,sid:s.sid||"",attOk:att>=0.7}); units.push({node:c,label:c.label,cname:c.label,sname:null,platform:p.platform,cid:c.cid,sid:null,attOk:true}); } }
   for(const u of units){ const m=u.node.m; const spend=m.spend, leads=m.n, shows=m.sh, sg=m.sg; if(spend<250&&leads<5) continue;
     const rec=spendIn(RB-13,RB,r=>r.cid===u.cid&&r.platform===u.platform).spend; if(!(rec>0)) continue; /* alleen campagnes die de laatste 14 dagen nog draaien */ if(/^\((geen|campagne niet|niet toewijsbaar)/.test(u.label)) continue;
@@ -608,8 +616,12 @@ function adviceFor(a,b,recRef){
 // ---- kwaliteits- en vroeg-signaalregels (geen budgetknop, wél een actie: formulier/targeting/tracking) ----
 // units = campagnes (+ adsets bij Meta/TikTok) met leads in venster a..b; ref = account-gemiddelde over alle betaalde leads in datzelfde venster
 function adviceQual(a,b,recRef){
-  const out=[]; const RB=recRef||b; const days=b-a+1;
-  const nodes=buildTree(a,b); nodes.forEach(n=>decorate(n,a,b));
+  const RB=recRef||b; const mk="q|"+a+"|"+b+"|"+RB+"|"+(PARTY?1:0); if(MEMO.adv.has(mk)) return MEMO.adv.get(mk);
+  const out=adviceQualCalc(a,b,RB); MEMO.adv.set(mk,out); return out;
+}
+function adviceQualCalc(a,b,RB){
+  const out=[]; const days=b-a+1;
+  const nodes=treeMemo(a,b);
   const paid=L.filter(l=>(l.platform==="meta"||l.platform==="google"||l.platform==="tiktok")&&!l.party&&l.cd>=a&&l.cd<=b);
   const refN=paid.length; if(refN<40) return out;
   const refPlan=paid.filter(l=>l.pd>=0).length/refN; const refSpend=spendIn(a,b,r=>(r.platform==="meta"||r.platform==="google"||r.platform==="tiktok")&&!(CAMPS.get(ck(r.platform,r.cid))||{}).party).spend; const refCpl=refN?refSpend/refN:null;
@@ -630,8 +642,12 @@ function adviceQual(a,b,recRef){
 }
 // vroeg signaal: pas gestarte of net gewijzigde units die in 14 dagen al laten zien dat het niet werkt (geld zonder leads, of leads zonder één geplande intake)
 function adviceEarly(N){
+  const mk="e|"+N+"|"+(PARTY?1:0); if(MEMO.adv.has(mk)) return MEMO.adv.get(mk);
+  const out=adviceEarlyCalc(N); MEMO.adv.set(mk,out); return out;
+}
+function adviceEarlyCalc(N){
   const out=[]; const a=N-13,b=N; const days=14;
-  const nodes=buildTree(a,b); nodes.forEach(n=>decorate(n,a,b));
+  const nodes=treeMemo(a,b);
   const paid=L.filter(l=>(l.platform==="meta"||l.platform==="google"||l.platform==="tiktok")&&!l.party&&l.cd>=N-59&&l.cd<=N-7);
   const refPlan=paid.length>=40?paid.filter(l=>l.pd>=0).length/paid.length:0.2;
   const units=[]; for(const p of nodes){ if(p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.noCamp) continue; units.push({node:c,label:c.label,cname:c.label,sname:null,platform:p.platform,cid:c.cid,sid:null});
@@ -656,13 +672,17 @@ function aiPayload(){
   const N=NOW; const win=(a,b)=>{ const all=L.filter(l=>!l.party); return metrics(all,spendIn(a,b,r=>!(CAMPS.get(ck(r.platform,r.cid))||{}).party),a,b); };
   const pick=m=>({spend:Math.round(m.spend),leads:m.n,cpl:m.cpl==null?null:Math.round(m.cpl),gepland:m.g,plan_pct:m.plan,shows:m.sh,show_pct:m.show,klanten:m.sg,cpk:m.cpk==null?null:Math.round(m.cpk),l2k_pct:m.l2k});
   const kp={laatste_30d:pick(win(N-29,N)),rijp_2_8wk:pick(win(N-57,N-14)),dit_jaar:pick(win(s2d(new Date(d2s(N).getFullYear(),0,1)),N))};
-  const nodes=buildTree(N-57,N-14); nodes.forEach(n=>decorate(n,N-57,N-14));
+  const nodes=treeMemo(N-57,N-14);
   const camps=[]; for(const p of nodes){ if(p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.m.n<5&&c.m.spend<100) continue;
     const lost={}; c.leads.filter(l=>l.lost&&l.cd>=N-57&&l.cd<=N-14).forEach(l=>{ const k=l.lost_reason||"(geen reden)"; lost[k]=(lost[k]||0)+1; });
     const sn=STNOW.get(p.platform+"|"+c.cid+"|"); camps.push({platform:p.platform,campagne:c.label,...pick(c.m),status:sn?sn.status:null,budget_nu:sn&&sn.budget!=null?sn.budget:null,verliesredenen:Object.entries(lost).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>k+" "+v).join(", "),
       adsets:c.children.filter(x=>x.key.startsWith("s:")&&(x.m.n>=5||x.m.spend>=100)).map(x=>({adset:x.label,...pick(x.m)}))}); } }
-  const adv=advList(0).slice(0,15).map(ad=>({type:ad.type,unit:ad.label,rang:Math.round(ad.rank),tekst:ad.txt,status_opvolging:advVerdict(ad).st}));
-  return {datum:fmtY(N),plafond_kosten_per_klant:MAXCPK(),kpi:kp,campagnes_rijp_2_8wk:camps,adviezen_vandaag:adv,opmerkingen:["Cohort-telling: alles hangt aan de leaddatum.","Mediaan lead→tekenen 12 dagen, 95% binnen 30.","Meta-kosten alleen per campagne/adset, niet per plaatsing.","TikTok Instant Form-leads komen zonder campagne-id binnen."]};
+  const adv=advList(0).slice(0,15).map(ad=>({type:ad.type,unit:ad.label,rang:Math.round(ad.rank),tekst:ad.txt,status_opvolging:advVerdict(ad).st,afgevinkt:!!folGet(ad).done,opmerking:folGet(ad).note||null}));
+  // sales-kant (SOP): verdeling over eigenaren/setters, no-show, verliesredenen — rijpe leads 2–8 weken
+  const rl=L.filter(l=>!l.party&&l.cd>=N-57&&l.cd<=N-14); const grp=(f)=>{ const m={}; rl.forEach(l=>{ const k=f(l)||"(leeg)"; const o=m[k]||(m[k]={leads:0,gepland:0,shows:0,noshow:0,klanten:0}); o.leads++; if(l.pd>=0) o.gepland++; if(l.is_show) o.shows++; if(l.is_noshow) o.noshow++; if(l.is_signed) o.klanten++; }); return Object.fromEntries(Object.entries(m).filter(([k,o])=>o.leads>=5).map(([k,o])=>[k,{...o,plan_pct:Math.round(o.gepland/o.leads*1000)/10,noshow_pct:(o.shows+o.noshow)?Math.round(o.noshow/(o.shows+o.noshow)*1000)/10:null}])); };
+  const lostAll={}; rl.filter(l=>l.lost).forEach(l=>{ const k=l.lost_reason||"(geen reden)"; lostAll[k]=(lostAll[k]||0)+1; });
+  const sales={definitie:"SQL = intake gepland; show = intake heeft plaatsgevonden; klant = getekend",per_eigenaar:grp(l=>l.owner),per_setter:grp(l=>l.setter),verliesredenen_top:Object.entries(lostAll).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>k+" "+v).join(", "),noshow_pct_totaal:(()=>{ const sh=rl.filter(l=>l.is_show).length, ns=rl.filter(l=>l.is_noshow).length; return (sh+ns)?Math.round(ns/(sh+ns)*1000)/10:null; })()};
+  return {datum:fmtY(N),plafond_kosten_per_klant:MAXCPK(),kpi:kp,campagnes_rijp_2_8wk:camps,sales_rijp_2_8wk:sales,adviezen_vandaag:adv,opmerkingen:["Cohort-telling: alles hangt aan de leaddatum.","Mediaan lead→tekenen 12 dagen, 95% binnen 30.","Doel is sales qualified leads (intakes gepland) en klanten, niet goedkope leads.","Meta-kosten alleen per campagne/adset, niet per plaatsing.","Speed-to-lead staat niet in deze data (wel in het sales-dashboard)."]};
 }
 async function aiRun(){
   if(AI.busy) return; AI.busy=true; AI.err=null; drawAdvice();
@@ -703,7 +723,12 @@ function advConflict(list){
 }
 // gedeelde lijst-bouw (Advies-tab én Opgevolgd-tab): rank incl. maandhistorie + jaar-adviezen + dedupe per label. shift=7 → het advies zoals het er een week geleden uitzag.
 function advList(shift,keepUit){
-  const N=NOW-(shift||0);
+  const mk=String(shift||0); let list=MEMO.list.get(mk);
+  if(!list){ list=advListCalc(NOW-(shift||0)); MEMO.list.set(mk,list); }
+  if(!keepUit) list=list.filter(ad=>!stUit(ad)&&!advDone(ad));   // wat al uit staat of al is doorgevoerd hoeft geen advies meer
+  return list;
+}
+function advListCalc(N){
   const cur=advCur(N);
   // maandhistorie dit jaar: in welke maanden vuurde dezelfde regel
   const months=[]; for(let d=monthKey(N); d>=monthKey(s2d(new Date(d2s(N).getFullYear(),0,1))); d=monthKey(d-1)) months.push([d,Math.min(monthKey(d+32)-1,N)]);
@@ -713,9 +738,7 @@ function advList(shift,keepUit){
   const all=advConflict(cur.concat(year)).map(ad=>{ const ms=hist.get(ad.type+"|"+ad.label)||[]; const n=ms.length; return {...ad,months:ms,rank:ad.w*(1+0.25*Math.max(0,n-1))}; });
   // dedupe per label: hoogste rang
   const best=new Map(); for(const ad of all){ const k=ad.label; if(!best.has(k)||best.get(k).rank<ad.rank) best.set(k,ad); }
-  let list=[...best.values()].sort((x,y)=>y.rank-x.rank);
-  if(!keepUit) list=list.filter(ad=>!stUit(ad)&&!advDone(ad));   // wat al uit staat of al is doorgevoerd hoeft geen advies meer
-  return list;
+  return [...best.values()].sort((x,y)=>y.rank-x.rank);
 }
 // ---- opvolging: hoeveel van de geadviseerde stap is gezet? ----
 // bron 1 = ingesteld budget + aan/uit uit het platform (dagsnapshot, dezelfde dag zichtbaar); bron 2 (terugval) = besteding per dag.
@@ -724,6 +747,7 @@ const dayOf=(x,y,ad)=>( ad.sid!=null ? spendAds(x,y,z=>z.platform===ad.platform&
 function lastSpendDay(ad){ let m=null; if(ad.sid!=null){ for(const r of AD){ if(r.spend>0.5&&r.ad.platform===ad.platform&&r.ad.cid===ad.cid&&(r.ad.adsetId||"")===ad.sid&&(m==null||r.d>m)) m=r.d; } } else { for(const r of CD){ if(r.spend>0.5&&r.platform===ad.platform&&(r.cid||"")===ad.cid&&(m==null||r.d>m)) m=r.d; } } return m; }
 function activeDays(ad,a,b){ const s=new Set(); if(ad.sid!=null){ for(const r of AD){ if(r.d>=a&&r.d<=b&&r.spend>0.5&&r.ad.platform===ad.platform&&r.ad.cid===ad.cid&&(r.ad.adsetId||"")===ad.sid) s.add(r.d); } } else { for(const r of CD){ if(r.d>=a&&r.d<=b&&r.spend>0.5&&r.platform===ad.platform&&(r.cid||"")===ad.cid) s.add(r.d); } } return s.size; }
 function advProgress(ad){
+  if(ad.manual) return {uit:false,src:"manual",bNow:null,bRef:null,tgt:null,f:null,lastSp:null,kpd:0};
   const sn=stNowOf(ad); const uit=stUit(ad);
   const kpd=ad.wa!=null? ad.m.spend/Math.max(1,activeDays(ad,ad.wa,ad.wb)) : 0;   // per dag dat de unit écht draaide (niet per kalenderdag)
   const lastSp=lastSpendDay(ad); const SL=(D&&D.counts&&D.counts.spend_last)?dOf(D.counts.spend_last):NOW-1;
@@ -742,8 +766,12 @@ function advProgress(ad){
 }
 // oordeel: ok = ≥ 75% van de stap gezet óf binnen € 5 van het doel · mid = 25–75% · no = ongewijzigd (binnen ±10% / € 5 = ruis) of tegengesteld · ey = niets om mee te vergelijken · man = zelf afvinken
 function advVerdict(ad){
+  if(!ad.manual){ const mk=folKey(ad)+"|"+ad.wa+"|"+ad.wb; const c=MEMO.ver.get(mk); if(c) return c; const v=advVerdictCalc(ad); MEMO.ver.set(mk,v); return v; }
+  return advVerdictCalc(ad);
+}
+function advVerdictCalc(ad){
   const P=advProgress(ad); const knijp=ad.type!=="opschalen"; let st,uitleg;
-  if(P.src==="manual"){ st=folGet(ad).done?"ok":"man"; uitleg=st==="ok"?"Door jullie afgevinkt als doorgevoerd.":"Dit is een actie in het formulier, de targeting of de tracking — geen budgetknop, dus niet automatisch te meten. Vink hem hier af zodra hij is doorgevoerd."; return {...P,st,uitleg}; }
+  if(P.src==="manual"){ st="man"; uitleg="Dit is een actie in het formulier, de targeting of de tracking — geen budgetknop, dus niet automatisch te meten. Vink hem hier af zodra hij is doorgevoerd."; return {...P,st,uitleg}; }
   if(P.uit){ if(knijp){ st="ok"; uitleg=P.src==="status"?"Staat uit in het advertentieplatform.":`Geen besteding meer sinds ${P.lastSp!=null?fmtY(P.lastSp):"—"} — staat uit.`; } else { st="no"; uitleg="Deze staat nu uit — terwijl het advies juist opschalen was."; } return {...P,st,uitleg}; }
   if(P.bRef==null||P.f==null){ st="ey"; uitleg=P.src==="status"?"Geen referentiebudget om mee te vergelijken.":"Vrijwel geen kosten in de afgelopen twee weken — nog niets om te beoordelen."; return {...P,st,uitleg}; }
   const d=P.bNow-P.bRef; const step=Math.abs(P.tgt-P.bRef); const near=Math.abs(P.bNow-P.tgt)<=Math.min(5,step*0.25); const TOL=Math.max(2,Math.min(5,P.bRef*0.10));   // ruisband: ±10%, max € 5 (min € 2)
@@ -756,7 +784,7 @@ function advVerdict(ad){
   return {...P,st,uitleg};
 }
 // is dit advies al doorgevoerd? (dan hoeft het niet meer op ⚡ Advies, wel als ✅ op Opgevolgd)
-function advDone(ad){ return advVerdict(ad).st==="ok"; }
+function advDone(ad){ return ad.manual ? !!folGet(ad).done : advVerdict(ad).st==="ok"; }
 // ---- afvinken + notities (per advies, in de browser bewaard) ----
 let FOLST={}; try{ FOLST=JSON.parse(localStorage.dpacMktFol||"{}"); }catch(e){ FOLST={}; }
 const folKey=ad=>ad.type+"|"+ad.label;
@@ -825,8 +853,7 @@ function folRows(){
     else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
     else if(V.bRef==null) disp="—";
     else disp=`${eur0(V.bRef)} → <b>${eur0(V.bNow)}/dag</b> ${V.src==="status"?"ingesteld":"besteed"}${V.tgt!=null?` <small>doel ≈ ${eur0(V.tgt)}</small>`:""}`;
-    let st=V.st; if(F.done&&st!=="ok"){ st="ok"; }
-    return {...ad,V,st,uitleg:V.uitleg+(F.done&&V.st!=="ok"?" Door jullie handmatig afgevinkt.":""),disp,ch,F}; });
+    return {...ad,V,st:V.st,uitleg:V.uitleg+(F.done?" ☑ Door jullie afgevinkt — de meting blijft leidend: staat het morgen nog op ❌, dan is het niet doorgevoerd.":""),disp,ch,F}; });
   const ORD={no:0,mid:1,man:2,ok:3,ey:4};
   rows.sort((x,y)=> ORD[x.st]-ORD[y.st] || y.rank-x.rank);
   return rows;
@@ -844,21 +871,22 @@ function drawFollow(){
   const shown = folSt==="all" ? rows : rows.filter(r=>r.st===folSt);
   let h=note+`<div class="advrows">`+(shown.length?shown.map(r=>{ const key=folKey(r); const opn=folOpen.has(key); const cls=CLS[r.st];
     return `<div class="advrow ${cls}${opn?" open":""}${r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
-      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken: dit is gedaan / besproken"><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
+      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = wij hebben dit gedaan/besproken. De status ernaast blijft de meting; de rij blijft staan waar hij staat."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
       +`<span class="sevb ${cls}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`
-      +`<span class="advmain"><b>${ADV_ICON[r.type]} ${ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}${r.F.note?` <span class="notetag" title="${esc(r.F.note)}">✎ notitie</span>`:""}</span>`
-      +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span><i class="chev${opn?" open":""}"></i>`
-      +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div>`
-        +`<div class="folnote"><span>Notitie voor het rapport</span><input type="text" value="${esc(r.F.note||"")}" placeholder="bv. bewust laten lopen tot vrijdag, of: Ger checkt de doelgroep" onchange="folNote(${jq(key)},this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"></div></div>`:"")
+      +`<span class="advmain"><b>${ADV_ICON[r.type]} ${ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</span>`
+      +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span>`
+      +`<input class="folnote-in${r.F.note?" has":""}" type="text" value="${esc(r.F.note||"")}" placeholder="opmerking (komt in het rapport)" title="Opmerking voor Ger én terugkoppeling voor Claude — komt letterlijk in het rapport" onclick="event.stopPropagation()" onchange="folNote(${jq(key)},this.value);this.classList.toggle('has',!!this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
+      +`<i class="chev${opn?" open":""}"></i>`
+      +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div></div>`:"")
       +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Niets te tonen — geen adviezen in deze periode.</span></div>`)+`</div>`;
-  h+=`<p class="note">Automatisch beoordeeld op het <b>ingestelde budget en de aan/uit-status</b> in het advertentieplatform (dagelijkse meting om 06:25 — een wijziging is dezelfde dag zichtbaar, met datum). Waar die meting ontbreekt geldt de terugval: besteding per dag, laatste 7 volle dagen. <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit; <b>Deels</b> = een kwart tot driekwart; <b>Niet doorgevoerd</b> = ongewijzigd (binnen ±10%, max € 5 — dat is ruis) of tegengesteld. Formulier-, targeting- en tracking-acties (⚠️ ⏱) zijn niet automatisch meetbaar — die vink je zelf af. ☑ + notitie bewaart de browser; <b>📋 Rapport</b> zet alles wat open staat in één Slack-bericht voor de media buyer.${nDone||nNote?` Nu ${nDone} afgevinkt, ${nNote} met notitie.`:""}</p>`;
+  h+=`<p class="note">Automatisch beoordeeld op het <b>ingestelde budget en de aan/uit-status</b> in het advertentieplatform (dagelijkse meting om 06:25 — een wijziging is dezelfde dag zichtbaar, met datum). Waar die meting ontbreekt geldt de terugval: besteding per dag, laatste 7 volle dagen. <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit; <b>Deels</b> = een kwart tot driekwart; <b>Niet doorgevoerd</b> = ongewijzigd (binnen ±10%, max € 5 — dat is ruis) of tegengesteld. Formulier-, targeting- en tracking-acties (⚠️ ⏱) zijn niet automatisch meetbaar — die vink je zelf af. <b>Het vinkje is jullie eigen aantekening</b> ("dit hebben we net gedaan"): de rij blijft staan en de status blijft de meting — staat hij morgen nog op ❌, dan is het echt niet doorgevoerd (en heb je per ongeluk geklikt). Vinkjes + opmerkingen bewaart de browser; <b>📋 Rapport</b> zet alles in één Slack-bericht voor de media buyer, met de opmerkingen als terugkoppeling voor Claude.${nDone||nNote?` Nu ${nDone} afgevinkt, ${nNote} met notitie.`:""}</p>`;
   w.innerHTML=h;
 }
 // ---- rapport voor de media buyer (Slack-klare tekst) ----
 function folReportText(rows){
   const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW);
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const todo=rows.filter(r=>r.st==="no"||r.st==="mid"||r.st==="man"), done=rows.filter(r=>r.st==="ok"), wait=rows.filter(r=>r.st==="ey");
+  const todo=rows.filter(r=>(r.st==="no"||r.st==="mid"||r.st==="man")&&!r.F.done), just=rows.filter(r=>(r.st==="no"||r.st==="mid"||r.st==="man")&&r.F.done), done=rows.filter(r=>r.st==="ok"), wait=rows.filter(r=>r.st==="ey");
   const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}* — ${r.label}`;
     if(V.src!=="manual"&&V.bRef!=null){ s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+eur0(V.tgt)+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
     s+=`\n   _${r.txt.replace(/\s+/g," ").slice(0,220)}${r.txt.length>220?"…":""}_`;
@@ -867,7 +895,9 @@ function folReportText(rows){
   const byPlat=list=>["meta","google","tiktok"].map(p=>{ const ls=list.filter(r=>r.platform===p); return ls.length?`*${PN(p)}*\n`+ls.map(line).join("\n"):""; }).filter(Boolean).join("\n\n");
   let out=`*Marketing · acties voor deze week* — ${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
   out+= todo.length? `*Nog te doen (${todo.length})*\n\n`+byPlat(todo) : "*Nog te doen*: niets open — alles is doorgevoerd. 👌";
+  if(just.length) out+=`\n\n*Net doorgevoerd / besproken, meting bevestigt nog (${just.length})* ☑\n`+just.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}${r.F.note?` — 📝 ${r.F.note}`:""}`).join("\n");
   if(extra.trim()) out+=`\n\n*Extra punten*\n${extra.trim()}`;
+  const notes=rows.filter(r=>r.F.note); if(notes.length) out+=`\n\n_📝 = onze opmerkingen; die gaan ook terug naar Claude als terugkoppeling op de adviezen._`;
   if(done.length) out+=`\n\n*Al doorgevoerd (${done.length})* ✅\n`+done.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}${r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` — 📝 ${r.F.note}`:""}`).join("\n");
   if(wait.length) out+=`\n\n*Nog niet te beoordelen (${wait.length})* ⏳\n`+wait.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}`).join("\n");
   return out;
