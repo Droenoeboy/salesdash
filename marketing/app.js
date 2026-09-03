@@ -598,21 +598,102 @@ function adviceFor(a,b,recRef){
     const snU=STNOW.get(u.platform+"|"+u.cid+"|"+(u.sid==null?"":u.sid))||null; const bN=snU&&snU.budget!=null?snU.budget:null;
     const perAdset=(u.sid==null&&(u.platform==="meta"||u.platform==="tiktok"))?" Let op: budgetten staan bij "+PN(u.platform)+" per adset — verdeel dit over de best presterende adsets.":"";
     if(cpk!=null&&cpk<MX*0.85&&(sg>=2||spend>=800)){ const mult=isrV?Math.min(2,Math.max(1.25,0.62/isrV)):1.35; const extra=kpd*(mult-1); const exL=leads*(mult-1)*0.65; const exK=exL*(sg/leads||0);
-      out.push({type:"opschalen",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:extra*30,txt:`Kosten per klant ${eur0(cpk)} (< ${eur0(MX*0.85)}). Schaal budget ×${r1(mult)} (+${eur0(extra)}/dag): ≈ +${r1(exL)} leads en +${r1(exK)} klanten per periode.${isrV?` Zoekvertoningsaandeel ${Math.round(isrV*100)}% → er is ruimte.`:""}${bN!=null?` Nu ingesteld ${eur0(bN)}/dag → zet naar ≈ ${eur0(bN*mult)}/dag.`:""}${perAdset}`,m}); }
-    if(sg===0&&shows===0&&spend>400&&u.attOk) out.push({type:"stoppen",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:kpd*30,txt:`${eur0(spend)} uitgegeven, ${leads} leads, geen enkele show en geen inschrijving. Pauzeer of herbouw.`,m});
-    else if(sg===0&&shows>0&&spend>400&&u.attOk) out.push({type:"halveren",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:kpd*15,txt:`${eur0(spend)} uitgegeven, ${shows} show${shows===1?"":"s"} maar nog geen inschrijving. Halveer het budget tot de eerste klant binnen is.${bN!=null?` Nu ingesteld ${eur0(bN)}/dag → zet naar ≈ ${eur0(bN/2)}/dag.`:""}${perAdset}`,m});
-    if(cpk!=null&&cpk>MX*1.25&&u.attOk){ const doel=sg*MX/days; out.push({type:"terugschroeven",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:(spend-sg*MX)/days*30,txt:`Kosten per klant ${eur0(cpk)} (> ${eur0(MX*1.25)}). Terug naar ≈ ${eur0(doel)}/dag (nu ${eur0(kpd)}/dag) of de kwaliteit van de leads verbeteren.${bN!=null?` Nu ingesteld ${eur0(bN)}/dag.`:""}${perAdset}`,m}); }
+      out.push({type:"opschalen",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:extra*30,mult,tgt:mult,txt:`Kosten per klant ${eur0(cpk)} (< ${eur0(MX*0.85)}). Schaal budget ×${r1(mult)} (+${eur0(extra)}/dag): ≈ +${r1(exL)} leads en +${r1(exK)} klanten per periode.${isrV?` Zoekvertoningsaandeel ${Math.round(isrV*100)}% → er is ruimte.`:""}${bN!=null?` Nu ingesteld ${eur0(bN)}/dag → zet naar ≈ ${eur0(bN*mult)}/dag.`:""}${perAdset}`,m}); }
+    if(sg===0&&shows===0&&spend>400&&u.attOk) out.push({type:"stoppen",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:kpd*30,tgt:0,txt:`${eur0(spend)} uitgegeven, ${leads} leads, geen enkele show en geen inschrijving. Pauzeer of herbouw.`,m});
+    else if(sg===0&&shows>0&&spend>400&&u.attOk) out.push({type:"halveren",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:kpd*15,tgt:0.5,txt:`${eur0(spend)} uitgegeven, ${shows} show${shows===1?"":"s"} maar nog geen inschrijving. Halveer het budget tot de eerste klant binnen is.${bN!=null?` Nu ingesteld ${eur0(bN)}/dag → zet naar ≈ ${eur0(bN/2)}/dag.`:""}${perAdset}`,m});
+    if(cpk!=null&&cpk>MX*1.25&&u.attOk){ const doel=sg*MX/days; out.push({type:"terugschroeven",label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,w:(spend-sg*MX)/days*30,tgt:Math.max(0.3,Math.min(0.8,doel/kpd)),txt:`Kosten per klant ${eur0(cpk)} (> ${eur0(MX*1.25)}). Terug naar ≈ ${eur0(doel)}/dag (nu ${eur0(kpd)}/dag) of de kwaliteit van de leads verbeteren.${bN!=null?` Nu ingesteld ${eur0(bN)}/dag.`:""}${perAdset}`,m}); }
   }
   return out;
 }
+// ---- kwaliteits- en vroeg-signaalregels (geen budgetknop, wél een actie: formulier/targeting/tracking) ----
+// units = campagnes (+ adsets bij Meta/TikTok) met leads in venster a..b; ref = account-gemiddelde over alle betaalde leads in datzelfde venster
+function adviceQual(a,b,recRef){
+  const out=[]; const RB=recRef||b; const days=b-a+1;
+  const nodes=buildTree(a,b); nodes.forEach(n=>decorate(n,a,b));
+  const paid=L.filter(l=>(l.platform==="meta"||l.platform==="google"||l.platform==="tiktok")&&!l.party&&l.cd>=a&&l.cd<=b);
+  const refN=paid.length; if(refN<40) return out;
+  const refPlan=paid.filter(l=>l.pd>=0).length/refN; const refSpend=spendIn(a,b,r=>(r.platform==="meta"||r.platform==="google"||r.platform==="tiktok")&&!(CAMPS.get(ck(r.platform,r.cid))||{}).party).spend; const refCpl=refN?refSpend/refN:null;
+  const JUNK=/incorrect contact|geen nederlands|too young|niets .*ingevuld|verkeerd/i;
+  const units=[]; for(const p of nodes){ if(p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.noCamp) continue; units.push({node:c,label:c.label,cname:c.label,sname:null,platform:p.platform,cid:c.cid,sid:null});
+    if(p.platform!=="google") for(const s of c.children){ if(s.key.startsWith("s:")&&s.leads.length>=25) units.push({node:s,label:c.label+" → "+s.label,cname:c.label,sname:s.label,platform:p.platform,cid:c.cid,sid:s.sid||""}); } } }
+  for(const u of units){ const m=u.node.m; const n=m.n; if(n<30) continue;
+    const rec=spendIn(RB-13,RB,r=>r.cid===u.cid&&r.platform===u.platform).spend; if(!(rec>0)) continue;
+    const kpd=m.spend/days; const plan=m.plan/100; const cpl=m.cpl;
+    const junkN=u.node.leads.filter(l=>l.cd>=a&&l.cd<=b&&l.lost&&JUNK.test(l.lost_reason||"")).length; const junk=junkN/n;
+    const base={label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,m,manual:true};
+    if(cpl!=null&&refCpl&&cpl<=refCpl*0.6&&plan<=refPlan*0.5&&m.sg<=1){
+      out.push({...base,type:"kwaliteit",w:kpd*30*0.5,txt:`Goedkope leads (${eur0(cpl)} per lead, gemiddeld ${eur0(refCpl)}) maar maar ${r1(plan*100)}% plant een intake (gemiddeld ${r1(refPlan*100)}%) en ${m.sg} klant${m.sg===1?"":"en"} op ${eur0(m.spend)}. Dit is de goedkope-leads-val: het formulier laat te veel mensen zonder intentie door. Actie: een extra kwalificatievraag in het formulier (bv. "Wanneer wil je starten?" of een budget/tijdsinvestering-vraag), of overstappen op het "higher intent"-formulier${u.platform==="meta"?" (Meta: leadformulier op 'Hogere intentie', of eerst naar de landingspagina)":""}. Meet daarna 2 weken opnieuw; blijft plan % onder de helft van gemiddeld, dan stoppen.`}); }
+    if(junk>=0.25&&junkN>=8){
+      out.push({...base,type:"kwaliteit",w:kpd*30*junk,txt:`${junkN} van de ${n} leads (${r1(junk*100)}%) zijn rommel: verkeerde contactgegevens, spreekt geen Nederlands of te jong. Dat is een targeting/formulier-probleem, geen sales-probleem. Actie: taal Nederlands als vereiste in de doelgroep, leeftijd 18+, telefoonnummer-validatie (NL-formaat) en een vraag "Ik heb dit formulier bewust ingevuld" of dubbele bevestiging in het formulier.`}); }
+  }
+  return out;
+}
+// vroeg signaal: pas gestarte of net gewijzigde units die in 14 dagen al laten zien dat het niet werkt (geld zonder leads, of leads zonder één geplande intake)
+function adviceEarly(N){
+  const out=[]; const a=N-13,b=N; const days=14;
+  const nodes=buildTree(a,b); nodes.forEach(n=>decorate(n,a,b));
+  const paid=L.filter(l=>(l.platform==="meta"||l.platform==="google"||l.platform==="tiktok")&&!l.party&&l.cd>=N-59&&l.cd<=N-7);
+  const refPlan=paid.length>=40?paid.filter(l=>l.pd>=0).length/paid.length:0.2;
+  const units=[]; for(const p of nodes){ if(p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.noCamp) continue; units.push({node:c,label:c.label,cname:c.label,sname:null,platform:p.platform,cid:c.cid,sid:null});
+    if(p.platform!=="google") for(const s of c.children){ if(s.key.startsWith("s:")) units.push({node:s,label:c.label+" → "+s.label,cname:c.label,sname:s.label,platform:p.platform,cid:c.cid,sid:s.sid||""}); } } }
+  for(const u of units){ const m=u.node.m; const kpd=m.spend/days; const base={label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,m,manual:true};
+    if(/^\((geen|campagne niet|niet toewijsbaar)/.test(u.label)) continue;
+    if(m.spend>=250&&m.n===0){ out.push({...base,type:"vroeg",w:kpd*30,txt:`${eur0(m.spend)} uitgegeven in de laatste 14 dagen zonder één lead. Dat is bijna nooit de doelgroep — check eerst de tracking (UTM's/formulierkoppeling: komen de leads misschien wél binnen maar zonder campagne-id?) en de landingspagina/het formulier. Niets gevonden? Dan pauzeren.`}); continue; }
+    // plan-signaal over leads van 7–20 dagen oud (die hebben 7 dagen gehad om ingepland te worden)
+    const a2=N-20,b2=N-7; const ls=u.node.leads.filter(l=>l.cd>=a2&&l.cd<=b2); const n2=ls.length; if(n2<20) continue;
+    const pl=ls.filter(l=>l.pd>=0).length/n2;
+    if(pl<=Math.max(0.05,refPlan*0.4)){ const sp2=(u.sid!=null?spendAds(a2,b2,x=>x.platform===u.platform&&x.cid===u.cid&&(x.adsetId||"")===u.sid):spendIn(a2,b2,r=>r.platform===u.platform&&(r.cid||"")===u.cid)).spend;
+      out.push({...base,type:"vroeg",w:kpd*30*0.7,txt:`Vroeg signaal: van de ${n2} leads van 7–20 dagen geleden plant maar ${r1(pl*100)}% een intake (gemiddeld ${r1(refPlan*100)}%)${sp2?` bij ${eur0(sp2)} kosten`:""}. Niet wachten op kosten per klant: dit wordt zelden nog goed. Check eerst de speed-to-lead en verdeling over de setters (SOP) — klopt dat, dan het formulier verzwaren of deze unit pauzeren.`}); }
+  }
+  return out;
+}
+const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻",kwaliteit:"⚠️",vroeg:"⏱"}, ADV_LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven",kwaliteit:"Leadkwaliteit",vroeg:"Vroeg signaal"};
 let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
+// ---- AI-analyse op aanvraag (kost alleen iets als je op de knop drukt; antwoord wordt in de browser bewaard) ----
+const AI_URL=DATA_URL;   // zelfde endpoint + toegangscode, body.action="ai" → AI-branch in n8n-workflow 13
+let AI={busy:false,err:null}; try{ AI=Object.assign(AI,JSON.parse(localStorage.dpacMktAI||"{}")); }catch(e){}
+function aiPayload(){
+  const N=NOW; const win=(a,b)=>{ const all=L.filter(l=>!l.party); return metrics(all,spendIn(a,b,r=>!(CAMPS.get(ck(r.platform,r.cid))||{}).party),a,b); };
+  const pick=m=>({spend:Math.round(m.spend),leads:m.n,cpl:m.cpl==null?null:Math.round(m.cpl),gepland:m.g,plan_pct:m.plan,shows:m.sh,show_pct:m.show,klanten:m.sg,cpk:m.cpk==null?null:Math.round(m.cpk),l2k_pct:m.l2k});
+  const kp={laatste_30d:pick(win(N-29,N)),rijp_2_8wk:pick(win(N-57,N-14)),dit_jaar:pick(win(s2d(new Date(d2s(N).getFullYear(),0,1)),N))};
+  const nodes=buildTree(N-57,N-14); nodes.forEach(n=>decorate(n,N-57,N-14));
+  const camps=[]; for(const p of nodes){ if(p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.m.n<5&&c.m.spend<100) continue;
+    const lost={}; c.leads.filter(l=>l.lost&&l.cd>=N-57&&l.cd<=N-14).forEach(l=>{ const k=l.lost_reason||"(geen reden)"; lost[k]=(lost[k]||0)+1; });
+    const sn=STNOW.get(p.platform+"|"+c.cid+"|"); camps.push({platform:p.platform,campagne:c.label,...pick(c.m),status:sn?sn.status:null,budget_nu:sn&&sn.budget!=null?sn.budget:null,verliesredenen:Object.entries(lost).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>k+" "+v).join(", "),
+      adsets:c.children.filter(x=>x.key.startsWith("s:")&&(x.m.n>=5||x.m.spend>=100)).map(x=>({adset:x.label,...pick(x.m)}))}); } }
+  const adv=advList(0).slice(0,15).map(ad=>({type:ad.type,unit:ad.label,rang:Math.round(ad.rank),tekst:ad.txt,status_opvolging:advVerdict(ad).st}));
+  return {datum:fmtY(N),plafond_kosten_per_klant:MAXCPK(),kpi:kp,campagnes_rijp_2_8wk:camps,adviezen_vandaag:adv,opmerkingen:["Cohort-telling: alles hangt aan de leaddatum.","Mediaan lead→tekenen 12 dagen, 95% binnen 30.","Meta-kosten alleen per campagne/adset, niet per plaatsing.","TikTok Instant Form-leads komen zonder campagne-id binnen."]};
+}
+async function aiRun(){
+  if(AI.busy) return; AI.busy=true; AI.err=null; drawAdvice();
+  try{ const body=JSON.stringify({code:GCODE,action:"ai",payload:aiPayload()});
+    const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body});
+    if(!resp.ok) throw new Error(resp.status===404?"de AI-workflow is nog niet aangesloten (404)":"server gaf "+resp.status);
+    const j=await resp.json(); if(!j||j.error) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||"onbruikbaar antwoord");
+    AI.text=String(j.text||j.output||"").trim(); AI.ts=Date.now(); AI.day=NOW; if(!AI.text) throw new Error("leeg antwoord");
+    try{ localStorage.dpacMktAI=JSON.stringify({text:AI.text,ts:AI.ts,day:AI.day,open:true}); }catch(e){}
+    AI.open=true;
+  }catch(e){ AI.err=e&&e.message?e.message:"mislukt"; }
+  AI.busy=false; drawAdvice();
+}
+function aiToggle(){ AI.open=!AI.open; try{ const s=JSON.parse(localStorage.dpacMktAI||"{}"); s.open=AI.open; localStorage.dpacMktAI=JSON.stringify(s); }catch(e){} drawAdvice(); }
+function aiPanelHtml(){
+  const when=AI.ts?new Date(AI.ts):null; const wl=when?`${when.getDate()} ${MND[when.getMonth()]} ${String(when.getHours()).padStart(2,"0")}:${String(when.getMinutes()).padStart(2,"0")}`:null;
+  let h=`<div class="aibar"><div><b>🤖 AI-analyse op aanvraag</b><span>Leest de cijfers van vandaag (KPI's, campagnes 2–8 wk, adviezen, verliesredenen) en redeneert er één keer overheen. Kost alleen iets als je op de knop drukt; het antwoord blijft hier staan.${wl?` Laatste analyse: <b>${wl}</b>${AI.day!=null&&AI.day<NOW?" (van een eerdere dag)":""}.`:""}</span></div>`
+    +`<div class="aibtns">${AI.text?`<button class="rbtn sm2" onclick="aiToggle()">${AI.open?"Verberg":"Toon"} analyse</button>`:""}<button class="rbtn sm2 pri" onclick="aiRun()" ${AI.busy?"disabled":""}>${AI.busy?"⏳ Bezig…":(AI.text?"🔄 Opnieuw analyseren":"🤖 Analyseer nu")}</button></div></div>`;
+  if(AI.err) h+=`<div class="aierr">AI-analyse mislukt: ${esc(AI.err)}.</div>`;
+  if(AI.text&&AI.open) h+=`<div class="cmp aiout"><h3>AI-analyse${wl?` · ${wl}`:""}</h3><div class="aitxt">${esc(AI.text).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^### (.+)$/gm,"<h4>$1</h4>").replace(/^## (.+)$/gm,"<h4>$1</h4>").replace(/^[-•] /gm,"• ")}</div></div>`;
+  return h;
+}
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
 // het advies van dag N: shows-regels over vers venster, kosten/klant-regels over uitgerijpt venster (leads hebben hun doorlooptijd gehad)
 function advCur(N){
   const fresh=adviceFor(N-29,N,N).filter(t=>t.type==="stoppen"||t.type==="halveren");
   const ripe=adviceFor(N-43,N-14,N).filter(t=>t.type==="opschalen");
   const sure=adviceFor(N-57,N-28,N).filter(t=>t.type==="terugschroeven");   // het negatieve kosten/klant-oordeel pas als ~95% getekend heeft
-  return fresh.concat(ripe).concat(sure);
+  const qual=adviceQual(N-57,N-14,N);   // leadkwaliteit: goedkoop maar plant/tekent niet, of rommel-leads — over uitgerijpte leads
+  const early=adviceEarly(N);           // vroeg signaal: geld zonder leads / leads zonder intakes in de eerste 2–3 weken
+  return fresh.concat(ripe).concat(sure).concat(qual).concat(early);
 }
 // consistentie: campagne knijpen (stoppen/halveren/terugschroeven) én adset opschalen binnen dezelfde campagne → één verschuif-advies op de adset
 function advConflict(list){
