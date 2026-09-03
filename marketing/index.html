@@ -505,6 +505,40 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
 .scorep.s2{background:rgba(245,200,76,.16);color:#d8a223}
 .scorep.s1{background:rgba(255,123,123,.16);color:#ff7b7b}
 .scorep.s0{background:rgba(127,127,127,.12);color:var(--mut,#9a9aa3);font-weight:600}
+/* ---- v2.7: detail-samenvatting, uitsplitsing, opgevolgd-checklist, rapport, AI-paneel ---- */
+.dsums{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px 4px}
+.dsum{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-width:104px;display:flex;flex-direction:column;gap:1px}
+.dsum b{font-size:19px;letter-spacing:-.3px;line-height:1.1} .dsum span{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:700} .dsum small{font-size:11px;color:var(--mut)}
+.dsum.clk{cursor:pointer} .dsum.clk:hover{border-color:var(--plan)} .dsum.on{border-color:var(--sel-bg);box-shadow:0 0 0 1.5px var(--sel-bg) inset}
+.dsum.wide{flex:1 1 220px;justify-content:center;gap:6px;min-width:200px} .dsum.wide span{text-transform:none;letter-spacing:0;font-weight:500}
+.obar{display:flex;width:100%;height:8px;border-radius:4px;overflow:hidden;background:var(--line2)} .obar i{display:block;height:100%}
+.fpills{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 16px 0} .fpills .lbl{font-size:11.5px;color:var(--mut);font-weight:600}
+.fpill{border:1px solid var(--plan);color:var(--plan-tx);background:var(--plan-bg);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer} .fpill b{font-weight:700} .fpill.clr{border-color:var(--line);background:transparent;color:var(--mut)}
+.dbrk{padding:10px 16px 6px}
+.brktbl{width:100%;border-collapse:collapse;font-size:12.5px} .brktbl th{color:var(--mut);font-weight:600;text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11.5px} .brktbl td{padding:5px 8px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.brktbl tr:not(:first-child){cursor:pointer} .brktbl tr:not(:first-child):hover td{background:var(--bg)} .brktbl tr.on td{background:var(--plan-bg)}
+.brktbl .num{text-align:right;white-space:nowrap} .brktbl .ck{width:22px;color:var(--mut)} .brktbl .val{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brktbl .won{color:var(--sign-tx)} .brktbl .lost{color:var(--close-tx)} .brktbl .barc{width:130px;min-width:110px} .brktbl .morec{text-align:center;color:var(--plan)}
+.dbody tr.o-won td:first-child{box-shadow:inset 3px 0 0 var(--sign)} .dbody tr.o-lost td:first-child{box-shadow:inset 3px 0 0 var(--close)}
+.dbody .more{padding:8px;text-align:center;color:var(--plan);font-size:12.5px} .dbody .more .sm{cursor:pointer}
+.folchk{display:flex;align-items:center;flex:none} .folchk input{width:17px;height:17px;cursor:pointer;accent-color:var(--green);margin:0}
+.advrow.man{border-left-color:#7a6ee0} .sevb.man{background:rgba(122,110,224,.16);color:#6a5fd0}
+.advrow.done .advmain{opacity:.6;text-decoration:line-through}
+.notetag{font-size:11px;color:var(--plan-tx);background:var(--plan-bg);border-radius:99px;padding:1px 8px;margin-left:6px;white-space:nowrap}
+.folnote{display:flex;gap:10px;align-items:center;margin-top:8px} .folnote span{font-size:11.5px;color:var(--mut);white-space:nowrap} .folnote input{flex:1;border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:12.5px;background:var(--bg);color:var(--txt)} .folnote input:focus{outline:none;border-color:var(--plan)}
+.rbtn.sm2{padding:6px 12px;font-size:12px;border-radius:10px} .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} .rbtn.pri:hover{filter:brightness(1.1)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;display:none;align-items:center;justify-content:center;padding:20px}
+.modalbox{background:var(--card);color:var(--txt);border-radius:var(--radius);width:min(1100px,100%);max-height:92vh;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.4);padding:16px 18px}
+.modalhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px} .modalhd b{font-size:15px} .modalhd .sm{cursor:pointer;color:var(--plan)}
+.modalgrid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,2fr);gap:14px} .modalgrid label{display:block;font-size:11.5px;color:var(--mut);font-weight:600;margin-bottom:4px}
+.modalgrid textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);color:var(--txt);resize:vertical} .modalgrid textarea:focus{outline:none;border-color:var(--plan)}
+.modalft{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px} .modalft .lbl{font-size:12px;color:var(--sign-tx);margin-right:auto}
+.aibar{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 16px;margin-bottom:10px;box-shadow:var(--shadow)}
+.aibar>div:first-child{display:flex;flex-direction:column;gap:2px;min-width:240px;flex:1} .aibar b{font-size:13.5px} .aibar span{font-size:12px;color:var(--mut);line-height:1.45} .aibtns{display:flex;gap:8px;flex:none}
+.aierr{color:var(--close-tx);font-size:12.5px;margin:-4px 0 10px 4px}
+.aiout .aitxt{font-size:13px;line-height:1.6;white-space:pre-wrap} .aiout h4{margin:10px 0 4px;font-size:13px}
+@media(max-width:900px){.modalgrid{grid-template-columns:1fr} .brktbl .barc{display:none} .dsum{min-width:88px}}
+html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .obar{background:#2a2a2d} html[data-theme="dark"] .fpill{background:#1a2740;border-color:#2e4a78;color:#9cc0f5} html[data-theme="dark"] .brktbl tr.on td{background:#1a2740} html[data-theme="dark"] .brktbl tr:not(:first-child):hover td{background:#1c1c1f} html[data-theme="dark"] .folnote input,html[data-theme="dark"] .modalgrid textarea{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .aibar{border-color:#2a2a2d} html[data-theme="dark"] .notetag{background:#1a2740;color:#9cc0f5} html[data-theme="dark"] .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
 </style>
 </head>
 <body>
@@ -553,6 +587,6 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
