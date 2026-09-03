@@ -717,26 +717,67 @@ function advList(shift,keepUit){
   if(!keepUit) list=list.filter(ad=>!stUit(ad)&&!advDone(ad));   // wat al uit staat of al is doorgevoerd hoeft geen advies meer
   return list;
 }
-// is dit advies al doorgevoerd? (huidig ingesteld budget vs het dagbudget in het meetvenster)
-function advDone(ad){ const sn=stNowOf(ad); if(!sn||sn.budget==null||ad.wa==null) return false;
-  const kpd=ad.m.spend/Math.max(1,ad.wb-ad.wa+1); if(!(kpd>0)) return false; const r=sn.budget/kpd;
-  if(ad.type==="opschalen") return r>=1.2;
-  if(ad.type==="halveren") return r<=0.6;
-  if(ad.type==="terugschroeven") return r<=0.8;
-  if(ad.type==="stoppen") return sn.budget===0;
-  return false; }
+// ---- opvolging: hoeveel van de geadviseerde stap is gezet? ----
+// bron 1 = ingesteld budget + aan/uit uit het platform (dagsnapshot, dezelfde dag zichtbaar); bron 2 (terugval) = besteding per dag.
+// referentie = dagbudget in het meetvenster van het advies (dat is waar het advies op rekende); doel = referentie × factor (opschalen ×mult, halveren ×0,5, terugschroeven ×tgt, stoppen 0).
+const dayOf=(x,y,ad)=>( ad.sid!=null ? spendAds(x,y,z=>z.platform===ad.platform&&z.cid===ad.cid&&(z.adsetId||"")===ad.sid).spend : spendIn(x,y,r=>r.platform===ad.platform&&(r.cid||"")===ad.cid).spend )/(y-x+1);
+function lastSpendDay(ad){ let m=null; if(ad.sid!=null){ for(const r of AD){ if(r.spend>0.5&&r.ad.platform===ad.platform&&r.ad.cid===ad.cid&&(r.ad.adsetId||"")===ad.sid&&(m==null||r.d>m)) m=r.d; } } else { for(const r of CD){ if(r.spend>0.5&&r.platform===ad.platform&&(r.cid||"")===ad.cid&&(m==null||r.d>m)) m=r.d; } } return m; }
+function activeDays(ad,a,b){ const s=new Set(); if(ad.sid!=null){ for(const r of AD){ if(r.d>=a&&r.d<=b&&r.spend>0.5&&r.ad.platform===ad.platform&&r.ad.cid===ad.cid&&(r.ad.adsetId||"")===ad.sid) s.add(r.d); } } else { for(const r of CD){ if(r.d>=a&&r.d<=b&&r.spend>0.5&&r.platform===ad.platform&&(r.cid||"")===ad.cid) s.add(r.d); } } return s.size; }
+function advProgress(ad){
+  const sn=stNowOf(ad); const uit=stUit(ad);
+  const kpd=ad.wa!=null? ad.m.spend/Math.max(1,activeDays(ad,ad.wa,ad.wb)) : 0;   // per dag dat de unit écht draaide (niet per kalenderdag)
+  const lastSp=lastSpendDay(ad); const SL=(D&&D.counts&&D.counts.spend_last)?dOf(D.counts.spend_last):NOW-1;
+  const out={uit,src:sn?"status":"spend",bNow:null,bRef:null,tgt:null,f:null,lastSp,kpd};
+  if(ad.manual){ out.src="manual"; return out; }
+  if(sn&&(uit||sn.budget!=null)){ out.bNow=uit?0:sn.budget; }
+  else { const v=dayOf(NOW-14,NOW-8,ad), n=dayOf(NOW-7,NOW-1,ad); out.v=v; out.n=n; out.bNow=n;
+    if(lastSp!=null&&lastSp<=SL-2){ out.uit=true; out.bNow=0; }   // minstens 2 volle dagen met data en géén besteding = staat uit
+    else if(v<1&&n<1){ out.bRef=null; return out; } }
+  out.bRef = kpd>0? kpd : (out.v>=1? out.v : null);
+  if(out.bRef==null) return out;
+  const tgt = ad.type==="opschalen"? out.bRef*(ad.mult||1.35) : out.bRef*(ad.tgt!=null?ad.tgt:0.5);
+  out.tgt=tgt; const step=tgt-out.bRef; if(!step) return out;
+  out.f=(out.bNow-out.bRef)/step;   // 1 = precies de geadviseerde stap · 0 = niets gedaan · < 0 = tegengesteld
+  return out;
+}
+// oordeel: ok = ≥ 75% van de stap gezet óf binnen € 5 van het doel · mid = 25–75% · no = ongewijzigd (binnen ±10% / € 5 = ruis) of tegengesteld · ey = niets om mee te vergelijken · man = zelf afvinken
+function advVerdict(ad){
+  const P=advProgress(ad); const knijp=ad.type!=="opschalen"; let st,uitleg;
+  if(P.src==="manual"){ st=folGet(ad).done?"ok":"man"; uitleg=st==="ok"?"Door jullie afgevinkt als doorgevoerd.":"Dit is een actie in het formulier, de targeting of de tracking — geen budgetknop, dus niet automatisch te meten. Vink hem hier af zodra hij is doorgevoerd."; return {...P,st,uitleg}; }
+  if(P.uit){ if(knijp){ st="ok"; uitleg=P.src==="status"?"Staat uit in het advertentieplatform.":`Geen besteding meer sinds ${P.lastSp!=null?fmtY(P.lastSp):"—"} — staat uit.`; } else { st="no"; uitleg="Deze staat nu uit — terwijl het advies juist opschalen was."; } return {...P,st,uitleg}; }
+  if(P.bRef==null||P.f==null){ st="ey"; uitleg=P.src==="status"?"Geen referentiebudget om mee te vergelijken.":"Vrijwel geen kosten in de afgelopen twee weken — nog niets om te beoordelen."; return {...P,st,uitleg}; }
+  const d=P.bNow-P.bRef; const step=Math.abs(P.tgt-P.bRef); const near=Math.abs(P.bNow-P.tgt)<=Math.min(5,step*0.25); const TOL=Math.max(2,Math.min(5,P.bRef*0.10));   // ruisband: ±10%, max € 5 (min € 2)
+  if(P.f>=0.75||near){ st="ok"; uitleg=ad.type==="stoppen"&&P.bNow<1?"Budget (vrijwel) naar nul.":`${knijp?"Verlaagd":"Verhoogd"} naar ${eur0(P.bNow)}/dag — ${(near&&P.f<0.75)?"vrijwel op het doel":Math.round(Math.min(P.f,2)*100)+"% van de geadviseerde stap"} (doel ≈ ${eur0(P.tgt)}/dag).`; }
+  else if(P.f>=0.25){ st="mid"; uitleg=`${knijp?"Verlaagd":"Verhoogd"} naar ${eur0(P.bNow)}/dag = ${Math.round(P.f*100)}% van de geadviseerde stap (doel ≈ ${eur0(P.tgt)}/dag). Nog niet ver genoeg.`; }
+  else if(Math.abs(d)<=TOL){ st="no"; uitleg=`Ongewijzigd: ${eur0(P.bRef)} → ${eur0(P.bNow)}/dag valt binnen de ruisband van ±10% (max € 5) — dat is geen wijziging. Doel ≈ ${eur0(P.tgt)}/dag.`; }
+  else if(P.f<0){ st="no"; uitleg=`Tegengesteld: budget ging ${d>0?"omhoog":"omlaag"} (${eur0(P.bRef)} → ${eur0(P.bNow)}/dag) terwijl het advies ${knijp?"knijpen":"opschalen"} was.`; }
+  else { st="no"; uitleg=`Nauwelijks gewijzigd (${eur0(P.bRef)} → ${eur0(P.bNow)}/dag = ${Math.round(P.f*100)}% van de stap). Doel ≈ ${eur0(P.tgt)}/dag.`; }
+  uitleg+= P.src==="status"?" Gemeten op het ingestelde budget in het platform (dagelijkse meting om 06:25, dezelfde dag zichtbaar).":" Gemeten op besteding (laatste 7 volle dagen vs het meetvenster) — voor deze unit ontbreekt de budgetmeting.";
+  return {...P,st,uitleg};
+}
+// is dit advies al doorgevoerd? (dan hoeft het niet meer op ⚡ Advies, wel als ✅ op Opgevolgd)
+function advDone(ad){ return advVerdict(ad).st==="ok"; }
+// ---- afvinken + notities (per advies, in de browser bewaard) ----
+let FOLST={}; try{ FOLST=JSON.parse(localStorage.dpacMktFol||"{}"); }catch(e){ FOLST={}; }
+const folKey=ad=>ad.type+"|"+ad.label;
+function folGet(ad){ return FOLST[folKey(ad)]||{}; }
+function folSave(){ try{ const cut=Date.now()-60*864e5; for(const k in FOLST){ if((FOLST[k].ts||0)<cut&&!FOLST[k].note) delete FOLST[k]; } localStorage.dpacMktFol=JSON.stringify(FOLST); }catch(e){} }
+function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now()}; folSave(); drawFollow(); }
+function folNote(key,val){ FOLST[key]={...(FOLST[key]||{}),note:String(val||"").trim(),ts:Date.now()}; folSave(); }
+function folExtra(val){ try{ localStorage.dpacMktFolExtra=String(val||""); }catch(e){} }
 // herkomst + onderbouwing van één advies (uitklappaneel, gedeeld door Advies- en Opgevolgd-tab)
 function advSrc(ad){
   const sn=stNowOf(ad);
-  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker."};
+  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker.",kwaliteit:"Kwaliteitsregel: gemeten op leads van 2–8 weken geleden, vergeleken met het account-gemiddelde in datzelfde venster. Goedkoop is pas goed als het ook intakes en klanten oplevert.",vroeg:"Vroeg signaal: laatste 14 dagen (geld zonder leads) of leads van 7–20 dagen oud (plan %). Geen eindoordeel, wel een reden om nu al te kijken in plaats van 6 weken te wachten."};
   return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname||ad.label)}</b></div>${ad.sname?`<div><small>Adset</small><b>${esc(ad.sname)}</b></div>`:""}${ad.wa!=null?`<div><small>Meetvenster (leads)</small><b>${fmtY(ad.wa)} t/m ${fmtY(ad.wb)}</b></div>`:""}<div><small>Cijfers in dat venster</small><b>${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · "+eur0(ad.m.cpk)+"/klant":""}</b></div>${sn?`<div><small>Nu ingesteld</small><b>${sn.status==="uit"?"staat uit":(sn.budget!=null?eur0(sn.budget)+"/dag":"aan")}</b></div>`:""}</div><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY[ad.type]||""}</p>`;
 }
 function drawAdvice(){
   const w=document.getElementById("advwrap");
   let note=`<div class="cmp" style="padding:12px 16px;margin-bottom:10px"><b>Alles wat hier staat, kun je vandaag direct doorvoeren.</b> Elk advies is al door het juiste meetvenster gehaald: snelle signalen (shows) worden vers gemeten, kosten per klant pas als de leads hun doorlooptijd hebben gehad. Twijfelgevallen staan hier simpelweg niet tussen — klik een advies open voor de volledige herkomst en onderbouwing.</div>`;
   const list=advList(0);
-  const ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻"}, LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven"};
+  const ICON=ADV_ICON, LAB=ADV_LAB;
   const sev=ad=> ad.rank>=1500 ? "hi" : ad.rank>=500 ? "mid" : "lo";
+  note+=aiPanelHtml();
   const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
   const CNT={}; for(const ad of list) CNT[ad.type]=(CNT[ad.type]||0)+1;
   const PCNT={}; for(const ad of list) PCNT[ad.platform]=(PCNT[ad.platform]||0)+1;
@@ -762,7 +803,9 @@ function drawAdvice(){
     <li><b>Halveren</b>: € 400+ uitgegeven, wél shows maar nog 0 klanten (laatste 30 dagen) — knijpen in plaats van stoppen, want de handtekening kan nog komen.</li>
     <li><b>Opschalen</b>: kosten/klant onder 85% van ${eur0(MAXCPK())} bij leads van 2–6 weken oud (en ≥ 2 klanten of ≥ € 800) — narijpers maken dit alleen nog beter, dus dit mag vroeg.</li>
     <li><b>Terugschroeven</b>: kosten/klant boven 125% van het plafond bij leads van 4–8 weken oud — dan heeft ~95% getekend, dus het oordeel is zeker.</li>
-    <li>Alleen campagnes die de laatste 14 dagen nog draaien; wat al uit staat of al is doorgevoerd (huidig ingesteld budget vs het meetvenster) verschijnt hier niet meer — dat vind je terug op ✔️ Opgevolgd.</li>
+    <li><b>⚠️ Leadkwaliteit</b>: leads van 2–8 weken oud, ≥ 30 stuks: kosten per lead ≤ 60% van gemiddeld maar plan % ≤ de helft van gemiddeld en hooguit 1 klant → goedkope leads zonder intentie (formulier verzwaren); of ≥ 25% rommel-leads (verkeerde gegevens, geen Nederlands, te jong) → targeting/formulier.</li>
+    <li><b>⏱ Vroeg signaal</b>: € 250+ in 14 dagen zonder één lead (tracking checken), of ≥ 20 leads van 7–20 dagen oud waarvan minder dan 40% van het gemiddelde plan % een intake plant. Geen eindoordeel — wel eerder kijken dan na 6 weken.</li>
+    <li>Alleen campagnes die de laatste 14 dagen nog draaien; wat al uit staat of al is doorgevoerd (≥ 75% van de geadviseerde stap gezet) verschijnt hier niet meer — dat vind je terug op ✔️ Opgevolgd.</li>
     <li>Bij <b>Google</b> leeft het budget op campagneniveau (adviezen dus ook); bij <b>Meta/TikTok</b> per adset — campagne-adviezen zeggen er daarom bij dat je de wijziging over de best presterende adsets verdeelt.</li>
     <li>Botst "campagne knijpen" met "adset opschalen" binnen dezelfde campagne, dan wordt dat één <b>verschuif-advies</b>. Adset-oordelen alleen als de leads goed aan advertenties toewijsbaar zijn.</li>
     <li>Volgorde = € per maand op het spel (+25% per extra maand dat het advies al geldt). Er wordt <b>niets automatisch gewijzigd</b> — jij voert uit; opvolging zie je op <b>✔️ Opgevolgd</b>.</li>
