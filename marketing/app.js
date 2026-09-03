@@ -309,7 +309,7 @@ function drawKpis(){
   const cpkCls=cpkPaid==null?"":(cpkPaid<=MAXCPK()*0.85?"good":cpkPaid>MAXCPK()*1.25?"bad":"warn");
   const items=[
     [eur0(m.spend),"Advertentiekosten",`excl. party/vacature (${eur0(party.spend)})`,dlt(m.spend,pm.spend,eur0,true)],
-    [m.n,"Leads binnengekomen",null,dlt(m.n,pm.n,v=>v)],
+    [m.n,"Leads binnengekomen","klik voor de namen, herkomst en gewonnen/verloren",dlt(m.n,pm.n,v=>v),"","nieuw"],
     [m.cpl==null?"—":eur0(m.cpl),"Kosten per lead",null,dlt(m.cpl,pm.cpl,eur0,true)],
     [m.g,"Intake gepland",m.plan!=null?`${r1(m.plan)}% van de leads · klik voor de namen`:null,dlt(m.g,pm.g,v=>v),"","gepland"],
     [m.sh,"Shows",m.show!=null?`${r1(m.show)}% van de intakes · klik voor de namen`:null,dlt(m.sh,pm.sh,v=>v),"","shows"],
@@ -320,7 +320,7 @@ function drawKpis(){
   ];
   k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}${x[5]?" kclk":""}" ${x[5]?`onclick="kpiPick('${x[5]}')"`:""} ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
 }
-function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dfCol=null; dfAll={}; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
+function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
 
 // ---- tabs ----
 function drawTabs(){
@@ -488,12 +488,26 @@ function drawBestInner(){
   w.innerHTML=h;
 }
 
-// ---- detail (namen) ----
+// ---- detail (namen) — met samenvatting gewonnen/verloren, uitsplitsing per dimensie en filters ----
 const SETLAB={nieuw:"Leads binnengekomen",gepland:"Intake gepland",shows:"Shows",sign:"Ingeschreven"};
-let dSort={c:1,d:-1}, dFilt={}, dfCol=null, dfAll={};
-function dfToggle(i,v){ if(!dFilt[i]) dFilt[i]=new Set(); const st=dFilt[i]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete dFilt[i]; drawDetail(); }
-function dfClear(i){ delete dFilt[i]; drawDetail(); }
-function showDetail(key,set){ detail={key,set}; dFilt={}; dfCol=null; dfAll={}; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
+let dSort={c:1,d:-1}, dFilt={}, dfCol=null, dfAll={}, dDim="camp", dOut=null, dShowAll=false;
+const outc=l=> l.is_signed?"won" : l.lost?"lost" : "open";
+const OUTL={won:["Gewonnen","var(--sign-tx)"],lost:["Verloren","var(--close-tx)"],open:["Nog open","var(--mut)"]};
+const campLab=l=> l.camp?l.camp.name : l.platform==="niet_betaald"?"(niet betaald)" : "(campagne onbekend) · "+PN(l.platform);
+const DIMS={
+  plat:{t:"Platform",fv:l=>PN(l.platform)+(l.platform==="meta"&&l.placement?" · "+l.placement:"")+(l.bioLink?" · bio-link":"")},
+  camp:{t:"Campagne",fv:campLab},
+  adset:{t:"Adset",fv:l=>l.adObj&&l.adObj.adsetName?l.adObj.adsetName:"(geen adset bekend)"},
+  ad:{t:"Advertentie",fv:l=>l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"(geen advertentie bekend)")},
+  fase:{t:"Fase",fv:l=>l.stage_name+(l.lost&&l.stage_position!==0?" · verloren":"")},
+  reden:{t:"Verliesreden",fv:l=>l.lost?(l.lost_reason||"(geen reden ingevuld)"):"(niet verloren)"},
+  owner:{t:"Eigenaar",fv:l=>l.owner||"(geen eigenaar)"},
+};
+function dfToggle(dim,v){ if(!dFilt[dim]) dFilt[dim]=new Set(); const st=dFilt[dim]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete dFilt[dim]; drawDetail(); }
+function dfClear(dim){ if(dim) delete dFilt[dim]; else { dFilt={}; dOut=null; } drawDetail(); }
+function dOutPick(o){ dOut = dOut===o? null : o; if(o==="lost"&&dOut==="lost") dDim="reden"; drawDetail(); }
+function dDimPick(k){ dDim=k; drawDetail(); }
+function showDetail(key,set){ detail={key,set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
 function drawDetail(){ const _el=document.getElementById("detail"); if(!detail||tab!=="tree"){ _el.style.display="none"; return; } keepScroll(_el,drawDetailInner); }
 function drawDetailInner(){
   const el=document.getElementById("detail"); if(!detail||tab!=="tree"){ el.style.display="none"; return; }
@@ -504,45 +518,46 @@ function drawDetailInner(){
   } else { n=findNode(detail.key,TREE); }
   if(!n){ el.style.display="none"; return; }
   const rowsAll=n.m.S[detail.set]||[];
-  const campLab=l=> l.camp?l.camp.name : l.platform==="niet_betaald"?"(niet betaald)" : "(campagne onbekend) · "+PN(l.platform);
+  const FE=Object.entries(dFilt);
+  const pass=(l,skip)=>FE.every(([k,st])=>k===skip||st.has(DIMS[k].fv(l)));
+  const rowsDim=rowsAll.filter(l=>pass(l));                       // alle dimensie-filters, nog zonder uitkomst-filter
+  const rows=dOut? rowsDim.filter(l=>outc(l)===dOut) : rowsDim;      // + uitkomst
+  const cnt=ls=>({n:ls.length,g:ls.filter(l=>l.pd>=0).length,sh:ls.filter(l=>l.is_show).length,won:ls.filter(l=>outc(l)==="won").length,lost:ls.filter(l=>outc(l)==="lost").length,open:ls.filter(l=>outc(l)==="open").length});
+  const T=cnt(rowsDim);
+  const bar=(c,h)=> c.n? `<span class="obar" style="height:${h||8}px"><i style="width:${c.won/c.n*100}%;background:var(--sign)"></i><i style="width:${c.open/c.n*100}%;background:#b8b4a6"></i><i style="width:${c.lost/c.n*100}%;background:var(--close)"></i></span>`:"";
+  // samenvatting
+  const sumChip=(k,val,lab,extra)=>`<div class="dsum${dOut===k?" on":""}${k?" clk":""}" ${k?`onclick="dOutPick('${k}')"`:""}><b>${val}</b><span>${lab}</span>${extra?`<small>${extra}</small>`:""}</div>`;
+  let sum=`<div class="dsums">${sumChip(null,T.n,"leads")}${sumChip(null,T.g,"intake gepland",T.n?fpct(T.g,T.n):"")}${sumChip(null,T.sh,"shows",T.g?fpct(T.sh,T.g)+" van gepland":"")}${sumChip("won",T.won,"gewonnen",T.n?fpct(T.won,T.n):"")}${sumChip("lost",T.lost,"verloren",T.n?fpct(T.lost,T.n):"")}${sumChip("open",T.open,"nog open",T.n?fpct(T.open,T.n):"")}<div class="dsum wide">${bar(T,12)}<span>gewonnen · open · verloren — klik op gewonnen/verloren/open om alleen die te zien</span></div></div>`;
+  // actieve filters
+  const pills=[]; for(const [k,st] of FE) for(const v of st) pills.push(`<span class="fpill" onclick="dfToggle('${k}',${jq(v)})" title="filter weghalen">${esc(DIMS[k].t)}: <b>${esc(v)}</b> ✕</span>`);
+  if(dOut) pills.push(`<span class="fpill" onclick="dOutPick('${dOut}')">Alleen <b>${OUTL[dOut][0].toLowerCase()}</b> ✕</span>`);
+  const fpanel= pills.length? `<div class="fpills"><span class="lbl">Filters:</span>${pills.join("")}<span class="fpill clr" onclick="dfClear()">alles wissen</span></div>` : "";
+  // uitsplitsing op één dimensie: aantallen binnen de overige filters
+  const base=rowsAll.filter(l=>pass(l,dDim));
+  const groups=new Map(); base.forEach(l=>{ const v=DIMS[dDim].fv(l); if(!groups.has(v)) groups.set(v,[]); groups.get(v).push(l); });
+  const sel=dFilt[dDim];
+  let ent=[...groups.entries()].map(([v,ls])=>[v,cnt(ls)]).sort((x,y)=>((sel&&sel.has(y[0]))?1:0)-((sel&&sel.has(x[0]))?1:0)||y[1].n-x[1].n);
+  const CAP=14; let more=0; if(!dfAll[dDim]&&ent.length>CAP+2){ more=ent.length-CAP; ent=ent.slice(0,CAP); }
+  let brk=`<div class="dbrk"><div class="wonchips" style="margin:0 0 6px"><span class="lbl">Uitsplitsen op:</span>`+Object.entries(DIMS).map(([k,d])=>`<div class="wchip sm${dDim===k?" on":""}" onclick="dDimPick('${k}')">${d.t}${dFilt[k]?` <span class="n">${dFilt[k].size}</span>`:""}</div>`).join("")+`<span class="lbl" style="margin-left:auto">klik op een rij om te filteren · meerdere tegelijk kan</span></div>`;
+  brk+=`<table class="brktbl"><tr><th></th><th>${esc(DIMS[dDim].t)}</th><th class="num">Leads</th><th class="num">Gepland</th><th class="num">Shows</th><th class="num won">Gewonnen</th><th class="num lost">Verloren</th><th class="num">Open</th><th class="barc">verdeling</th><th class="num">verloren %</th></tr>`
+    + (ent.length? ent.map(([v,c])=>`<tr class="${sel&&sel.has(v)?"on":""}" onclick="dfToggle('${dDim}',${jq(v)})"><td class="ck">${sel&&sel.has(v)?"☑":"☐"}</td><td class="val" title="${esc(v)}">${esc(v)}</td><td class="num"><b>${c.n}</b></td><td class="num">${c.g||"—"}</td><td class="num">${c.sh||"—"}</td><td class="num won">${c.won||"—"}</td><td class="num lost">${c.lost||"—"}</td><td class="num">${c.open||"—"}</td><td class="barc">${bar(c)}</td><td class="num">${c.n?fpct(c.lost,c.n):"—"}</td></tr>`).join("") : `<tr><td colspan="10" class="empty">—</td></tr>`)
+    + (more?`<tr><td colspan="10" class="morec"><span class="sm" onclick="dfAll['${dDim}']=true;drawDetail()">nog ${more} meer ⏷</span></td></tr>`:"")+`</table></div>`;
+  // namenlijst
   const cols=[
     {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
-    {t:"Fase",v:l=>l.stage_position,k:l=>`<span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span>${l.lost&&l.lost_reason?` <small>${esc(l.lost_reason)}</small>`:""}`,fv:l=>l.stage_name+(l.lost&&l.stage_position!==0?" · verloren":"")},
-    {t:"Platform",v:l=>l.platform,k:l=>`<span class="dot" style="background:${PC(l.platform)}"></span>${esc(PN(l.platform))}${l.placement?` <small>${esc(l.placement)}</small>`:""}${l.bioLink?` <small>bio-link</small>`:""}`,fv:l=>PN(l.platform)+(l.platform==="meta"&&l.placement?" · "+l.placement:"")},
-    {t:"Campagne",v:l=>campLab(l).toLowerCase(),k:l=>`<small title="${esc(l.utm_campaign||"")}">${esc(campLab(l))}</small>`,fv:campLab},
-    {t:"Adset",v:l=>l.adObj?(l.adObj.adsetName||"").toLowerCase():"",k:l=>`<small>${esc(l.adObj&&l.adObj.adsetName?l.adObj.adsetName:"—")}</small>`,fv:l=>l.adObj&&l.adObj.adsetName?l.adObj.adsetName:"(geen adset bekend)"},
-    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`,fv:l=>l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—")},
+    {t:"Fase",v:l=>l.stage_position,k:l=>`<span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span>${l.lost&&l.lost_reason?` <small>${esc(l.lost_reason)}</small>`:""}`},
+    {t:"Binnen",v:l=>l.cd,k:l=>l.cd>=0?fmt(l.cd):"—"},
+    {t:"Platform",v:l=>l.platform,k:l=>`<span class="dot" style="background:${PC(l.platform)}"></span>${esc(PN(l.platform))}${l.placement?` <small>${esc(l.placement)}</small>`:""}${l.bioLink?` <small>bio-link</small>`:""}`},
+    {t:"Campagne",v:l=>campLab(l).toLowerCase(),k:l=>`<small title="${esc(l.utm_campaign||"")}">${esc(campLab(l))}</small>`},
+    {t:"Adset",v:l=>l.adObj?(l.adObj.adsetName||"").toLowerCase():"",k:l=>`<small>${esc(l.adObj&&l.adObj.adsetName?l.adObj.adsetName:"—")}</small>`},
+    {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`},
+    {t:"Eigenaar",v:l=>l.owner||"",k:l=>esc(l.owner||"—")},
   ];
-  // filters toepassen (per kolom, meerdere waarden mogelijk)
-  const FE=Object.entries(dFilt);
-  const rows=rowsAll.filter(l=>FE.every(([i,st])=>st.has(cols[i].fv(l))));
-  const s=dSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
-  // filterchips: altijd zichtbaar, met aantallen (geteld binnen de overige filters)
-  const chipRow=(i,cap)=>{ const fc=cols[i];
-    const base=rowsAll.filter(l=>FE.every(([j,st])=>+j===i||st.has(cols[j].fv(l))));
-    const cnt=new Map(); base.forEach(l=>{ const vv=fc.fv(l); cnt.set(vv,(cnt.get(vv)||0)+1); });
-    const sel=dFilt[i];
-    let ent=[...cnt.entries()].sort((a,b)=>((sel&&sel.has(b[0]))?1:0)-((sel&&sel.has(a[0]))?1:0)||b[1]-a[1]);
-    let more=0; if(cap&&!dfAll[i]&&ent.length>cap+2){ more=ent.length-cap; ent=ent.slice(0,cap); }
-    if(ent.length<2&&!sel) return "";
-    return `<div class="wonchips" style="margin:8px 14px 0"><span class="lbl">${fc.t}:</span><div class="wchip sm${sel?"":" on"}" onclick="dfClear(${i})">Alles <span class="n">${base.length}</span></div>`
-      +ent.map(([vv,c2])=>`<div class="wchip sm${sel&&sel.has(vv)?" on":""}" onclick="dfToggle(${i},${jq(vv)})">${esc(vv)} <span class="n">${c2}</span></div>`).join("")
-      +(more?`<div class="wchip sm" onclick="dfAll[${i}]=true;drawDetail()">nog ${more} meer ⏷</div>`:"")+`</div>`; };
-  const fpanel=chipRow(1)+chipRow(2)+chipRow(3)+chipRow(4,12);
-  // verdeling binnen deze set: campagnes en advertenties die het vaakst voorkomen
-  const byAd=new Map(); for(const l of rows){ const k=l.adObj?(l.adObj.adName||l.adObj.adId):(l.camp?"(campagne: "+l.camp.name+")":"(geen advertentie bekend)"); byAd.set(k,(byAd.get(k)||0)+1); }
-  const top=[...byAd.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const byCamp=new Map(); for(const l of rows){ const k=(l.camp?l.camp.name:PN(l.platform)); byCamp.set(k,(byCamp.get(k)||0)+1); }
-  const topC=[...byCamp.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const lostRows=rows.filter(l=>l.lost);
-  const byLost=new Map(); lostRows.forEach(l=>{ const k=l.lost_reason||"(geen reden ingevuld)"; byLost.set(k,(byLost.get(k)||0)+1); });
-  const topL=[...byLost.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const s=dSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
+  const LIM=dShowAll?sorted.length:150;
   el.style.display="block";
-  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}${rows.length!==rowsAll.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${fpanel}
-    <div class="dbody"><div class="two dtwo"><div style="overflow:auto"><table class="dtl"><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.slice(0,300).map(l=>`<tr>`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>300?`<div class="more">eerste 300 van ${sorted.length}</div>`:""}</div>
-    <div style="align-self:start;display:flex;flex-direction:column;gap:12px"><div class="cmp"><h3>Uit welke campagnes komen ze</h3>${topC.length?topC.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/topC[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div>
-    <div class="cmp"><h3>Welke advertenties komen het vaakst voor</h3>${top.length?top.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/top[0][1]*100)}%"></b></i><em>${c}</em></div>`).join(""):"<div class='empty'>—</div>"}</div>
-    ${topL.length?`<div class="cmp"><h3>Waarom verloren (${lostRows.length})</h3>${topL.map(([k,c])=>`<div class="lr"><span title="${esc(k)}">${esc(k)}</span><i><b style="width:${Math.round(c/topL[0][1]*100)}%"></b></i><em>${c}</em></div>`).join("")}</div>`:""}</div></div></div>`;
+  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}${rows.length!==rowsAll.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${sum}${fpanel}${brk}
+    <div class="dbody"><div style="overflow:auto"><table class="dtl"><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.slice(0,LIM).map(l=>`<tr class="o-${outc(l)}">`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>LIM?`<div class="more"><span class="sm" onclick="dShowAll=true;drawDetail()">toon alle ${sorted.length} (nu de eerste ${LIM})</span></div>`:""}${sorted.length?"":`<div class="empty">Geen leads met deze filters.</div>`}</div></div>`;
 }
 
 // ---- trend ----
