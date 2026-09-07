@@ -714,6 +714,45 @@ function adviceFollowCalc(a,b){
   }
   return out;
 }
+// ---- 🎯 Actiepunten (instellingen/targeting/formulier) voor de media buyer — v2.10 ----
+// Geen budgetknop maar wél een concrete actie in het advertentieplatform. Volledige namen: platform › campagne › adset. Afvinken op ✔️ Opgevolgd.
+// Bron van de cijfers staat in 'why'. Verwijderen zodra doorgevoerd én bevestigd (of 'until' zetten).
+const ACTIES=[
+  {id:"tt-taal",platform:"tiktok",cname:"17 augustus 2026 | Lead forms | NL | Dijs",sname:"alle 4 adgroups: Video Ad | Breed | EDM · Video Ad | Breed | HIP HOP · Video Ad | Breed | POP · Video Ad | Breed | Niet aangenomen",since:"2026-09-07",w:550,
+   txt:"Taal toevoegen aan de targeting: Nederlands én Engels (Engels erbij, anders vallen Nederlandse jongeren met hun telefoon in het Engels weg). Nu staat er alleen locatie Nederland zonder taal. Daardoor zien ook mensen met een buitenlands TikTok-account in Nederland de ad, en het formulier vult hun buitenlandse nummer vooraf in (Guinee, Ivoorkust).",
+   why:"TikTok 17 aug–7 sep: ±43% van de kosten naar Nederlandstalige gebruikers, ±35% Engels, ±22% overig (Frans, Russisch, Spaans, Turks, Arabisch, Tamil …) ≈ € 550 per maand aan mensen die we niet kunnen bellen. Tot en met 6 sep liep dat nog door.",
+   doen:"TikTok Ads Manager › campagne › adgroup › Targeting › Language: Dutch + English. Controle: de dag erna moet de besteding op andere talen naar nul."},
+  {id:"tt-taal-lp",platform:"tiktok",cname:"Copy 1 of V2  NL | Dijs | Nieuwe Landingpagina",sname:"Video 1 | Hook 2",since:"2026-09-07",w:150,
+   txt:"Zelfde taalfilter: Nederlands én Engels toevoegen aan de targeting.",
+   why:"4–6 sep: ±€ 17 van de € 40 per dag naar Engelstalige gebruikers, rest Nederlands — geen andere talen, maar zonder filter kan dat elke dag veranderen.",
+   doen:"TikTok Ads Manager › adgroup › Targeting › Language: Dutch + English."},
+  {id:"tt-form",platform:"tiktok",cname:"17 augustus 2026 | Lead forms | NL | Dijs",sname:"leadformulier \"2024 new form juiste UTM\"",since:"2026-09-07",w:300,
+   txt:"Formulier aanscherpen: telefoonnummer níet vooringevuld laten (zelf laten typen), Nederlands nummer verplicht, en de 18+-vraag houden. Zo vallen buitenlandse nummers en 'niets ingevuld'-leads weg vóór ze bij sales landen.",
+   why:"Sinds 17 aug: 3 van de laatste 10 leadformulier-leads met buitenlands of ontbrekend nummer; verliesredenen 'Incorrect contact details' en 'Zegt niets te hebben ingevuld' komen vooral uit leadformulieren.",
+   doen:"TikTok Ads Manager › Instant form › formulier bewerken › telefoonveld: prefill uit, validatie aan."},
+  {id:"meta-taal",platform:"meta",cname:"alle campagnes",sname:"alle adsets",since:"2026-09-07",w:200,
+   txt:"Controleer bij elke adset of Taal = Nederlands (+ Engels) in de doelgroep staat. Zo niet: toevoegen. Zelfde lek als bij TikTok is hier waarschijnlijk.",
+   why:"Verliesreden 'Spreekt geen Nederlands' en 'Incorrect contact details' komen ook bij Meta-leadformulieren voor; Meta splitst kosten per taal niet in onze data, dus dit is een handmatige check.",
+   doen:"Ads Manager › adset › Doelgroep › Talen."},
+  {id:"meta-url",platform:"meta",cname:"Abel DPAC - landingpage GHL - Dijs Media",sname:"advertentie \"Video 1 | hook 4 | hobby je werk\"",since:"2026-09-03",w:120,
+   txt:"URL-parameters op dynamisch zetten (utm_campaign={{campaign.id}}, utm_content={{ad.id}}, adset-id) — de exacte template staat in de UTM-checklist. Zonder dit worden leads van deze advertentie niet aan de juiste adset gekoppeld.",
+   why:"Leads van deze advertentie komen binnen met een adset-naam die niet bestaat ('Interest Ad Set | Video - Kopie'), dus de koppeling loopt op naam in plaats van id.",
+   doen:"Ads Manager › advertentie bewerken › Tracking › URL-parameters."},
+  {id:"meta-adsets10",platform:"meta",cname:"Abel DPAC - landingpage GHL - Dijs Media",sname:"9 nieuwe adsets van € 10 per dag (Breed | EDM hook 1 · Breed | Hip-Hop hook 1 · Breed | POP hook 1 · Interest ad set | Video 1 | Hook 1/2/3 · Interest ad set | Video 3 | Hook 1/2/3)",since:"2026-09-07",w:900,
+   txt:"Negen adsets van € 10 per dag komen geen van alle uit de leerfase (Meta wil ±50 leads per adset per week; bij € 10 per dag zijn dat er 1–2). Voorstel: terug naar maximaal 2–3 adsets van minstens € 40 per dag met de beste video's erin, óf de negen onder één campagnebudget (Advantage campaign budget) van minstens € 160 per dag zetten zodat Meta zelf schuift. Doelgroepen na elkaar testen, niet naast elkaar.",
+   why:"Budgetmeting 7 sep: campagne van € 115 → € 205 per dag door 9 × € 10. Beste adset in deze campagne (Interest ad set | Video 3 | Hook 4, € 45 per dag) haalt ±6 leads per week — al ver onder de 50 die Meta nodig heeft.",
+   doen:"Ads Manager › campagne › adsets samenvoegen of Advantage campaign budget aanzetten."},
+  {id:"g-search",platform:"google",cname:"2.0 | Search | Producer Opleiding & Cursus + 2.1 | Search | Producer Opleiding & Cursus",sname:null,since:"2026-09-03",w:250,
+   txt:"Twee vrijwel gelijke zoekcampagnes draaien naast elkaar (elk € 50 per dag) en bieden tegen elkaar op. Is 2.1 de vervanger? Dan 2.0 uitzetten. Anders 2.1 uit.",
+   why:"2.1 draait sinds 30 aug naast 2.0; 2.0 leverde in 30 dagen 11 leads, 3 intakes gepland, 1 klant.",
+   doen:"Google Ads › campagnes › één van beide pauzeren."}
+];
+function adviceActies(N){
+  const out=[]; const cm={}; for(const p of treeMemo(N-29,N)) for(const c of p.children) if(c.cid) cm[c.label]=c.m;
+  for(const a of ACTIES){ if(a.until&&dOf(a.until)<N) continue; const m=cm[a.cname]||{spend:0,n:0,g:0,sh:0,sg:0,cpk:null};
+    out.push({type:"actie",label:a.cname+(a.sname?" → "+a.sname:""),cname:a.cname,sname:a.sname,platform:a.platform,cid:"",sid:null,wa:null,wb:null,m,manual:true,w:a.w,txt:a.txt,why:a.why,doen:a.doen,since:a.since,actie:true}); }
+  return out;
+}
 function smCls(r,ref,n){ if(r==null||n<5) return "sm-na"; if(!ref) return "sm-3"; const q=r/ref; return q<0.5?"sm-1":q<0.8?"sm-2":q<=1.2?"sm-3":q<=1.5?"sm-4":"sm-5"; }
 function smPick(met){ smMetric=met; drawSales(); }
 function smTog(k){ smOpen.has(k)?smOpen.delete(k):smOpen.add(k); drawSales(); }
@@ -750,7 +789,7 @@ function drawSales(){
   h+=laag.map(row).join("")+hoog.map(row).join("")+`</div>`;
   w.innerHTML=h;
 }
-const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻",kwaliteit:"⚠️",vroeg:"⏱",opvolging:"👤"}, ADV_LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven",kwaliteit:"Leadkwaliteit",vroeg:"Vroeg signaal",opvolging:"Opvolging (sales)"};
+const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻",kwaliteit:"⚠️",vroeg:"⏱",opvolging:"👤",actie:"🎯"}, ADV_LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven",kwaliteit:"Leadkwaliteit",vroeg:"Vroeg signaal",opvolging:"Opvolging (sales)",actie:"Actiepunt (instellingen)"};
 let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
 // ---- AI-analyse op aanvraag (kost alleen iets als je op de knop drukt; antwoord wordt in de browser bewaard) ----
 const AI_URL=DATA_URL;   // zelfde endpoint + toegangscode, body.action="ai" → AI-branch in n8n-workflow 13
@@ -802,7 +841,8 @@ function advCur(N){
   const qual=adviceQual(N-57,N-14,N);   // leadkwaliteit: goedkoop maar plant/tekent niet, of rommel-leads — over uitgerijpte leads
   const early=adviceEarly(N);           // vroeg signaal: geld zonder leads / leads zonder intakes in de eerste 2–3 weken
   const fol=adviceFollow(N-57,N-14);    // opvolging: één verkoper plant de leads uit een bron niet in, de rest wél — sales-punt (zelfde rijpe venster als leadkwaliteit)
-  return fresh.concat(ripe).concat(sure).concat(qual).concat(early).concat(fol);
+  const act=adviceActies(N);            // 🎯 actiepunten voor de media buyer (targeting/formulier/instellingen) — handmatig af te vinken
+  return fresh.concat(ripe).concat(sure).concat(qual).concat(early).concat(fol).concat(act);
 }
 // consistentie: campagne knijpen (stoppen/halveren/terugschroeven) én adset opschalen binnen dezelfde campagne → één verschuif-advies op de adset
 function advConflict(list){
@@ -885,7 +925,8 @@ function folExtra(val){ try{ localStorage.dpacMktFolExtra=String(val||""); }catc
 // herkomst + onderbouwing van één advies (uitklappaneel, gedeeld door Advies- en Opgevolgd-tab)
 function advSrc(ad){
   const sn=stNowOf(ad);
-  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker.",kwaliteit:"Kwaliteitsregel: gemeten op leads van 2–8 weken geleden, vergeleken met het account-gemiddelde in datzelfde venster. Goedkoop is pas goed als het ook intakes en klanten oplevert.",vroeg:"Vroeg signaal: laatste 14 dagen (geld zonder leads) of leads van 7–20 dagen oud (plan %). Geen eindoordeel, wel een reden om nu al te kijken in plaats van 6 weken te wachten.",opvolging:"Opvolgregel: leads van 2–8 weken geleden, per verkoper vergeleken met de rest van het team op dezelfde bron (beide ≥ 10 leads). Levert dezelfde bron bij de rest wél intakes op, dan ligt het niet aan de advertentie. Zie de tab 🤝 Sales × bron."};
+  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker.",kwaliteit:"Kwaliteitsregel: gemeten op leads van 2–8 weken geleden, vergeleken met het account-gemiddelde in datzelfde venster. Goedkoop is pas goed als het ook intakes en klanten oplevert.",vroeg:"Vroeg signaal: laatste 14 dagen (geld zonder leads) of leads van 7–20 dagen oud (plan %). Geen eindoordeel, wel een reden om nu al te kijken in plaats van 6 weken te wachten.",opvolging:"Opvolgregel: leads van 2–8 weken geleden, per verkoper vergeleken met de rest van het team op dezelfde bron (beide ≥ 10 leads). Levert dezelfde bron bij de rest wél intakes op, dan ligt het niet aan de advertentie. Zie de tab 🤝 Sales × bron.",actie:"Actiepunt: een instelling in het advertentieplatform (targeting, formulier, URL-parameters, structuur) — geen budgetknop, dus niet automatisch meetbaar. Afvinken op ✔️ Opgevolgd zodra het staat."};
+  if(ad.type==="actie") return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname)}</b></div>${ad.sname?`<div><small>Adset / onderdeel</small><b>${esc(ad.sname)}</b></div>`:""}<div><small>Sinds</small><b>${esc(ad.since||"—")}</b></div></div><p style="margin:8px 0 0;font-size:12.5px"><b>Waarom:</b> ${esc(ad.why||"")}</p><p style="margin:4px 0 0;font-size:12.5px"><b>Waar:</b> ${esc(ad.doen||"")}</p><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY.actie}</p>`;
   return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname||ad.label)}</b></div>${ad.sname?`<div><small>${ad.type==="opvolging"?"Verkoper":"Adset"}</small><b>${esc(ad.sname)}</b></div>`:""}${ad.wa!=null?`<div><small>Meetvenster (leads)</small><b>${fmtY(ad.wa)} t/m ${fmtY(ad.wb)}</b></div>`:""}<div><small>Cijfers in dat venster</small><b>${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · "+eur0(ad.m.cpk)+"/klant":""}</b></div>${sn?`<div><small>Nu ingesteld</small><b>${sn.status==="uit"?"staat uit":(sn.budget!=null?eur0(sn.budget)+"/dag":"aan")}</b></div>`:""}</div><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY[ad.type]||""}</p>`;
 }
 function drawAdvice(){
@@ -909,7 +950,7 @@ function drawAdvice(){
       +`<span class="rank">${i+1}</span>`
       +`<span class="sevb ${sv}">${SEVLAB[sv]}</span>`
       +`<span class="advmain"><b>${ICON[ad.type]} ${LAB[ad.type]}</b> · <span class="dot" style="background:${PC(ad.platform)}"></span>${esc(ad.label)}</span>`
-      +`<span class="advdata">${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · <b>"+eur0(ad.m.cpk)+"/klant</b>":""}</span>`
+      +`<span class="advdata">${ad.type==="actie"?`actiepunt media buyer · sinds ${esc(ad.since||"—")}`:`${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · <b>"+eur0(ad.m.cpk)+"/klant</b>":""}`}</span>`
       +`<span class="advw">≈ ${eur0(ad.w)}/mnd op het spel</span><i class="chev${opn?" open":""}"></i>`
       +(opn?`<div class="advx"><p>${esc(ad.txt)}</p>${advSrc(ad)}<div class="doen">${ad.months.length?`Geldt al ${ad.months.length} maand${ad.months.length===1?"":"en"} (${ad.months.map(m=>MND[d2s(m).getMonth()]).join(", ")})`:"Nieuw dit moment"}${ad.buiten?" · vuurt op dit moment niet, maar stond eerder dit jaar open":""}${ad.shift?" · <b>verschuif-advies</b>":""}</div></div>`:"")
       +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Geen regels die vuren in deze periode (te weinig kosten of leads per campagne).</span></div>`)+`</div>`
@@ -922,6 +963,7 @@ function drawAdvice(){
     <li><b>Terugschroeven</b>: kosten/klant boven 125% van het plafond bij leads van 4–8 weken oud — dan heeft ~95% getekend, dus het oordeel is zeker.</li>
     <li><b>⚠️ Leadkwaliteit</b>: leads van 2–8 weken oud, ≥ 30 stuks: kosten per lead ≤ 60% van gemiddeld maar plan % ≤ de helft van gemiddeld en hooguit 1 klant → goedkope leads zonder intentie (formulier verzwaren); of ≥ 25% rommel-leads (verkeerde gegevens, geen Nederlands, te jong) → targeting/formulier.</li>
     <li><b>⏱ Vroeg signaal</b>: € 250+ in 14 dagen zonder één lead (tracking checken), of ≥ 20 leads van 7–20 dagen oud waarvan minder dan 40% van het gemiddelde plan % een intake plant. Geen eindoordeel — wel eerder kijken dan na 6 weken.</li>
+    <li><b>🎯 Actiepunt (instellingen)</b>: concrete instelling voor de media buyer (taalfilter, formulier, URL-parameters, structuur) met de cijfers erbij; niet automatisch meetbaar, dus afvinken op ✔️ Opgevolgd. Verdwijnt zodra doorgevoerd én bevestigd.</li>
     <li><b>👤 Opvolging (sales)</b>: leads van 2–8 weken oud, per verkoper × campagne (beide ≥ 10 leads): plant een verkoper hooguit de helft van wat de rest van het team op dezelfde campagne plant (én ≥ 8 punten lager), dan is het een sales-punt en geen advertentiepunt. De ⚠️ Leadkwaliteit-regel slaat die campagne dan over. Details op 🤝 Sales × bron.</li>
     <li>Alleen campagnes die de laatste 14 dagen nog draaien; wat al uit staat of al is doorgevoerd (≥ 75% van de geadviseerde stap gezet) verschijnt hier niet meer — dat vind je terug op ✔️ Opgevolgd.</li>
     <li>Bij <b>Google</b> leeft het budget op campagneniveau (adviezen dus ook); bij <b>Meta/TikTok</b> per adset — campagne-adviezen zeggen er daarom bij dat je de wijziging over de best presterende adsets verdeelt.</li>
