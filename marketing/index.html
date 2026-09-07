@@ -538,8 +538,19 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
 .aibar>div:first-child{display:flex;flex-direction:column;gap:2px;min-width:240px;flex:1} .aibar b{font-size:13.5px} .aibar span{font-size:12px;color:var(--mut);line-height:1.45} .aibtns{display:flex;gap:8px;flex:none}
 .aierr{color:var(--close-tx);font-size:12.5px;margin:-4px 0 10px 4px}
 .aiout .aitxt{font-size:13px;line-height:1.6;white-space:pre-wrap} .aiout h4{margin:10px 0 4px;font-size:13px}
-@media(max-width:900px){.modalgrid{grid-template-columns:1fr} .brktbl .barc{display:none} .dsum{min-width:88px}}
-html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .obar{background:#2a2a2d} html[data-theme="dark"] .fpill{background:#1a2740;border-color:#2e4a78;color:#9cc0f5} html[data-theme="dark"] .brktbl tr.on td{background:#1a2740} html[data-theme="dark"] .brktbl tr:not(:first-child):hover td{background:#1c1c1f} html[data-theme="dark"] .folnote input,html[data-theme="dark"] .folnote-in,html[data-theme="dark"] .modalgrid textarea{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .folnote-in.has{background:#1a2740;border-color:#2e4a78} html[data-theme="dark"] .advrow.done{background:linear-gradient(90deg,rgba(49,162,76,.16),transparent 60%)} html[data-theme="dark"] .aibar{border-color:#2a2a2d} html[data-theme="dark"] .notetag{background:#1a2740;color:#9cc0f5} html[data-theme="dark"] .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
+/* v2.9 · Sales × bron */
+.sm-warn{display:block;margin-top:6px;color:var(--show-tx);font-weight:600}
+.smcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:10px}
+.smcard{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:var(--shadow);cursor:pointer} .smcard:hover{filter:brightness(.98)}
+.smcard .smo{font-size:12px;font-weight:700;color:var(--mut)} .smcard .smv{font-size:26px;font-weight:800;letter-spacing:-.5px;margin:2px 0} .smcard .sms{font-size:11.5px;color:var(--mut);line-height:1.4}
+.smcard.sm-1{border-left-color:#dc2a1e} .smcard.sm-2{border-left-color:#e08a00} .smcard.sm-3{border-left-color:#8e8e93} .smcard.sm-4{border-left-color:#31a24c} .smcard.sm-5{border-left-color:#1a7a34} .smcard.sm-na{border-left-color:var(--line)}
+.smtbl{border-collapse:separate;border-spacing:3px;width:100%} .smtbl th{font-size:11.5px;color:var(--mut);text-align:center;padding:4px 6px;white-space:nowrap} .smtbl th:first-child{text-align:left}
+.smtbl td.smc{white-space:nowrap;font-weight:600;font-size:12.5px;cursor:pointer;padding:4px 8px;max-width:340px;overflow:hidden;text-overflow:ellipsis} .smtbl td.smc:hover{text-decoration:underline}
+.smcell{text-align:center;border-radius:8px;padding:5px 6px;min-width:64px;cursor:pointer;line-height:1.15} .smcell b{display:block;font-size:13px} .smcell small{display:block;font-size:10.5px;color:var(--mut)}
+.smcell.sm-1{background:rgba(220,42,30,.22)} .smcell.sm-2{background:rgba(224,138,0,.22)} .smcell.sm-3{background:rgba(142,142,147,.14)} .smcell.sm-4{background:rgba(49,162,76,.22)} .smcell.sm-5{background:rgba(26,122,52,.38)} .smcell.sm-na{background:rgba(142,142,147,.08);color:var(--mut)} .smcell.smt{background:var(--bg);border:1px solid var(--line);cursor:default}
+.smtbl tr.smtot td{font-weight:700} .smtbl tr.smtot td:first-child{padding:4px 8px;font-size:12.5px}
+@media(max-width:900px){.modalgrid{grid-template-columns:1fr} .brktbl .barc{display:none} .dsum{min-width:88px} .smcard .smv{font-size:22px}}
+html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .obar{background:#2a2a2d} html[data-theme="dark"] .fpill{background:#1a2740;border-color:#2e4a78;color:#9cc0f5} html[data-theme="dark"] .brktbl tr.on td{background:#1a2740} html[data-theme="dark"] .brktbl tr:not(:first-child):hover td{background:#1c1c1f} html[data-theme="dark"] .folnote input,html[data-theme="dark"] .folnote-in,html[data-theme="dark"] .modalgrid textarea{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .folnote-in.has{background:#1a2740;border-color:#2e4a78} html[data-theme="dark"] .advrow.done{background:linear-gradient(90deg,rgba(49,162,76,.16),transparent 60%)} html[data-theme="dark"] .aibar{border-color:#2a2a2d} html[data-theme="dark"] .notetag{background:#1a2740;color:#9cc0f5} html[data-theme="dark"] .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} html[data-theme="dark"] .smcell.sm-3{background:rgba(142,142,147,.18)} html[data-theme="dark"] .smcell.smt{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .smcell.sm-5{background:rgba(49,162,76,.45)}
 </style>
 </head>
 <body>
@@ -583,11 +594,12 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
   <div id="trendwrap" style="display:none"></div>
   <div id="advwrap" style="display:none"></div>
   <div id="folwrap" style="display:none"></div>
+  <div id="saleswrap" style="display:none"></div>
   <div id="signwrap" style="display:none"></div>
   <div id="datawrap" style="display:none"></div>
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>
