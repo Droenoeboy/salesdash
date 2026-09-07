@@ -325,7 +325,7 @@ function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=nu
 // ---- tabs ----
 function drawTabs(){
   const el=document.getElementById("tabs"); el.innerHTML="";
-  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","⚡ Advies"],["fol","✔️ Opgevolgd"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
+  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","⚡ Advies"],["fol","✔️ Opgevolgd"],["sales","🤝 Sales × bron"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
   const mb=document.getElementById("modebar"); mb.innerHTML="";   // één telling: cohort — leads (en alles wat eruit voortkomt) tellen bij de periode waarin de lead binnenkwam
 }
 
@@ -633,7 +633,12 @@ function adviceQualCalc(a,b,RB){
     const kpd=m.spend/days; const plan=m.plan/100; const cpl=m.cpl;
     const junkN=u.node.leads.filter(l=>l.cd>=a&&l.cd<=b&&l.lost&&JUNK.test(l.lost_reason||"")).length; const junk=junkN/n;
     const base={label:u.label,cname:u.cname,sname:u.sname,platform:u.platform,cid:u.cid,sid:u.sid,wa:a,wb:b,m,manual:true};
-    if(cpl!=null&&refCpl&&cpl<=refCpl*0.6&&plan<=refPlan*0.5&&m.sg<=1){
+    // zit het lage plan % bij één verkoper? dan is het een opvolgpunt (👤 Opvolging), geen formulierprobleem
+    const byO={}; u.node.leads.filter(l=>l.cd>=a&&l.cd<=b).forEach(l=>{ const o=l.owner||"(geen eigenaar)"; const x=byO[o]||(byO[o]={n:0,g:0}); x.n++; if(l.pd>=0) x.g++; });
+    let worst=null; for(const [o,x] of Object.entries(byO)){ if(x.n>=10&&o!=="(geen eigenaar)"&&(!worst||x.g/x.n<worst.g/worst.n)) worst={o,...x}; }
+    const restN=worst?n-worst.n:0, restG=worst?m.g-worst.g:0; const restPlan=restN>=10?restG/restN:null;
+    const salesSide=!!(worst&&restPlan!=null&&restPlan>=refPlan*0.8&&worst.g/worst.n<=restPlan*0.5);
+    if(cpl!=null&&refCpl&&cpl<=refCpl*0.6&&plan<=refPlan*0.5&&m.sg<=1&&!salesSide){
       out.push({...base,type:"kwaliteit",w:kpd*30*0.5,txt:`Goedkope leads (${eur0(cpl)} per lead, gemiddeld ${eur0(refCpl)}) maar maar ${r1(plan*100)}% plant een intake (gemiddeld ${r1(refPlan*100)}%) en ${m.sg} klant${m.sg===1?"":"en"} op ${eur0(m.spend)}. Dit is de goedkope-leads-val: het formulier laat te veel mensen zonder intentie door. Actie: een extra kwalificatievraag in het formulier (bv. "Wanneer wil je starten?" of een budget/tijdsinvestering-vraag), of overstappen op het "higher intent"-formulier${u.platform==="meta"?" (Meta: leadformulier op 'Hogere intentie', of eerst naar de landingspagina)":""}. Meet daarna 2 weken opnieuw; blijft plan % onder de helft van gemiddeld, dan stoppen.`}); }
     if(junk>=0.25&&junkN>=8){
       out.push({...base,type:"kwaliteit",w:kpd*30*junk,txt:`${junkN} van de ${n} leads (${r1(junk*100)}%) zijn rommel: verkeerde contactgegevens, spreekt geen Nederlands of te jong. Dat is een targeting/formulier-probleem, geen sales-probleem. Actie: taal Nederlands als vereiste in de doelgroep, leeftijd 18+, telefoonnummer-validatie (NL-formaat) en een vraag "Ik heb dit formulier bewust ingevuld" of dubbele bevestiging in het formulier.`}); }
@@ -663,7 +668,89 @@ function adviceEarlyCalc(N){
   }
   return out;
 }
-const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻",kwaliteit:"⚠️",vroeg:"⏱"}, ADV_LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven",kwaliteit:"Leadkwaliteit",vroeg:"Vroeg signaal"};
+// ---- sales × bron: plant elke verkoper de leads uit elke campagne even goed in? (v2.9) ----
+// Zelfde leads als de rest van het dashboard: cohort op leaddatum, betaalde kanalen, zonder party. SQL = intake gepland.
+let smMetric="g", smOpen=new Set();
+const SM_MET={g:{lab:"SQL % (intake gepland)",f:o=>o.g,short:"intakes gepland"},sh:{lab:"Show % (intake gehouden)",f:o=>o.sh,short:"intakes gehouden"},sg:{lab:"Klant %",f:o=>o.sg,short:"klanten"}};
+function salesMatrix(a,b){
+  const mk="sm|"+a+"|"+b+"|"+(PARTY?1:0); if(MEMO.adv.has(mk)) return MEMO.adv.get(mk);
+  const ls=L.filter(l=>!l.party&&l.cd>=a&&l.cd<=b&&(l.platform==="meta"||l.platform==="google"||l.platform==="tiktok"));
+  const oc={}; ls.forEach(l=>{ const o=l.owner||"(geen eigenaar)"; oc[o]=(oc[o]||0)+1; });
+  const owners=Object.entries(oc).filter(([o,n])=>n>=8&&o!=="(geen eigenaar)").sort((x,y)=>y[1]-x[1]).map(([o])=>o);
+  const ownerOf=l=>{ const o=l.owner||"(geen eigenaar)"; return o==="(geen eigenaar)"?o:(owners.includes(o)?o:"Overig"); };
+  const cols=owners.slice(); if(ls.some(l=>ownerOf(l)==="Overig")) cols.push("Overig"); if(ls.some(l=>!l.owner)) cols.push("(geen eigenaar)");
+  const cc={}; ls.forEach(l=>{ const c=campLab(l); cc[c]=(cc[c]||0)+1; });
+  const camps=Object.entries(cc).filter(([c,n])=>n>=10&&!/^\((campagne onbekend|niet betaald)/.test(c)).sort((x,y)=>y[1]-x[1]).slice(0,14).map(([c])=>c);
+  const cell=()=>({n:0,g:0,sh:0,sg:0,leads:[]}); const add=(o,l)=>{ o.n++; if(l.pd>=0) o.g++; if(l.is_show) o.sh++; if(l.is_signed) o.sg++; o.leads.push(l); };
+  const M={}, rowT={}, colT={}, all=cell(), cinfo={};
+  for(const c of camps){ M[c]={}; rowT[c]=cell(); for(const o of cols) M[c][o]=cell(); }
+  for(const o of cols) colT[o]=cell();
+  for(const l of ls){ const o=ownerOf(l); add(all,l); add(colT[o],l); const c=campLab(l); if(!M[c]) continue; add(M[c][o],l); add(rowT[c],l); if(!cinfo[c]) cinfo[c]={platform:l.platform,cid:l.campaign_id||""}; }
+  const out={a,b,ls,owners:cols,camps,M,rowT,colT,all,cinfo}; MEMO.adv.set(mk,out); return out;
+}
+// afwijkingen: verkoper × campagne (≥ 10 leads) t.o.v. de rest van het team op dezelfde campagne (≥ 10 leads); plus verkoper totaal t.o.v. de rest van het team
+function salesFlags(SM,met){
+  const F=SM_MET[met||"g"].f; const out=[];
+  const sub=(t,c)=>({n:t.n-c.n,g:t.g-c.g,sh:t.sh-c.sh,sg:t.sg-c.sg});
+  const cmp=(cell,rest,ctx)=>{ if(cell.n<10||rest.n<10) return; const r=F(cell)/cell.n, rr=F(rest)/rest.n, d=r-rr, missed=(rr-r)*cell.n;
+    if(r<=rr*0.5&&d<=-0.08) out.push({...ctx,dir:"laag",r,rr,n:cell.n,k:F(cell),rn:rest.n,rk:F(rest),missed,leads:cell.leads});
+    else if(r>=rr*1.5&&d>=0.08) out.push({...ctx,dir:"hoog",r,rr,n:cell.n,k:F(cell),rn:rest.n,rk:F(rest),missed,leads:cell.leads}); };
+  for(const o of SM.owners){ if(o==="Overig"||o==="(geen eigenaar)") continue;
+    for(const c of SM.camps) cmp(SM.M[c][o],sub(SM.rowT[c],SM.M[c][o]),{owner:o,camp:c,scope:"camp",...SM.cinfo[c]});
+    cmp(SM.colT[o],sub(SM.all,SM.colT[o]),{owner:o,camp:null,scope:"all"}); }
+  return out.sort((x,y)=>Math.abs(y.missed)-Math.abs(x.missed));
+}
+// adviesregel 👤 Opvolging: één verkoper plant de leads uit een campagne niet in terwijl de rest van het team dat wél doet → sales-punt, geen advertentiepunt
+function adviceFollow(a,b){ const mk="o|"+a+"|"+b+"|"+(PARTY?1:0); if(MEMO.adv.has(mk)) return MEMO.adv.get(mk); const out=adviceFollowCalc(a,b); MEMO.adv.set(mk,out); return out; }
+function adviceFollowCalc(a,b){
+  const out=[]; const SM=salesMatrix(a,b); const days=b-a+1;
+  const cm={}; for(const p of treeMemo(a,b)) for(const c of p.children) if(c.cid) cm[c.label]=c.m;
+  for(const f of salesFlags(SM,"g")){ if(f.dir!=="laag"||f.missed<2) continue;
+    const m=f.camp?cm[f.camp]:null; const cps=m&&m.g?m.spend/m.g:null;   // advertentiekosten per SQL van die campagne
+    const w=(cps?f.missed*cps:f.missed*60)*(30/days);
+    const unit=f.camp?f.camp+" → "+f.owner:"Alle betaalde campagnes → "+f.owner;
+    out.push({type:"opvolging",label:unit,cname:f.camp||"Alle betaalde campagnes",sname:f.owner,platform:f.platform||"meta",cid:f.cid||"",sid:null,wa:a,wb:b,m:m||{spend:0,n:f.n,g:f.k,sh:0,sg:0,cpk:null},manual:true,w,owner:f.owner,
+      txt:`${f.owner} kreeg ${f.n} leads${f.camp?" uit deze campagne":""} en plande er ${f.k} in (${r1(f.r*100)}%). De rest van het team plant ${r1(f.rr*100)}% (${f.rk} van ${f.rn}). Dat scheelt ≈ ${Math.round(f.missed)} intakes${cps?` (≈ ${eur0(f.missed*cps)} aan advertentiekosten)`:""}. Dit is een opvolgpunt voor sales (speed-to-lead, belpogingen, script) — geen reden om de advertentie te veranderen. Check eerst: kreeg ${f.owner} deze leads op andere momenten (avond/weekend) of via een andere route dan de rest?`});
+  }
+  return out;
+}
+function smCls(r,ref,n){ if(r==null||n<5) return "sm-na"; if(!ref) return "sm-3"; const q=r/ref; return q<0.5?"sm-1":q<0.8?"sm-2":q<=1.2?"sm-3":q<=1.5?"sm-4":"sm-5"; }
+function smPick(met){ smMetric=met; drawSales(); }
+function smTog(k){ smOpen.has(k)?smOpen.delete(k):smOpen.add(k); drawSales(); }
+function smDetail(c,o){ tab="tree"; detail={key:"__ALL__",set:"nieuw"}; dFilt={}; if(c) dFilt.camp=new Set([c]); if(o&&o!=="Overig") dFilt.owner=new Set([o]); dOut=null; dfAll={}; dShowAll=false; dDim=o?"fase":"owner"; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
+function drawSales(){
+  const w=document.getElementById("saleswrap"); const SM=salesMatrix(A,B); const MT=SM_MET[smMetric]; const F=MT.f;
+  const pc=o=>o&&o.n?F(o)/o.n:null; const refR=pc(SM.all); const fresh=B>NOW-14;
+  let h=`<div class="cmp" style="padding:12px 16px;margin-bottom:10px"><b>Plant elke verkoper de leads uit elke campagne even goed in?</b> Leads op leaddatum in de gekozen periode, betaalde kanalen, zonder party. <b>SQL = intake gepland.</b> Kleur = vergeleken met de rest van het team. Klik op een getal voor de namen.${fresh?` <span class="sm-warn">Let op: de periode loopt tot ${fmtY(B)} — leads jonger dan 2 weken zijn vaak nog niet ingepland. Kies een periode die minstens 2 weken geleden eindigt voor een eerlijk beeld.</span>`:""}</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Maatstaf:</span>${Object.entries(SM_MET).map(([k,v])=>`<div class="wchip sm${smMetric===k?" on":""}" onclick="smPick('${k}')">${v.lab}</div>`).join("")}</div>`;
+  if(!SM.ls.length){ h+=`<div class="empty">Geen betaalde leads in deze periode.</div>`; w.innerHTML=h; return; }
+  // kaarten per verkoper
+  h+=`<div class="smcards">`+SM.owners.filter(o=>o!=="Overig").map(o=>{ const t=SM.colT[o]; const r=pc(t); const rest={n:SM.all.n-t.n,g:SM.all.g-t.g,sh:SM.all.sh-t.sh,sg:SM.all.sg-t.sg}; const rr=pc(rest); const d=(r!=null&&rr!=null)?(r-rr)*100:null;
+    return `<div class="smcard ${smCls(r,rr,t.n)}" onclick="smDetail(null,${jq(o)})" title="Klik voor de namen"><div class="smo">${esc(o)}</div><div class="smv">${r==null?"—":r1(r*100)+"%"}</div><div class="sms">${F(t)} ${MT.short} van ${t.n} leads${d!=null?`<br>rest van het team ${r1(rr*100)}% (${d>=0?"+":"−"}${r1(Math.abs(d))} pt)`:""}</div></div>`; }).join("")
+    +`<div class="smcard sm-3"><div class="smo">Team totaal</div><div class="smv">${refR==null?"—":r1(refR*100)+"%"}</div><div class="sms">${F(SM.all)} ${MT.short} van ${SM.all.n} leads</div></div></div>`;
+  // heatmap campagne × verkoper
+  h+=`<div class="cmp" style="margin-top:12px;overflow-x:auto"><h3>Per campagne × verkoper <span class="chsub">${MT.lab} · campagnes met ≥ 10 leads · cel = percentage, eronder aantal</span></h3><table class="smtbl"><tr><th>Campagne</th>${SM.owners.map(o=>`<th>${esc(o)}</th>`).join("")}<th>Totaal</th></tr>`;
+  for(const c of SM.camps){ const T=SM.rowT[c]; const rowRef=pc(T);
+    h+=`<tr><td class="smc" onclick="smDetail(${jq(c)},null)" title="Klik voor de namen"><span class="dot" style="background:${PC((SM.cinfo[c]||{}).platform)}"></span>${esc(c)}</td>`
+      +SM.owners.map(o=>{ const x=SM.M[c][o]; const r=pc(x); return `<td class="smcell ${smCls(r,rowRef,x.n)}" onclick="smDetail(${jq(c)},${jq(o)})"><b>${x.n?(r1(r*100)+"%"):"·"}</b><small>${x.n?F(x)+" / "+x.n:""}</small></td>`; }).join("")
+      +`<td class="smcell smt"><b>${rowRef==null?"—":r1(rowRef*100)+"%"}</b><small>${F(T)} / ${T.n}</small></td></tr>`; }
+  h+=`<tr class="smtot"><td>Alle betaalde campagnes</td>${SM.owners.map(o=>{ const t=SM.colT[o]; const r=pc(t); return `<td class="smcell ${smCls(r,refR,t.n)}" onclick="smDetail(null,${jq(o)})"><b>${t.n?(r1(r*100)+"%"):"·"}</b><small>${t.n?F(t)+" / "+t.n:""}</small></td>`; }).join("")}<td class="smcell smt"><b>${refR==null?"—":r1(refR*100)+"%"}</b><small>${F(SM.all)} / ${SM.all.n}</small></td></tr></table>`;
+  h+=`<p class="note">Rijen: campagnes met minstens 10 leads in de periode (op leaddatum). Kolommen: verkopers met minstens 8 leads; kleinere onder "Overig"; "(geen eigenaar)" = nog niet toegewezen. Kleur per cel t.o.v. het rijgemiddelde (rood &lt; 50%, oranje &lt; 80%, grijs ≈ gelijk, groen &gt; 120%, donkergroen &gt; 150%). Cellen met minder dan 5 leads blijven grijs.</p></div>`;
+  // werklijst: afwijkingen
+  const flags=salesFlags(SM,smMetric); const laag=flags.filter(f=>f.dir==="laag"), hoog=flags.filter(f=>f.dir==="hoog");
+  h+=`<div class="cmp" style="margin-top:12px"><h3>👤 Afwijkingen per verkoper <span class="chsub">minstens 10 leads bij de verkoper én 10 bij de rest van het team; afwijking ≥ 8 punten en minstens de helft / anderhalf keer</span></h3>`;
+  if(!flags.length) h+=`<div class="empty">Geen opvallende verschillen tussen verkopers in deze periode. 👌</div>`;
+  const row=(f,i)=>{ const k=(f.camp||"ALL")+"|"+f.owner; const open=smOpen.has(k); const st=f.dir==="laag"?"hi":"ok";
+    const head=f.camp?`<b>${esc(f.owner)}</b> op <b>${esc(f.camp)}</b>`:`<b>${esc(f.owner)}</b> over alle betaalde campagnes`;
+    const txt=f.dir==="laag"?`${r1(f.r*100)}% ${MT.short} (${f.k} van ${f.n}) — rest van het team ${r1(f.rr*100)}% (${f.rk} van ${f.rn}) → ≈ ${Math.round(f.missed)} ${MT.short} minder dan verwacht.`:`${r1(f.r*100)}% ${MT.short} (${f.k} van ${f.n}) — rest van het team ${r1(f.rr*100)}% (${f.rk} van ${f.rn}) → ≈ ${Math.round(-f.missed)} ${MT.short} méér dan verwacht.`;
+    let body="";
+    if(open){ const ls=f.leads.slice().sort((x,y)=>y.cd-x.cd);
+      body=`<div class="advx"><p>${f.dir==="laag"?"Sales-punt, geen advertentiepunt: dezelfde campagne levert bij de rest van het team wél intakes op. Check speed-to-lead, aantal belpogingen en het moment van binnenkomst (avond/weekend) voor deze verkoper.":"Goed om te weten wie deze bron het best opvolgt — mogelijk iets om te delen met het team."}</p><table><tr><th>Lead</th><th>Datum</th><th>Fase</th><th>Verliesreden</th></tr>${ls.slice(0,60).map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${fmt(l.cd)}</td><td>${esc(l.stage_name||"—")}${l.lost&&l.stage_position!==0?" · verloren":""}</td><td><small>${esc(l.lost?(l.lost_reason||"(geen reden)"):"")}</small></td></tr>`).join("")}</table>${ls.length>60?`<div class="more">eerste 60 van ${ls.length}</div>`:""}</div>`; }
+    return `<div class="advrow ${st}${open?" open":""}" onclick="smTog(${jq(k)})"><span class="sevb ${f.dir==="laag"?"hi":"ok"}">${f.dir==="laag"?"Sales-punt":"Sterk"}</span><span class="advmain">${head}</span><span class="advdata">${txt}</span><i class="chev${open?" open":""}"></i>${body}</div>`; };
+  h+=laag.map(row).join("")+hoog.map(row).join("")+`</div>`;
+  w.innerHTML=h;
+}
+const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻",kwaliteit:"⚠️",vroeg:"⏱",opvolging:"👤"}, ADV_LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven",kwaliteit:"Leadkwaliteit",vroeg:"Vroeg signaal",opvolging:"Opvolging (sales)"};
 let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
 // ---- AI-analyse op aanvraag (kost alleen iets als je op de knop drukt; antwoord wordt in de browser bewaard) ----
 const AI_URL=DATA_URL;   // zelfde endpoint + toegangscode, body.action="ai" → AI-branch in n8n-workflow 13
@@ -681,7 +768,8 @@ function aiPayload(){
   // sales-kant (SOP): verdeling over eigenaren/setters, no-show, verliesredenen — rijpe leads 2–8 weken
   const rl=L.filter(l=>!l.party&&l.cd>=N-57&&l.cd<=N-14); const grp=(f)=>{ const m={}; rl.forEach(l=>{ const k=f(l)||"(leeg)"; const o=m[k]||(m[k]={leads:0,gepland:0,shows:0,noshow:0,klanten:0}); o.leads++; if(l.pd>=0) o.gepland++; if(l.is_show) o.shows++; if(l.is_noshow) o.noshow++; if(l.is_signed) o.klanten++; }); return Object.fromEntries(Object.entries(m).filter(([k,o])=>o.leads>=5).map(([k,o])=>[k,{...o,plan_pct:Math.round(o.gepland/o.leads*1000)/10,noshow_pct:(o.shows+o.noshow)?Math.round(o.noshow/(o.shows+o.noshow)*1000)/10:null}])); };
   const lostAll={}; rl.filter(l=>l.lost).forEach(l=>{ const k=l.lost_reason||"(geen reden)"; lostAll[k]=(lostAll[k]||0)+1; });
-  const sales={definitie:"SQL = intake gepland; show = intake heeft plaatsgevonden; klant = getekend",per_eigenaar:grp(l=>l.owner),per_setter:grp(l=>l.setter),verliesredenen_top:Object.entries(lostAll).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>k+" "+v).join(", "),noshow_pct_totaal:(()=>{ const sh=rl.filter(l=>l.is_show).length, ns=rl.filter(l=>l.is_noshow).length; return (sh+ns)?Math.round(ns/(sh+ns)*1000)/10:null; })()};
+  const smF=salesFlags(salesMatrix(N-57,N-14),"g").slice(0,8).map(f=>`${f.owner} × ${f.camp||"alle betaalde campagnes"}: ${r1(f.r*100)}% SQL (${f.k}/${f.n}) vs rest team ${r1(f.rr*100)}% (${f.rk}/${f.rn}) → ${f.dir}`);
+  const sales={definitie:"SQL = intake gepland; show = intake heeft plaatsgevonden; klant = getekend",verkoper_x_bron_afwijkingen:smF,per_eigenaar:grp(l=>l.owner),per_setter:grp(l=>l.setter),verliesredenen_top:Object.entries(lostAll).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>k+" "+v).join(", "),noshow_pct_totaal:(()=>{ const sh=rl.filter(l=>l.is_show).length, ns=rl.filter(l=>l.is_noshow).length; return (sh+ns)?Math.round(ns/(sh+ns)*1000)/10:null; })()};
   return {datum:fmtY(N),plafond_kosten_per_klant:MAXCPK(),kpi:kp,campagnes_rijp_2_8wk:camps,sales_rijp_2_8wk:sales,adviezen_vandaag:adv,opmerkingen:["Cohort-telling: alles hangt aan de leaddatum.","Mediaan lead→tekenen 12 dagen, 95% binnen 30.","Doel is sales qualified leads (intakes gepland) en klanten, niet goedkope leads.","Meta-kosten alleen per campagne/adset, niet per plaatsing.","Speed-to-lead staat niet in deze data (wel in het sales-dashboard)."]};
 }
 async function aiRun(){
@@ -713,7 +801,8 @@ function advCur(N){
   const sure=adviceFor(N-57,N-28,N).filter(t=>t.type==="terugschroeven");   // het negatieve kosten/klant-oordeel pas als ~95% getekend heeft
   const qual=adviceQual(N-57,N-14,N);   // leadkwaliteit: goedkoop maar plant/tekent niet, of rommel-leads — over uitgerijpte leads
   const early=adviceEarly(N);           // vroeg signaal: geld zonder leads / leads zonder intakes in de eerste 2–3 weken
-  return fresh.concat(ripe).concat(sure).concat(qual).concat(early);
+  const fol=adviceFollow(N-57,N-14);    // opvolging: één verkoper plant de leads uit een bron niet in, de rest wél — sales-punt (zelfde rijpe venster als leadkwaliteit)
+  return fresh.concat(ripe).concat(sure).concat(qual).concat(early).concat(fol);
 }
 // consistentie: campagne knijpen (stoppen/halveren/terugschroeven) én adset opschalen binnen dezelfde campagne → één verschuif-advies op de adset
 function advConflict(list){
@@ -796,8 +885,8 @@ function folExtra(val){ try{ localStorage.dpacMktFolExtra=String(val||""); }catc
 // herkomst + onderbouwing van één advies (uitklappaneel, gedeeld door Advies- en Opgevolgd-tab)
 function advSrc(ad){
   const sn=stNowOf(ad);
-  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker.",kwaliteit:"Kwaliteitsregel: gemeten op leads van 2–8 weken geleden, vergeleken met het account-gemiddelde in datzelfde venster. Goedkoop is pas goed als het ook intakes en klanten oplevert.",vroeg:"Vroeg signaal: laatste 14 dagen (geld zonder leads) of leads van 7–20 dagen oud (plan %). Geen eindoordeel, wel een reden om nu al te kijken in plaats van 6 weken te wachten."};
-  return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname||ad.label)}</b></div>${ad.sname?`<div><small>Adset</small><b>${esc(ad.sname)}</b></div>`:""}${ad.wa!=null?`<div><small>Meetvenster (leads)</small><b>${fmtY(ad.wa)} t/m ${fmtY(ad.wb)}</b></div>`:""}<div><small>Cijfers in dat venster</small><b>${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · "+eur0(ad.m.cpk)+"/klant":""}</b></div>${sn?`<div><small>Nu ingesteld</small><b>${sn.status==="uit"?"staat uit":(sn.budget!=null?eur0(sn.budget)+"/dag":"aan")}</b></div>`:""}</div><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY[ad.type]||""}</p>`;
+  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker.",kwaliteit:"Kwaliteitsregel: gemeten op leads van 2–8 weken geleden, vergeleken met het account-gemiddelde in datzelfde venster. Goedkoop is pas goed als het ook intakes en klanten oplevert.",vroeg:"Vroeg signaal: laatste 14 dagen (geld zonder leads) of leads van 7–20 dagen oud (plan %). Geen eindoordeel, wel een reden om nu al te kijken in plaats van 6 weken te wachten.",opvolging:"Opvolgregel: leads van 2–8 weken geleden, per verkoper vergeleken met de rest van het team op dezelfde bron (beide ≥ 10 leads). Levert dezelfde bron bij de rest wél intakes op, dan ligt het niet aan de advertentie. Zie de tab 🤝 Sales × bron."};
+  return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname||ad.label)}</b></div>${ad.sname?`<div><small>${ad.type==="opvolging"?"Verkoper":"Adset"}</small><b>${esc(ad.sname)}</b></div>`:""}${ad.wa!=null?`<div><small>Meetvenster (leads)</small><b>${fmtY(ad.wa)} t/m ${fmtY(ad.wb)}</b></div>`:""}<div><small>Cijfers in dat venster</small><b>${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · "+eur0(ad.m.cpk)+"/klant":""}</b></div>${sn?`<div><small>Nu ingesteld</small><b>${sn.status==="uit"?"staat uit":(sn.budget!=null?eur0(sn.budget)+"/dag":"aan")}</b></div>`:""}</div><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY[ad.type]||""}</p>`;
 }
 function drawAdvice(){
   const w=document.getElementById("advwrap");
@@ -833,6 +922,7 @@ function drawAdvice(){
     <li><b>Terugschroeven</b>: kosten/klant boven 125% van het plafond bij leads van 4–8 weken oud — dan heeft ~95% getekend, dus het oordeel is zeker.</li>
     <li><b>⚠️ Leadkwaliteit</b>: leads van 2–8 weken oud, ≥ 30 stuks: kosten per lead ≤ 60% van gemiddeld maar plan % ≤ de helft van gemiddeld en hooguit 1 klant → goedkope leads zonder intentie (formulier verzwaren); of ≥ 25% rommel-leads (verkeerde gegevens, geen Nederlands, te jong) → targeting/formulier.</li>
     <li><b>⏱ Vroeg signaal</b>: € 250+ in 14 dagen zonder één lead (tracking checken), of ≥ 20 leads van 7–20 dagen oud waarvan minder dan 40% van het gemiddelde plan % een intake plant. Geen eindoordeel — wel eerder kijken dan na 6 weken.</li>
+    <li><b>👤 Opvolging (sales)</b>: leads van 2–8 weken oud, per verkoper × campagne (beide ≥ 10 leads): plant een verkoper hooguit de helft van wat de rest van het team op dezelfde campagne plant (én ≥ 8 punten lager), dan is het een sales-punt en geen advertentiepunt. De ⚠️ Leadkwaliteit-regel slaat die campagne dan over. Details op 🤝 Sales × bron.</li>
     <li>Alleen campagnes die de laatste 14 dagen nog draaien; wat al uit staat of al is doorgevoerd (≥ 75% van de geadviseerde stap gezet) verschijnt hier niet meer — dat vind je terug op ✔️ Opgevolgd.</li>
     <li>Bij <b>Google</b> leeft het budget op campagneniveau (adviezen dus ook); bij <b>Meta/TikTok</b> per adset — campagne-adviezen zeggen er daarom bij dat je de wijziging over de best presterende adsets verdeelt.</li>
     <li>Botst "campagne knijpen" met "adset opschalen" binnen dezelfde campagne, dan wordt dat één <b>verschuif-advies</b>. Adset-oordelen alleen als de leads goed aan advertenties toewijsbaar zijn.</li>
@@ -1045,9 +1135,9 @@ function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
   drawTabs(); drawKpis();
   document.getElementById("kpis").style.display = tab==="tree"?"":"none";
-  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",fol:"folwrap",sign:"signwrap",data:"datawrap"};
+  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",fol:"folwrap",sales:"saleswrap",sign:"signwrap",data:"datawrap"};
   for(const k in ids) document.getElementById(ids[k]).style.display = tab===k?"block":"none";
-  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="fol") drawFollow(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
+  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="fol") drawFollow(); if(tab==="sales") drawSales(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
   drawDetail();
   if(window.parent!==window){ try{ window.parent.postMessage({dpacMkt:"h",h:document.body.scrollHeight},"*"); }catch(e){} }
 }
