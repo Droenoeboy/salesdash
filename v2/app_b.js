@@ -344,7 +344,9 @@ function insights(){
   const tPlan=pct(tot.gepland.length,tBeh), tShow=pct(tot.show.length,tot.agenda.length), tSign=pct(tot.signS.length,tot.show.length), tClose=pct(tot.closed.length,tot.closed.length+tot.closeLost.length);
   const MP=+(DEFS.min_volume_plan||15), MS=+(DEFS.min_volume_show||8), MG=+(DEFS.min_volume_sign||5);
   const items=[], rows=[]; const r1=v=>(v+"").replace(".",",");
+  const INACTIVE=["Connor"];
   for(const p of REPS){
+    if(INACTIVE.includes(p.n)) continue;
     const f=funnel(p.n,A,B); const beh=f.gepland.length+f.verloren.length;
     const pr=pct(f.gepland.length,beh), sr=pct(f.show.length,f.agenda.length), gr=pct(f.signS.length,f.show.length), cr=pct(f.closed.length,f.closed.length+f.closeLost.length);
     rows.push({n:p.n,beh,gepland:f.gepland.length,agenda:f.agenda.length,show:f.show.length,signS:f.signS.length,dossiers:f.dossiers.length,signO:f.signO.length,closed:f.closed.length,closeLost:f.closeLost.length,pr:beh>=MP?pr:null,sr:f.agenda.length>=MS?sr:null,gr:f.show.length>=MG?gr:null,cr:(f.closed.length+f.closeLost.length)>=MG?cr:null});
