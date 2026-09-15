@@ -360,7 +360,6 @@ function insights(){
   }
   const openGS=tot.geenShow.filter(l=>l.open);
   if(openGS.length>=3) items.push({cat:"funnel",imp:openGS.length*4, tag:openGS.length>=10?"hi":"mid", t:`${openGS.length} no-shows staan nog open`, p:`Van de ${tot.geenShow.length} geen-shows in deze periode zijn er ${openGS.length} nog niet verloren gezet — die zijn mogelijk nog te herplannen.`, d:`Nabellen/appen en direct een nieuwe intake plannen (klik show-blok → rechterlijst).`});
-  if(ts.unres.length>=3) items.push({cat:"funnel",imp:ts.unres.length*3, tag:"mid", t:`${ts.unres.length} intakes zonder geregistreerde uitkomst`, p:`Deze afspraken zijn geweest maar staan in GHL nog op new/confirmed. Zolang niemand show of no-show zet, tellen ze niet mee en klopt de show rate per slot niet.`, d:`Laat de intakers na elke intake-avond de status zetten (tab Afspraken → "Zonder uitkomst").`});
   if(ts.late.length>=3) items.push({cat:"funnel",imp:ts.late.length*4, tag:"mid", t:`${ts.late.length} late cancels (op de dag zelf)`, p:`${ts.late.length} van de ${ts.all.length} intakes zijn op de dag zelf geannuleerd — verloren tijd voor de intaker, maar deze mensen zijn makkelijker terug te halen dan een no-show.`, d:`Aparte reactivatie-flow voor late cancels; check of de bevestigingsreminder op tijd gaat.`});
   const withBoth=tot.agenda.filter(l=>l.cd>=0&&l.id_>=0);
   const fast=withBoth.filter(l=>l.id_-l.cd<=3), slow=withBoth.filter(l=>l.id_-l.cd>3);
