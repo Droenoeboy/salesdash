@@ -115,10 +115,11 @@
   /* v2.7: adviezen-ranglijst (zelfde stijl als marketing) */
   .advrows{display:flex;flex-direction:column;gap:8px}
   .advrow{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:var(--shadow);flex-wrap:wrap}
-  .advrow.hi{border-left-color:#e04b4b}.advrow.mid{border-left-color:#e08a00}.advrow.lo{border-left-color:#c9b94a}
+  .advrow.hi{border-left-color:#e04b4b}.advrow.mid{border-left-color:#e08a00}.advrow.lo{border-left-color:#c9b94a}.advrow.ok{border-left-color:#3aa76d}
   .advrow .rank{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--sel-bg);color:var(--sel-tx2);font-weight:800;font-size:13px;flex:none}
   .sevb{font-size:10px;font-weight:800;border-radius:99px;padding:3px 9px;text-transform:uppercase;letter-spacing:.3px;flex:none}
-  .sevb.hi{background:rgba(224,75,75,.16);color:#e04b4b}.sevb.mid{background:rgba(224,138,0,.16);color:#e08a00}.sevb.lo{background:rgba(201,185,74,.18);color:#a08f2c}
+  .sevb.hi{background:rgba(224,75,75,.16);color:#e04b4b}.sevb.mid{background:rgba(224,138,0,.16);color:#e08a00}.sevb.lo{background:rgba(201,185,74,.18);color:#a08f2c}.sevb.ok{background:rgba(58,167,109,.16);color:#3aa76d}
+  .adveur{flex:none;min-width:78px;font-size:13px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}.adveur.nil{color:var(--mut2);font-weight:600}
   .advmain{font-size:13.5px;min-width:180px;flex:1 1 220px;line-height:1.35}
   .advdata{font-size:11.5px;color:var(--mut);white-space:nowrap}
   .advdata.elli{overflow:hidden;text-overflow:ellipsis;max-width:430px;flex:0 1 auto}
@@ -449,6 +450,6 @@
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=42"></script>
+<script src="app.js?v=43"></script>
 </body>
 </html>
