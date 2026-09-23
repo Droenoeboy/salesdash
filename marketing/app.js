@@ -162,7 +162,7 @@ function dpPresetList(){
 //  DPAC · Marketing Dashboard — kern
 // ============================================================
 let CAMPS=new Map(), ADS=[], ADIDX=new Map(), CD=[], AD=[], FORMS=[];
-let STDATA=[], STNOW=new Map(), STPREV=new Map(), STLAST=-1;   // dagsnapshots van ingestelde budgetten + aan/uit (dpac.ad_entity_status)
+let STDATA=[], STNOW=new Map(), STPREV=new Map(), STLAST=-1, STAT_AT=0;   // dagsnapshots van ingestelde budgetten + aan/uit (dpac.ad_entity_status)
 let MODE="cohort";          // periode (leads op leaddatum, inschrijvingen op tekendatum) · cohort · gebeurd
 let GROUP="tree";            // tree (platform › campagne › adset › ad) · utm_source · placement · bron · temperature · owner · setter
 let PARTY=false;             // party/vacature-campagnes meetellen in totalen
@@ -206,7 +206,7 @@ function initApp(){
   STDATA=(D.entity_status||[]).map(r=>({d:dOf(r[0]),key:r[1]+"|"+r[2]+"|"+(r[3]||""),platform:r[1],cid:r[2],sid:r[3]||"",level:r[4],status:r[5],budget:r[6]==null?null:+r[6],name:r[7]}));
   STNOW=new Map(); STPREV=new Map();
   for(const r of STDATA){ const a2=STNOW.get(r.key); if(!a2||r.d>a2.d) STNOW.set(r.key,r); if(r.d<=NOW-7){ const b2=STPREV.get(r.key); if(!b2||r.d>b2.d) STPREV.set(r.key,r); } }
-  STLAST=STDATA.reduce((m,r)=>Math.max(m,r.d),-1);
+  STLAST=STDATA.reduce((m,r)=>Math.max(m,r.d),-1); STAT_AT=D.status_at?(Date.parse(D.status_at)||0):0;   // moment van de laatste budget/status-meting
   A=NOW-29; B=NOW; memoReset();
   render();
 }
@@ -994,56 +994,87 @@ function drawAdvice(){
 }
 
 // ---- opgevolgd: is elk advies daadwerkelijk uitgevoerd? (ingesteld budget/aan-uit uit het platform; terugval = besteding) ----
-// v2.11: vier blokken (Nog te doen · Afgevinkt, meting volgt · Doorgevoerd · Nog niet te beoordelen). Vinkje = "net gedaan in het overleg";
-// het verdwijnt vanzelf zodra de ochtendmeting (06:25) het als ✅ ziet. Afgevinkt maar na de volgende meting nog ❌ → terug naar Nog te doen met ⚠️.
-let folOpen=new Set(), folPlat=null, folClr=0, folGrpOpen=new Set(["todo","wacht"]);
+// v2.12 (23 sep, Abel): vinkje = "doorgevoerd" → de rij gaat meteen naar ✅ Doorgevoerd. Knop 🔄 Controleer meet direct in Google/Meta/TikTok
+// (workflow 23 via endpoint action status_check). Bevestigt de meting het → vinkje valt weg, meting neemt over. Ziet een meting ná het afvinken
+// het niet → ⚠️ Klopt niet. Niet-meetbare acties (🎯 ⚠️ ⏱ 👤) zijn klaar bij afvinken.
+let folOpen=new Set(), folPlat=null, folClr=0, folGrpOpen=new Set(["todo","fout"]), FOLCHK=null;
 function folTog(k){ folOpen.has(k)?folOpen.delete(k):folOpen.add(k); drawFollow(); }
 function folGrpTog(g){ folGrpOpen.has(g)?folGrpOpen.delete(g):folGrpOpen.add(g); drawFollow(); }
-const dayOfTs=ts=>{ const t=new Date(ts); return s2d(new Date(t.getFullYear(),t.getMonth(),t.getDate())); };
+const hhmm=ms=>{ const t=new Date(ms); return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"); };
+const whenTxt=ms=>{ if(!ms) return "—"; const t=new Date(ms), d=s2d(new Date(t.getFullYear(),t.getMonth(),t.getDate())); return (d===TODAY?"vandaag":d===TODAY-1?"gisteren":fmtY(d))+" "+hhmm(ms); };
 const FOL_STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],man:["☐","Zelf afvinken"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
-const FOL_GRP={todo:["🔴","Nog te doen","volgens de meting niet (genoeg) doorgevoerd, en nog niet afgevinkt"],wacht:["☑","Afgevinkt · meting volgt","door jullie afgevinkt; de meting van 06:25 bevestigt het en haalt het vinkje dan vanzelf weg"],ok:["✅","Doorgevoerd","bevestigd door de meting, of zelf afgevinkt bij acties die niet meetbaar zijn"],ey:["⏳","Nog niet te beoordelen","nog niets om mee te vergelijken"]};
+const FOL_GRP={todo:["🔴","Nog te doen","nog niet doorgevoerd en nog niet afgevinkt"],fout:["⚠️","Klopt niet","afgevinkt, maar de meting ziet het niet in het platform: check of de wijziging echt is opgeslagen"],ok:["✅","Doorgevoerd","afgevinkt of bevestigd door de meting"],ey:["⏳","Nog niet te beoordelen","nog niets om mee te vergelijken"]};
+function folMeasuredAfter(F){ if(!F.ts) return false; return STAT_AT? STAT_AT>F.ts : STLAST>dayOfTs(F.ts); }
+const dayOfTs=ts=>{ const t=new Date(ts); return s2d(new Date(t.getFullYear(),t.getMonth(),t.getDate())); };
 function folRows(){
   const list=advList(0);
   // adviezen die vorige week nog golden en nu niet meer, tonen we ook (meestal: opgevolgd)
   const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label&&c.type===p.type)).map(p=>({...p,vervallen:true}));
   let dirty=false;
   const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const key=folKey(ad); let F=folGet(ad);
-    if(F.done&&V.src!=="manual"&&V.st==="ok"){ FOLST[key]={...F,done:false,autoOk:Date.now()}; F=FOLST[key]; dirty=true; }   // meting ziet het → vinkje vanzelf weg
+    if(F.done&&V.src!=="manual"&&V.st==="ok"){ FOLST[key]={...F,done:false,autoOk:Date.now()}; F=FOLST[key]; dirty=true; }   // meting bevestigt → vinkje valt weg
     let disp; if(V.src==="manual") disp=F.done?"afgevinkt":"zelf afvinken";
     else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
     else if(V.bRef==null) disp="—";
     else disp=`${eur0(V.bRef)} → <b>${eur0(V.bNow)}/dag</b> ${V.src==="status"?"ingesteld":"besteed"}${V.tgt!=null?` <small>doel ≈ ${eur0(V.tgt)}</small>`:""}`;
-    const cday=F.done&&F.ts?dayOfTs(F.ts):null;
-    const stale=!!(F.done&&V.src!=="manual"&&cday!=null&&STLAST>cday&&(V.st==="no"||V.st==="mid"));
-    let grp; if(V.src==="manual") grp=F.done?"ok":"todo"; else if(V.st==="ok") grp="ok"; else if(V.st==="ey") grp="ey"; else if(F.done&&!stale) grp="wacht"; else grp="todo";
+    const meas=F.done&&V.src!=="manual"&&folMeasuredAfter(F);
+    const stale=!!(meas&&(V.st==="no"||V.st==="mid"));
+    const unv=!!(F.done&&V.src!=="manual"&&!stale);          // afgevinkt, meting heeft het nog niet (kunnen) zien
+    let grp; if(V.src==="manual") grp=F.done?"ok":"todo"; else if(stale) grp="fout"; else if(V.st==="ok"||F.done) grp="ok"; else if(V.st==="ey") grp="ey"; else grp="todo";
     let uitleg=V.uitleg;
-    if(grp==="wacht") uitleg+=` ☑ Door jullie afgevinkt op ${fmtY(cday)}. De meting van ${cday>=STLAST?"morgen ":""}06:25 bevestigt het; dan verdwijnt het vinkje vanzelf en schuift de rij naar Doorgevoerd.`;
-    if(stale) uitleg+=` ⚠️ Afgevinkt op ${fmtY(cday)}, maar de meting van ${fmtY(STLAST)} ziet het nog niet in het platform: check of de wijziging echt is opgeslagen.`;
-    return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,stale,cday}; });
+    if(unv) uitleg+=` ☑ Afgevinkt ${whenTxt(F.ts)}. Nog niet gecontroleerd: klik op 🔄 Controleer (of wacht op de meting van 06:25). Bevestigt de meting het, dan verdwijnt het vinkje vanzelf.`;
+    if(stale) uitleg+=` ⚠️ Afgevinkt ${whenTxt(F.ts)}, maar de meting van ${whenTxt(STAT_AT)} ziet het niet in het platform. Check of de wijziging echt is opgeslagen; klopt het wel, haal dan het vinkje weg en weer aan na de volgende controle.`;
+    return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,stale,unv}; });
   if(dirty) folSave();
   const ORD={no:0,mid:1,man:2,ok:3,ey:4}, PO={google:0,meta:1,tiktok:2};
   rows.sort((x,y)=> ((PO[x.platform]??9)-(PO[y.platform]??9)) || ORD[x.st]-ORD[y.st] || y.rank-x.rank);
   return rows;
 }
 const folMB=rows=>rows.filter(r=>r.type!=="opvolging");   // sales-opvolging (👤) hoort niet in het rapport voor de media buyer
-function folGroups(rows){ const G={todo:[],wacht:[],ok:[],ey:[]}; for(const r of rows) (G[r.grp]||G.todo).push(r); return G; }
+function folGroups(rows){ const G={todo:[],fout:[],ok:[],ey:[]}; for(const r of rows) (G[r.grp]||G.todo).push(r); return G; }
 function folClearAll(){ if(!folClr){ folClr=1; drawFollow(); setTimeout(()=>{ if(folClr){ folClr=0; drawFollow(); } },4000); return; }
   folClr=0; for(const k in FOLST){ if(FOLST[k]&&FOLST[k].done) FOLST[k]={...FOLST[k],done:false}; } folSave(); drawFollow(); }
+async function folCheckNow(){
+  if(FOLCHK&&FOLCHK.busy) return;
+  const before=Object.keys(FOLST).filter(k=>FOLST[k]&&FOLST[k].done);
+  FOLCHK={busy:true,at:Date.now(),before}; drawFollow();
+  try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"status_check"})});
+    const j=await resp.json().catch(()=>null);
+    if(!resp.ok||!j||!j.ok) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||("server gaf "+resp.status));
+    await ververs(); FOLCHK.busy=false; FOLCHK.done=Date.now(); drawFollow();
+  }catch(e){ FOLCHK.busy=false; FOLCHK.err=e.message; drawFollow(); }
+}
+function folCheckBanner(rows){
+  if(!FOLCHK) return "";
+  if(FOLCHK.busy) return `<div class="folcheck busy">🔄 Bezig met controleren in Google, Meta en TikTok… (± 15 seconden)</div>`;
+  if(FOLCHK.err) return `<div class="folcheck bad">❌ Controleren lukte niet: ${esc(FOLCHK.err)}</div>`;
+  const B=FOLCHK.before; const byKey=new Map(rows.map(r=>[folKey(r),r]));
+  let ok=0,bad=0,man=0; for(const k of B){ const r=byKey.get(k); const F=FOLST[k]||{}; if(r&&r.grp==="fout") bad++; else if(r&&r.V.src==="manual") man++; else if(!F.done&&(F.autoOk||0)>=FOLCHK.at) ok++; }
+  if(!B.length) return `<div class="folcheck">✔️ Gecontroleerd om ${hhmm(FOLCHK.done)}. Er stond niets afgevinkt; de statussen hieronder zijn bijgewerkt.</div>`;
+  return `<div class="folcheck${bad?" bad":""}">✔️ Gecontroleerd om ${hhmm(FOLCHK.done)} · van de ${B.length} afgevinkte punten: <b>✅ ${ok} bevestigd</b> in het platform${bad?` · <b>⚠️ ${bad} klopt niet</b> (staan hieronder bij Klopt niet)`:""}${man?` · ${man} niet meetbaar (formulier/targeting), die tellen als klaar`:""}${B.length-ok-bad-man>0?` · ${B.length-ok-bad-man} nog niet te beoordelen`:""}.</div>`;
+}
 function drawFollow(){ const w=document.getElementById("folwrap"); if(w) keepScroll(w,drawFollowInner); }
 function drawFollowInner(){
   const w=document.getElementById("folwrap");
   const all=folRows(); const GA=folGroups(all);
-  const PCNT={}; for(const r of GA.todo) PCNT[r.platform]=(PCNT[r.platform]||0)+1;
+  const PCNT={}; for(const r of GA.todo.concat(GA.fout)) PCNT[r.platform]=(PCNT[r.platform]||0)+1;
   const rows=folPlat?all.filter(r=>r.platform===folPlat):all; const G=folGroups(rows);
-  const nChk=Object.values(FOLST).filter(x=>x&&x.done).length;
+  const nChk=Object.values(FOLST).filter(x=>x&&x.done).length, busy=!!(FOLCHK&&FOLCHK.busy);
   const CLS={no:"hi",mid:"mid",man:"man",ok:"ok",ey:"ey"};
-  let h=`<div class="folbar"><div class="folkpis">`+["todo","wacht","ok","ey"].map(g=>`<div class="folkpi ${g}${folGrpOpen.has(g)?" on":""}" onclick="folGrpTog('${g}')" title="klik om dit blok open/dicht te klappen"><b>${G[g].length}</b><span>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</span></div>`).join("")
-    +`</div><div class="folbtns"><button class="rbtn sm2${folClr?" warn":""}" onclick="folClearAll()" ${nChk?"":"disabled"} title="Haalt alle vinkjes weg (opmerkingen blijven staan). Voor een nieuwe ronde.">${folClr?"Zeker? Klik nog een keer":"☐ Vinkjes wissen"+(nChk?` (${nChk})`:"")}</button><button class="rbtn sm2" onclick="folReport()" title="Tekstversie om zelf te kopiëren">📋 Tekst</button><button class="rbtn sm2 pri" onclick="folSendOpen()" title="Maakt het visuele rapport met alles wat nog open staat en stuurt het via de Slack-bot naar Ger en Abel (eerst zie je een voorbeeld)">📨 Stuur rapport naar Ger</button></div></div>`;
-  h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${folPlat==null?" on":""}" onclick="folPlat=null;drawFollow()">Alle <span class="n">${GA.todo.length} te doen</span></div>`+["google","meta","tiktok"].filter(p=>all.some(r=>r.platform===p)).map(p=>`<div class="wchip sm${folPlat===p?" on":""}" onclick="folPlat='${p}';drawFollow()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]||0} te doen</span></div>`).join("")+`</div>`;
-  const rowHtml=r=>{ const key=folKey(r); const opn=folOpen.has(key); const cls=r.stale?"hi":r.grp==="wacht"?"man":CLS[r.st];
-    const badge=r.stale?`<span class="sevb hi">⚠️ Afgevinkt, niet gezien</span>`:r.grp==="wacht"?`<span class="sevb man">☑ Meting volgt</span>`:`<span class="sevb ${CLS[r.st]}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`;
+  // stappenbalk: zo werk je deze tab af
+  let h=`<div class="folsteps">
+    <div class="folstep"><span class="stepn">1</span><div><b>Vink af wat je hebt doorgevoerd</b><small>de rij gaat meteen naar ✅ Doorgevoerd</small></div></div>
+    <div class="folstep"><span class="stepn">2</span><div><button class="rbtn sm2" onclick="folCheckNow()" ${busy?"disabled":""}>${busy?"🔄 Bezig…":"🔄 Controleer in Google, Meta en TikTok"}</button><small>laatst gemeten: ${whenTxt(STAT_AT)}</small></div></div>
+    <div class="folstep"><span class="stepn">3</span><div><button class="rbtn sm2 pri" onclick="folSendOpen()">📨 Stuur open punten naar Ger</button><small>via de Slack-bot, naar Ger en jou</small></div></div>
+    <div class="folmore"><span class="lnk" onclick="folReport()">kopieer als tekst</span> · <span class="lnk${folClr?" warn":""}" onclick="folClearAll()">${folClr?"zeker? klik nog een keer":"alle vinkjes weghalen"+(nChk?` (${nChk})`:"")}</span></div>
+  </div>`;
+  h+=folCheckBanner(all);
+  h+=`<div class="folkpis">`+["todo","fout","ok","ey"].filter(g=>g!=="ey"||G.ey.length).map(g=>`<div class="folkpi ${g}${folGrpOpen.has(g)?" on":""}" onclick="folGrpTog('${g}')" title="klik om dit blok open/dicht te klappen"><b>${G[g].length}</b><span>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</span></div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${folPlat==null?" on":""}" onclick="folPlat=null;drawFollow()">Alle <span class="n">${GA.todo.length+GA.fout.length} open</span></div>`+["google","meta","tiktok"].filter(p=>all.some(r=>r.platform===p)).map(p=>`<div class="wchip sm${folPlat===p?" on":""}" onclick="folPlat='${p}';drawFollow()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]||0} open</span></div>`).join("")+`</div>`;
+  const rowHtml=r=>{ const key=folKey(r); const opn=folOpen.has(key); const cls=r.stale?"hi":r.unv?"man":CLS[r.st];
+    const badge=r.stale?`<span class="sevb hi">⚠️ Klopt niet</span>`:r.unv?`<span class="sevb man">☑ Nog niet gecontroleerd</span>`:(r.V.src==="manual"&&r.F.done)?`<span class="sevb ok">☑ Afgevinkt</span>`:`<span class="sevb ${CLS[r.st]}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`;
     return `<div class="advrow ${cls}${opn?" open":""}${r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
-      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = dit hebben we net doorgevoerd. De meting van 06:25 bevestigt het en haalt het vinkje dan vanzelf weg."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
+      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = doorgevoerd. 🔄 Controleer kijkt daarna in het platform of het klopt."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
       +badge
       +`<span class="advmain"><b>${ADV_ICON[r.type]} ${ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</span>`
       +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span>`
@@ -1051,49 +1082,47 @@ function drawFollowInner(){
       +`<i class="chev${opn?" open":""}"></i>`
       +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div></div>`:"")
       +`</div>`; };
-  for(const g of ["todo","wacht","ok","ey"]){ const ls=G[g]; if(!ls.length&&g!=="todo") continue; const opn=folGrpOpen.has(g);
+  for(const g of ["todo","fout","ok","ey"]){ const ls=G[g]; if(!ls.length&&g!=="todo") continue; const opn=folGrpOpen.has(g);
     h+=`<div class="folgrp ${g}"><div class="folgrph" onclick="folGrpTog('${g}')"><i class="chev${opn?" open":""}"></i><b>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</b><span class="n">${ls.length}</span><small>${FOL_GRP[g][2]}</small></div>`;
     if(opn){ if(!ls.length) h+=`<div class="advrows"><div class="advrow ok"><span class="advmain">Niets meer te doen${folPlat?" voor "+esc(PN(folPlat)):""}. 👌</span></div></div>`;
       else { let lastP=null; h+=`<div class="advrows">`; for(const r of ls){ if(r.platform!==lastP){ lastP=r.platform; h+=`<div class="folplat"><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}<span class="n">${ls.filter(x=>x.platform===r.platform).length}</span></div>`; } h+=rowHtml(r); } h+=`</div>`; } }
     h+=`</div>`; }
-  h+=`<p class="note"><b>Hoe het werkt.</b> Elke ochtend om 06:25 meet het dashboard het <b>ingestelde budget en de aan/uit-status</b> in Google, Meta en TikTok (terugval: besteding per dag, laatste 7 volle dagen). <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit. <b>Vinkje</b> = "dit hebben we net gedaan" (bijvoorbeeld tijdens het overleg met Ger): de rij gaat naar <b>Afgevinkt · meting volgt</b>. Ziet de meting van de volgende ochtend het, dan verdwijnt het vinkje vanzelf en staat hij bij Doorgevoerd. Ziet de meting het dan nog níet, dan komt hij terug bij Nog te doen met ⚠️. Acties die niet meetbaar zijn (🎯 ⚠️ ⏱ 👤) zijn klaar zodra je ze afvinkt. <b>📨 Stuur rapport naar Ger</b> maakt een visueel rapport van wat nog open staat (plus jullie opmerkingen) en stuurt de link via de Slack-bot naar Ger en Abel. Vinkjes en opmerkingen bewaart deze browser.</p>`;
+  h+=`<p class="note"><b>Hoe het werkt.</b> Het dashboard meet elke ochtend om 06:25 het <b>ingestelde budget en de aan/uit-status</b> in Google, Meta en TikTok, en opnieuw als je op <b>🔄 Controleer</b> klikt (duurt ± 15 seconden). <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit. Een <b>vinkje</b> betekent "doorgevoerd": de rij gaat meteen naar ✅. Bevestigt de meting het, dan valt het vinkje weg en neemt de meting het over. Ziet een meting ná het afvinken het niet, dan staat de rij bij <b>⚠️ Klopt niet</b>. Acties die niet meetbaar zijn (🎯 ⚠️ ⏱ 👤) zijn klaar zodra je ze afvinkt. <b>📨 Stuur open punten naar Ger</b> zet alles wat nog open staat (plus jullie opmerkingen) in een visueel rapport en stuurt de link via de Slack-bot naar Ger en Abel. Vinkjes en opmerkingen bewaart deze browser.</p>`;
   w.innerHTML=h;
 }
 // ---- rapport voor de media buyer: tekst (kopiëren) en visueel (HTML, via de Slack-bot) ----
+const folTarget=r=>{ const mt=/zet naar ≈ € ([\d.]+)\/dag/.exec(r.txt||""); return mt?"€ "+mt[1]:eur0(r.V.tgt); };   // zelfde doelbedrag als in de adviestekst
 function folReportText(rows){
-  const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW); const G=folGroups(rows);
+  const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW); const G=folGroups(rows); const open=G.todo.concat(G.fout);
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
   const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}*: ${r.label}`;
-    if(V.src!=="manual"&&V.bRef!=null){ const mt=/zet naar ≈ € ([\d.]+)\/dag/.exec(r.txt||""); s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+(mt?"€ "+mt[1]:eur0(V.tgt))+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
-    if(r.stale) s+=` ⚠️ was afgevinkt, meting ziet het nog niet`;
+    if(V.src!=="manual"&&V.bRef!=null){ s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+folTarget(r)+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
+    if(r.stale) s+=` ⚠️ was afgevinkt, maar de meting ziet het niet`;
     s+=`\n   _${r.txt.replace(/\s+/g," ").slice(0,220)}${r.txt.length>220?"…":""}_`;
     if(r.F.note) s+=`\n   📝 ${r.F.note}`;
     return s; };
   const byPlat=list=>["google","meta","tiktok"].map(p=>{ const ls=list.filter(r=>r.platform===p); return ls.length?`*${PN(p)}*\n`+ls.map(line).join("\n"):""; }).filter(Boolean).join("\n\n");
-  let out=`*Marketing · acties voor deze week* (${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()})\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
-  out+= G.todo.length? `*Nog te doen (${G.todo.length})*\n\n`+byPlat(G.todo) : "*Nog te doen*: niets open, alles is doorgevoerd. 👌";
-  if(G.wacht.length) out+=`\n\n*Net doorgevoerd / besproken, meting bevestigt nog (${G.wacht.length})* ☑\n`+G.wacht.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
+  let out=`*Marketing · open punten* (${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()})\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
+  out+= open.length? `*Nog te doen (${open.length})*\n\n`+byPlat(open) : "*Nog te doen*: niets open, alles is doorgevoerd. 👌";
   if(extra.trim()) out+=`\n\n*Extra punten*\n${extra.trim()}`;
   if(rows.some(r=>r.F.note)) out+=`\n\n_📝 = onze opmerkingen; die gaan ook terug naar Claude als terugkoppeling op de adviezen._`;
-  if(G.ok.length) out+=`\n\n*Al doorgevoerd (${G.ok.length})* ✅\n`+G.ok.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
-  if(G.ey.length) out+=`\n\n*Nog niet te beoordelen (${G.ey.length})* ⏳\n`+G.ey.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}`).join("\n");
+  if(G.ok.length) out+=`\n\n*Doorgevoerd (${G.ok.length})* ✅\n`+G.ok.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.unv?" (afgevinkt, nog niet gecontroleerd)":r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
   return out;
 }
 function folReportHtml(rows,extra){
-  const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const G=folGroups(rows); const e=esc;
+  const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const G=folGroups(rows); const open=G.todo.concat(G.fout); const e=esc;
   const big=r=>{ const V=r.V; if(V.src==="manual"||V.bRef==null) return `<div class="big act">${r.type==="actie"?"instelling":"actie"}</div>`;
-    const mt=/zet naar ≈ € ([\d.]+)\/dag/.exec(r.txt||"");   // zelfde doelbedrag als in de adviestekst (huidig ingesteld × factor)
-    const nu=V.uit?"uit":eur0(V.bNow), naar=r.type==="stoppen"?"uit":(mt?"€ "+mt[1]:eur0(V.tgt)); return `<div class="big"><span>${nu}</span><i>→</i><b>${naar}</b>${r.type==="stoppen"?"":"<small>per dag</small>"}</div>`; };
+    const nu=V.uit?"uit":eur0(V.bNow), naar=r.type==="stoppen"?"uit":folTarget(r); return `<div class="big"><span>${nu}</span><i>→</i><b>${naar}</b>${r.type==="stoppen"?"":"<small>per dag</small>"}</div>`; };
   const wie=r=>`<div class="unit"><span class="pl" style="background:${PC(r.platform)}">${e(PN(r.platform))}</span>${e(r.cname||r.label)}${r.sname?` <em>›</em> ${e(r.sname)}`:""}</div>`;
-  const card=r=>`<div class="card${r.stale?" stale":""}"><div class="top"><div class="ty">${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])}</div>${big(r)}</div>${wie(r)}<p>${e(r.txt.replace(/\s+/g," ").slice(0,280))}${r.txt.length>280?"…":""}</p>${r.type==="actie"&&r.doen?`<p class="waar"><b>Waar:</b> ${e(r.doen)}</p>`:""}${r.stale?`<p class="warn">⚠️ Was afgevinkt, maar de meting ziet het nog niet in het platform.</p>`:""}${r.F.note?`<p class="note">📝 ${e(r.F.note)}</p>`:""}</div>`;
+  const card=r=>`<div class="card${r.stale?" stale":""}"><div class="top"><div class="ty">${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])}</div>${big(r)}</div>${wie(r)}<p>${e(r.txt.replace(/\s+/g," ").slice(0,280))}${r.txt.length>280?"…":""}</p>${r.type==="actie"&&r.doen?`<p class="waar"><b>Waar:</b> ${e(r.doen)}</p>`:""}${r.stale?`<p class="warn">⚠️ Was afgevinkt als doorgevoerd, maar de meting ziet het niet in het platform. Graag checken of het is opgeslagen.</p>`:""}${r.F.note?`<p class="note">📝 ${e(r.F.note)}</p>`:""}</div>`;
   const byP=ls=>["google","meta","tiktok"].map(p=>{ const x=ls.filter(r=>r.platform===p); return x.length?`<h3><span class="dot" style="background:${PC(p)}"></span>${e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
-  const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.platform)}"></span> ${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])} · ${e(r.label)}${r.ch?` <small>(${fmtY(r.ch.d)})</small>`:""}${r.F.note?` <small>📝 ${e(r.F.note)}</small>`:""}</li>`).join("")}</ul>`;
-  return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport media buyer · ${dat}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet"><style>
+  const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.platform)}"></span> ${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])} · ${e(r.label)}${r.unv?` <small>(afgevinkt, meting volgt)</small>`:r.ch?` <small>(${fmtY(r.ch.d)})</small>`:""}${r.F.note?` <small>📝 ${e(r.F.note)}</small>`:""}</li>`).join("")}</ul>`;
+  return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open punten media buyer · ${dat}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet"><style>
 :root{--bg:#0e0e0f;--card:#17171a;--line:#2a2a2e;--tx:#f2efe8;--mut:#9a968c;--roze:#c927b4;--rood:#e04b4b}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 Barlow,system-ui,sans-serif;padding:28px 16px}
 .w{max-width:980px;margin:0 auto}h1,h2,h3{font-family:"IBM Plex Sans Condensed",Barlow,sans-serif;font-weight:700;margin:0}
 h1{font-size:34px;line-height:1.1}h1 b{color:var(--roze)}.sub{color:var(--mut);margin:6px 0 22px;font-size:14px}
-.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}.kpi{background:var(--card);border:1px solid var(--line);padding:14px 16px}.kpi b{display:block;font:700 34px "IBM Plex Sans Condensed",Barlow,sans-serif}.kpi span{color:var(--mut);font-size:13px}.kpi.todo b{color:var(--roze)}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:10px}.kpi{background:var(--card);border:1px solid var(--line);padding:14px 16px}.kpi b{display:block;font:700 34px "IBM Plex Sans Condensed",Barlow,sans-serif}.kpi span{color:var(--mut);font-size:13px}.kpi.todo b{color:var(--roze)}
 h2{font-size:22px;margin:28px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}h3{font-size:17px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}h3 span{color:var(--mut);font-weight:600}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%}
 .cards{display:grid;gap:10px}.card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--roze);padding:14px 16px}.card.stale{border-left-color:var(--rood)}
@@ -1105,11 +1134,10 @@ p{margin:4px 0;color:#d6d2c8;font-size:14px}p.note{color:var(--tx);background:#1
 .extra{background:var(--card);border:1px solid var(--line);padding:12px 16px;white-space:pre-wrap}.foot{color:var(--mut);font-size:12.5px;margin-top:30px}
 @media(max-width:600px){.kpis{grid-template-columns:1fr}h1{font-size:28px}.big{font-size:24px}}
 </style></head><body><div class="w">
-<h1>Marketing · acties voor <b>deze week</b></h1><div class="sub">${dat} · uit het DPAC-marketingdashboard (tabblad Opgevolgd) · budgetten per adset bij Meta en TikTok, per campagne bij Google</div>
-<div class="kpis"><div class="kpi todo"><b>${G.todo.length}</b><span>nog te doen</span></div><div class="kpi"><b>${G.wacht.length}</b><span>net doorgevoerd, meting bevestigt nog</span></div><div class="kpi"><b>${G.ok.length}</b><span>al doorgevoerd</span></div></div>
-<h2>Nog te doen</h2>${G.todo.length?byP(G.todo):`<p>Niets open, alles is doorgevoerd. 👌</p>`}
+<h1>Marketing · <b>open punten</b></h1><div class="sub">${dat} · uit het DPAC-marketingdashboard (tabblad Opgevolgd) · budgetten per adset bij Meta en TikTok, per campagne bij Google</div>
+<div class="kpis"><div class="kpi todo"><b>${open.length}</b><span>nog te doen</span></div><div class="kpi"><b>${G.ok.length}</b><span>al doorgevoerd</span></div></div>
+<h2>Nog te doen</h2>${open.length?byP(open):`<p>Niets open, alles is doorgevoerd. 👌</p>`}
 ${extra&&extra.trim()?`<h2>Extra punten</h2><div class="extra">${e(extra.trim())}</div>`:""}
-${G.wacht.length?`<h2>Net doorgevoerd of besproken</h2><p style="color:var(--mut)">Afgevinkt in het overleg; de dagelijkse meting (06:25) bevestigt het.</p>${mini(G.wacht)}`:""}
 ${G.ok.length?`<h2>Al doorgevoerd ✅</h2>${mini(G.ok)}`:""}
 <div class="foot">📝 = opmerkingen van Abel en Ger; die gaan ook terug naar Claude als terugkoppeling op de adviezen. Er wordt niets automatisch gewijzigd in de advertentieplatforms.</div>
 </div></body></html>`;
@@ -1118,7 +1146,7 @@ function folModal(){ let m=document.getElementById("folmodal"); if(!m){ m=docume
 function folReport(){
   const rows=folMB(folRows()); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
   const m=folModal();
-  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📋 Rapport als tekst</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📋 Open punten als tekst</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
     <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="4" placeholder="bv. nieuwe video's klaar donderdag · TikTok-formulier aan GHL koppelen · …" oninput="folExtra(this.value);folReportRefresh()">${esc(extra)}</textarea></div>
     <div><label>Bericht (bewerkbaar, Slack-opmaak)</label><textarea id="foltxt" rows="18" oninput="this.dataset.edited=1">${esc(folReportText(rows))}</textarea></div></div>
     <div class="modalft"><span class="lbl" id="folcopied"></span><button class="rbtn sm2" onclick="folReportRefresh(true)">↺ Opnieuw genereren</button><button class="rbtn sm2 pri" onclick="folCopy()">Kopieer</button></div></div>`;
@@ -1129,10 +1157,10 @@ function folReportClose(){ const m=document.getElementById("folmodal"); if(m) m.
 async function folCopy(){ const ta=document.getElementById("foltxt"); const lb=document.getElementById("folcopied"); try{ await navigator.clipboard.writeText(ta.value); lb.textContent="gekopieerd"; }catch(e){ ta.select(); document.execCommand("copy"); lb.textContent="gekopieerd (fallback)"; } setTimeout(()=>{ if(lb) lb.textContent=""; },3000); }
 function folSendOpen(){
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const G=folGroups(folMB(folRows())); const m=folModal();
-  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📨 Rapport voor Ger (media buyer)</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+  const G=folGroups(folMB(folRows())); const m=folModal(); const nUnv=G.ok.filter(r=>r.unv).length;
+  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📨 Open punten naar Ger (media buyer)</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
     <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="6" placeholder="bv. nieuwe video's klaar donderdag · TikTok-formulier aan GHL koppelen · …" oninput="folExtra(this.value);folSendPreview()">${esc(extra)}</textarea>
-      <div class="folsendinfo"><b>${G.todo.length}</b> nog te doen · <b>${G.wacht.length}</b> net afgevinkt · <b>${G.ok.length}</b> al doorgevoerd<br>Gaat als <b>DM via de Slack-bot</b> naar <b>Ger</b> én naar <b>Abel</b>, met een link naar dit rapport. Opmerkingen (📝) gaan mee. Sales-opvolging (👤) blijft eruit: dat is niet voor de media buyer.</div></div>
+      <div class="folsendinfo"><b>${G.todo.length+G.fout.length}</b> nog te doen${G.fout.length?` (waarvan <b>${G.fout.length}</b> ⚠️ klopt niet)`:""} · <b>${G.ok.length}</b> doorgevoerd<br>Gaat als <b>DM via de Slack-bot</b> naar <b>Ger</b> én naar <b>Abel</b>, met een link naar dit rapport. Opmerkingen (📝) gaan mee. Sales-opvolging (👤) blijft eruit: dat is niet voor de media buyer.${nUnv?`<br><span class="folwarn">Tip: ${nUnv} afgevinkte punten zijn nog niet gecontroleerd. Klik eerst op 🔄 Controleer, dan weet je zeker dat alleen de echte open punten naar Ger gaan.</span>`:""}</div></div>
     <div><label>Voorbeeld (zo ziet Ger het)</label><iframe id="folprev" class="folprev" title="voorbeeld rapport"></iframe></div></div>
     <div class="modalft"><span class="lbl" id="folsent"></span><button class="rbtn sm2 pri" id="folsendbtn" onclick="folSend()">📨 Verstuur naar Ger en Abel</button></div></div>`;
   m.style.display="flex"; m.onclick=folReportClose; folSendPreview();
@@ -1140,9 +1168,9 @@ function folSendOpen(){
 function folSendPreview(){ const f=document.getElementById("folprev"); if(!f) return; let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){} f.srcdoc=folReportHtml(folMB(folRows()),extra); }
 async function folSend(test){
   const b=document.getElementById("folsendbtn"), lb=document.getElementById("folsent"); if(!b||b.disabled) return; b.disabled=true; lb.textContent="versturen…";
-  const rows=folMB(folRows()); const G=folGroups(rows); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const pp={}; G.todo.forEach(r=>pp[r.platform]=(pp[r.platform]||0)+1); const t=d2s(NOW);
-  const summary={datum:`${t.getDate()} ${MNDF[t.getMonth()]}`,todo:G.todo.length,just:G.wacht.length,done:G.ok.length,perPlatform:["google","meta","tiktok"].filter(p=>pp[p]).map(p=>({name:PN(p),n:pp[p]})),test:!!test};
+  const rows=folMB(folRows()); const G=folGroups(rows); const open=G.todo.concat(G.fout); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const pp={}; open.forEach(r=>pp[r.platform]=(pp[r.platform]||0)+1); const t=d2s(NOW);
+  const summary={datum:`${t.getDate()} ${MNDF[t.getMonth()]}`,todo:open.length,fout:G.fout.length,done:G.ok.length,perPlatform:["google","meta","tiktok"].filter(p=>pp[p]).map(p=>({name:PN(p),n:pp[p]})),test:!!test};
   try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"mb_report",summary,html:folReportHtml(rows,extra)})});
     const j=await resp.json().catch(()=>null);
     if(!resp.ok||!j||!j.ok) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||("server gaf "+resp.status));
