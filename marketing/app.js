@@ -162,7 +162,7 @@ function dpPresetList(){
 //  DPAC · Marketing Dashboard — kern
 // ============================================================
 let CAMPS=new Map(), ADS=[], ADIDX=new Map(), CD=[], AD=[], FORMS=[];
-let STDATA=[], STNOW=new Map(), STPREV=new Map(), STLAST=-1, STAT_AT=0;   // dagsnapshots van ingestelde budgetten + aan/uit (dpac.ad_entity_status)
+let STDATA=[], STNOW=new Map(), STPREV=new Map(), STLAST=-1, STAT_AT=0, AIADV=null;   // dagsnapshots van ingestelde budgetten + aan/uit (dpac.ad_entity_status)
 let MODE="cohort";          // periode (leads op leaddatum, inschrijvingen op tekendatum) · cohort · gebeurd
 let GROUP="tree";            // tree (platform › campagne › adset › ad) · utm_source · placement · bron · temperature · owner · setter
 let PARTY=false;             // party/vacature-campagnes meetellen in totalen
@@ -207,6 +207,9 @@ function initApp(){
   STNOW=new Map(); STPREV=new Map();
   for(const r of STDATA){ const a2=STNOW.get(r.key); if(!a2||r.d>a2.d) STNOW.set(r.key,r); if(r.d<=NOW-7){ const b2=STPREV.get(r.key); if(!b2||r.d>b2.d) STPREV.set(r.key,r); } }
   STLAST=STDATA.reduce((m,r)=>Math.max(m,r.d),-1); STAT_AT=D.status_at?(Date.parse(D.status_at)||0):0;   // moment van de laatste budget/status-meting
+  AIADV=(D.ai_advice&&D.ai_advice.advice)?D.ai_advice:null;
+  folMergeServer(D.followups||[]);
+  for(const k in FOLST){ const F=FOLST[k]; if(F&&!F.sy&&(F.done||F.rounded||F.note||F.confirmed)) folSync(k); }   // lokale vinkjes van vóór v2.15 één keer naar Supabase
   A=NOW-29; B=NOW; memoReset();
   render();
 }
@@ -813,44 +816,39 @@ const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"
 let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
 // ---- AI-analyse op aanvraag (kost alleen iets als je op de knop drukt; antwoord wordt in de browser bewaard) ----
 const AI_URL=DATA_URL;   // zelfde endpoint + toegangscode, body.action="ai" → AI-branch in n8n-workflow 13
-let AI={busy:false,err:null}; try{ AI=Object.assign(AI,JSON.parse(localStorage.dpacMktAI||"{}")); }catch(e){}
-function aiPayload(){
-  const N=NOW; const win=(a,b)=>{ const all=L.filter(l=>!l.party); return metrics(all,spendIn(a,b,r=>!(CAMPS.get(ck(r.platform,r.cid))||{}).party),a,b); };
-  const pick=m=>({spend:Math.round(m.spend),leads:m.n,cpl:m.cpl==null?null:Math.round(m.cpl),gepland:m.g,plan_pct:m.plan,shows:m.sh,show_pct:m.show,klanten:m.sg,cpk:m.cpk==null?null:Math.round(m.cpk),l2k_pct:m.l2k});
-  const kp={laatste_30d:pick(win(N-29,N)),rijp_2_8wk:pick(win(N-57,N-14)),dit_jaar:pick(win(s2d(new Date(d2s(N).getFullYear(),0,1)),N))};
-  const nodes=treeMemo(N-57,N-14);
-  const camps=[]; for(const p of nodes){ if(p.platform==="onbekend"||p.platform==="niet_betaald") continue; for(const c of p.children){ if(!c.cid||c.m.n<5&&c.m.spend<100) continue;
-    const lost={}; c.leads.filter(l=>l.lost&&l.cd>=N-57&&l.cd<=N-14).forEach(l=>{ const k=l.lost_reason||"(geen reden)"; lost[k]=(lost[k]||0)+1; });
-    const sn=STNOW.get(p.platform+"|"+c.cid+"|"); camps.push({platform:p.platform,campagne:c.label,...pick(c.m),status:sn?sn.status:null,budget_nu:sn&&sn.budget!=null?sn.budget:null,verliesredenen:Object.entries(lost).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>k+" "+v).join(", "),
-      adsets:c.children.filter(x=>x.key.startsWith("s:")&&(x.m.n>=5||x.m.spend>=100)).map(x=>({adset:x.label,...pick(x.m)}))}); } }
-  const adv=advList(0).slice(0,15).map(ad=>({type:ad.type,unit:ad.label,rang:Math.round(ad.rank),tekst:ad.txt,status_opvolging:advVerdict(ad).st,afgevinkt:!!folGet(ad).done,opmerking:folGet(ad).note||null}));
-  // sales-kant (SOP): verdeling over eigenaren/setters, no-show, verliesredenen — rijpe leads 2–8 weken
-  const rl=L.filter(l=>!l.party&&l.cd>=N-57&&l.cd<=N-14); const grp=(f)=>{ const m={}; rl.forEach(l=>{ const k=f(l)||"(leeg)"; const o=m[k]||(m[k]={leads:0,gepland:0,shows:0,noshow:0,klanten:0}); o.leads++; if(l.pd>=0) o.gepland++; if(l.is_show) o.shows++; if(l.is_noshow) o.noshow++; if(l.is_signed) o.klanten++; }); return Object.fromEntries(Object.entries(m).filter(([k,o])=>o.leads>=5).map(([k,o])=>[k,{...o,plan_pct:Math.round(o.gepland/o.leads*1000)/10,noshow_pct:(o.shows+o.noshow)?Math.round(o.noshow/(o.shows+o.noshow)*1000)/10:null}])); };
-  const lostAll={}; rl.filter(l=>l.lost).forEach(l=>{ const k=l.lost_reason||"(geen reden)"; lostAll[k]=(lostAll[k]||0)+1; });
-  const smF=salesFlags(salesMatrix(N-57,N-14),"g").slice(0,8).map(f=>`${f.owner} × ${f.camp||"alle betaalde campagnes"}: ${r1(f.r*100)}% SQL (${f.k}/${f.n}) vs rest team ${r1(f.rr*100)}% (${f.rk}/${f.rn}) → ${f.dir}`);
-  const sales={definitie:"SQL = intake gepland; show = intake heeft plaatsgevonden; klant = getekend",verkoper_x_bron_afwijkingen:smF,per_eigenaar:grp(l=>l.owner),per_setter:grp(l=>l.setter),verliesredenen_top:Object.entries(lostAll).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>k+" "+v).join(", "),noshow_pct_totaal:(()=>{ const sh=rl.filter(l=>l.is_show).length, ns=rl.filter(l=>l.is_noshow).length; return (sh+ns)?Math.round(ns/(sh+ns)*1000)/10:null; })()};
-  return {datum:fmtY(N),plafond_kosten_per_klant:MAXCPK(),kpi:kp,campagnes_rijp_2_8wk:camps,sales_rijp_2_8wk:sales,adviezen_vandaag:adv,opmerkingen:["Cohort-telling: alles hangt aan de leaddatum.","Mediaan lead→tekenen 12 dagen, 95% binnen 30.","Doel is sales qualified leads (intakes gepland) en klanten, niet goedkope leads.","Meta-kosten alleen per campagne/adset, niet per plaatsing.","Speed-to-lead staat niet in deze data (wel in het sales-dashboard)."]};
+// ---- AI-advies (v2.15): de AI is de adviseur, het algoritme de rekenmachine. Draait donderdag 06:40 (n8n) en op de knop; resultaat staat in Supabase (dpac.mkt_ai_advice), openen kost niets. ----
+let AIRUN={busy:false,err:null,model:"fable"}; try{ AIRUN.model=localStorage.dpacMktAIModel||"fable"; }catch(e){}
+const AI_MODELS={fable:["Fable 5.1","≈ € 0,30 per keer","claude-fable-5-1"],sonnet:["Sonnet 4.5","≈ € 0,05 per keer","claude-sonnet-4-5"]};
+const aiModelLab=id=>{ for(const k in AI_MODELS){ if(AI_MODELS[k][2]===id) return AI_MODELS[k][0]; } return id||"—"; };
+const AI_TYPE={opschalen:"opschalen",aanzetten:"opschalen",halveren:"halveren",terugschroeven:"terugschroeven",stoppen:"stoppen",instelling:"actie",sales:"opvolging"};
+// AI-adviezen in dezelfde vorm als de motor-adviezen (zelfde folKey = type|label → zelfde vinkjes/afrondingen op Opgevolgd)
+function aiAdvList(){
+  if(!AIADV||!AIADV.advice||!Array.isArray(AIADV.advice.adviezen)) return [];
+  return AIADV.advice.adviezen.map((a,i)=>{ const type=AI_TYPE[a.actie]||"actie"; const cid=a.campaign_id||null; const sid=a.adset_id||null;
+    const c=cid?CAMPS.get(ck(a.platform,cid)):null; const cname=c?c.name:(a.campagne||"(campagne onbekend)");
+    let sname=a.adset||null; if(sid){ const x=ADS.find(y=>y.platform===a.platform&&y.cid===cid&&y.adsetId===sid); if(x&&x.adsetName) sname=x.adsetName; }
+    const manual=(type==="actie"||type==="opvolging"||!cid||a.budget_naar==null);
+    const label=cname+(sname?" → "+sname:"");
+    return {ai:true,type,label,cname,sname,platform:a.platform,cid,sid:sid||(cid?null:null),manual,absRef:manual?null:(a.budget_nu==null?null:+a.budget_nu),absTgt:manual?null:+a.budget_naar,txt:String(a.waarom||""),titel:String(a.titel||""),kant:a.kant||"advertentie",zekerheid:a.zekerheid||"",w:+a.euro_per_maand||0,rank:(20-(+a.prioriteit||i+1))*1000,prio:+a.prioriteit||i+1,months:[],wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null},actie:a.actie}; });
 }
-async function aiRun(){
-  if(AI.busy) return; AI.busy=true; AI.err=null; drawAdvice();
-  try{ const body=JSON.stringify({code:GCODE,action:"ai",payload:aiPayload()});
-    const resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body});
-    if(!resp.ok) throw new Error(resp.status===404?"de AI-workflow is nog niet aangesloten (404)":"server gaf "+resp.status);
-    const j=await resp.json(); if(!j||j.error) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||"onbruikbaar antwoord");
-    AI.text=String(j.text||j.output||"").trim(); AI.ts=Date.now(); AI.day=NOW; if(!AI.text) throw new Error("leeg antwoord");
-    try{ localStorage.dpacMktAI=JSON.stringify({text:AI.text,ts:AI.ts,day:AI.day,open:true}); }catch(e){}
-    AI.open=true;
-  }catch(e){ AI.err=e&&e.message?e.message:"mislukt"; }
-  AI.busy=false; drawAdvice();
+async function aiRunAdvice(){
+  if(AIRUN.busy) return; AIRUN.busy=true; AIRUN.err=null; drawAdvice();
+  try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"ai_advice",model:AIRUN.model})});
+    const j=await resp.json().catch(()=>null);
+    if(!resp.ok||!j||!j.ok) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||("server gaf "+resp.status));
+    AIADV=j.ai_advice; memoReset(); AIRUN.busy=false; render();
+  }catch(e){ AIRUN.busy=false; AIRUN.err=e&&e.message?e.message:"mislukt"; drawAdvice(); }
 }
-function aiToggle(){ AI.open=!AI.open; try{ const s=JSON.parse(localStorage.dpacMktAI||"{}"); s.open=AI.open; localStorage.dpacMktAI=JSON.stringify(s); }catch(e){} drawAdvice(); }
-function aiPanelHtml(){
-  const when=AI.ts?new Date(AI.ts):null; const wl=when?`${when.getDate()} ${MND[when.getMonth()]} ${String(when.getHours()).padStart(2,"0")}:${String(when.getMinutes()).padStart(2,"0")}`:null;
-  let h=`<div class="aibar"><div><b>🤖 AI-analyse op aanvraag</b><span>Leest de cijfers van vandaag (KPI's, campagnes 2–8 wk, adviezen, verliesredenen) en redeneert er één keer overheen. Kost alleen iets als je op de knop drukt; het antwoord blijft hier staan.${wl?` Laatste analyse: <b>${wl}</b>${AI.day!=null&&AI.day<NOW?" (van een eerdere dag)":""}.`:""}</span></div>`
-    +`<div class="aibtns">${AI.text?`<button class="rbtn sm2" onclick="aiToggle()">${AI.open?"Verberg":"Toon"} analyse</button>`:""}<button class="rbtn sm2 pri" onclick="aiRun()" ${AI.busy?"disabled":""}>${AI.busy?"⏳ Bezig…":(AI.text?"🔄 Opnieuw analyseren":"🤖 Analyseer nu")}</button></div></div>`;
-  if(AI.err) h+=`<div class="aierr">AI-analyse mislukt: ${esc(AI.err)}.</div>`;
-  if(AI.text&&AI.open) h+=`<div class="cmp aiout"><h3>AI-analyse${wl?` · ${wl}`:""}</h3><div class="aitxt">${esc(AI.text).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/^### (.+)$/gm,"<h4>$1</h4>").replace(/^## (.+)$/gm,"<h4>$1</h4>").replace(/^[-•] /gm,"• ")}</div></div>`;
-  return h;
+function aiModelPick(v){ AIRUN.model=AI_MODELS[v]?v:"fable"; try{ localStorage.dpacMktAIModel=AIRUN.model; }catch(e){} drawAdvice(); }
+// korte status-uitleg voor een advies (Advies- én Opgevolgd-tab): één zin, geen meetvensters
+function advShort(ad){
+  const V=advVerdict(ad); const F=folGet(ad); const sn=stNowOf(ad);
+  const nu=V.uit?"uit":(V.bNow!=null?eur0(V.bNow)+"/dag":(sn&&sn.budget!=null?eur0(sn.budget)+"/dag":"—"));
+  const doel=ad.type==="stoppen"?"uit":(V.tgt!=null?eur0(V.tgt)+"/dag":null);
+  if(V.src==="manual") return F.rounded?`Afgerond ${whenTxt(F.rounded)}.`:"Niet meetbaar in het platform: vink zelf af zodra het gedaan is.";
+  if(V.st==="ok") return `Doorgevoerd: staat op ${nu}${doel?` (advies ${doel})`:""}.`;
+  if(V.st==="ey") return `Nog niets om mee te vergelijken; staat op ${nu}.`;
+  return `Staat op ${nu}${doel?`, advies ${doel}`:""}${V.st==="mid"?" (deels gedaan)":""}.`;
 }
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
 // het advies van dag N: shows-regels over vers venster, kosten/klant-regels over uitgerijpt venster (leads hebben hun doorlooptijd gehad)
@@ -897,6 +895,8 @@ function lastSpendDay(ad){ let m=null; if(ad.sid!=null){ for(const r of AD){ if(
 function activeDays(ad,a,b){ const s=new Set(); if(ad.sid!=null){ for(const r of AD){ if(r.d>=a&&r.d<=b&&r.spend>0.5&&r.ad.platform===ad.platform&&r.ad.cid===ad.cid&&(r.ad.adsetId||"")===ad.sid) s.add(r.d); } } else { for(const r of CD){ if(r.d>=a&&r.d<=b&&r.spend>0.5&&r.platform===ad.platform&&(r.cid||"")===ad.cid) s.add(r.d); } } return s.size; }
 function advProgress(ad){
   if(ad.manual) return {uit:false,src:"manual",bNow:null,bRef:null,tgt:null,f:null,lastSp:null,kpd:0};
+  if(ad.absTgt!=null){ const sn0=stNowOf(ad); const uit0=stUit(ad); const bNow=sn0?(uit0?0:sn0.budget):null; const o={uit:uit0,src:sn0?"status":"spend",bNow,bRef:ad.absRef,tgt:ad.absTgt,f:null,lastSp:lastSpendDay(ad),kpd:0};
+    if(bNow==null||ad.absRef==null) return o; const step=ad.absTgt-ad.absRef; if(!step) return o; o.f=(bNow-ad.absRef)/step; return o; }   // AI-advies: doel is een absoluut bedrag
   const sn=stNowOf(ad); const uit=stUit(ad);
   const kpd=ad.wa!=null? ad.m.spend/Math.max(1,activeDays(ad,ad.wa,ad.wb)) : 0;   // per dag dat de unit écht draaide (niet per kalenderdag)
   const lastSp=lastSpendDay(ad); const SL=(D&&D.counts&&D.counts.spend_last)?dOf(D.counts.spend_last):NOW-1;
@@ -915,7 +915,7 @@ function advProgress(ad){
 }
 // oordeel: ok = ≥ 75% van de stap gezet óf binnen € 5 van het doel · mid = 25–75% · no = ongewijzigd (binnen ±10% / € 5 = ruis) of tegengesteld · ey = niets om mee te vergelijken · man = zelf afvinken
 function advVerdict(ad){
-  if(!ad.manual){ const mk=folKey(ad)+"|"+ad.wa+"|"+ad.wb; const c=MEMO.ver.get(mk); if(c) return c; const v=advVerdictCalc(ad); MEMO.ver.set(mk,v); return v; }
+  if(!ad.manual){ const mk=folKey(ad)+"|"+ad.wa+"|"+ad.wb+"|"+(ad.absTgt==null?"":ad.absRef+">"+ad.absTgt); const c=MEMO.ver.get(mk); if(c) return c; const v=advVerdictCalc(ad); MEMO.ver.set(mk,v); return v; }
   return advVerdictCalc(ad);
 }
 function advVerdictCalc(ad){
@@ -938,9 +938,18 @@ function advDone(ad){ const F=folGet(ad); if(ad.manual) return !!(F.done||F.roun
 let FOLST={}; try{ FOLST=JSON.parse(localStorage.dpacMktFol||"{}"); }catch(e){ FOLST={}; }
 const folKey=ad=>ad.type+"|"+ad.label;
 function folGet(ad){ return FOLST[folKey(ad)]||{}; }
-function folSave(){ try{ const cut=Date.now()-60*864e5; for(const k in FOLST){ const F=FOLST[k]||{}; if(Math.max(F.ts||0,F.rounded||0,F.confirmed||0)<cut&&!F.done) delete FOLST[k]; } localStorage.dpacMktFol=JSON.stringify(FOLST); }catch(e){} }
-function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now()}; folSave(); drawFollow(); }
-function folNote(key,val){ FOLST[key]={...(FOLST[key]||{}),note:String(val||"").trim(),ts:Date.now()}; folSave(); }
+function folSave(){ try{ const cut=Date.now()-60*864e5; for(const k in FOLST){ const F=FOLST[k]||{}; if(Math.max(F.ts||0,F.rounded||0,F.confirmed||0,F.upd||0)<cut&&!F.done) delete FOLST[k]; } localStorage.dpacMktFol=JSON.stringify(FOLST); }catch(e){} }
+function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now(),upd:Date.now()}; folSave(); folSync(key); drawFollow(); }
+function folNote(key,val){ FOLST[key]={...(FOLST[key]||{}),note:String(val||"").trim(),upd:Date.now()}; folSave(); folSync(key); }
+// ---- gedeeld geheugen: vinkjes/afrondingen/opmerkingen ook in Supabase (dpac.mkt_followups), zodat Abel en Ger hetzelfde zien en de AI ze kan lezen ----
+let SYNCQ=new Set(), SYNCT=null, ADVBYKEY=new Map();
+function folMergeServer(rows){ let ch=false; for(const r of rows){ const k=r.key; if(!k) continue; const su=Date.parse(r.updated_at)||0; const loc=FOLST[k]||{}; if(su>(loc.upd||0)){ FOLST[k]={...loc,done:!!r.done,ts:r.done_at?Date.parse(r.done_at):loc.ts,rounded:r.rounded_at?Date.parse(r.rounded_at):0,confirmed:r.confirmed_at?Date.parse(r.confirmed_at):loc.confirmed,note:r.note||"",upd:su}; ch=true; } } if(ch) folSave(); }
+function folSync(key){ SYNCQ.add(key); if(SYNCT) clearTimeout(SYNCT); SYNCT=setTimeout(folSyncFlush,900); }
+async function folSyncFlush(){ SYNCT=null; if(!GCODE||!SYNCQ.size) return; const keys=[...SYNCQ]; SYNCQ.clear();
+  const iso=ms=>ms?new Date(ms).toISOString():null;
+  const items=keys.map(k=>{ const F=FOLST[k]||{}; const ad=ADVBYKEY.get(k)||{}; return {key:k,type:ad.type||k.split("|")[0],label:ad.label||k.split("|").slice(1).join("|"),platform:ad.platform||null,cid:ad.cid||null,sid:ad.sid||null,done:!!F.done,done_at:iso(F.done?F.ts:0),rounded_at:iso(F.rounded),confirmed_at:iso(F.confirmed),note:F.note||null,by:"dashboard"}; });
+  try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"fol_sync",items})}); const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok) throw new Error("sync "+resp.status); keys.forEach(k=>{ if(FOLST[k]) FOLST[k].sy=true; }); folSave(); }
+  catch(e){ keys.forEach(k=>SYNCQ.add(k)); if(!SYNCT) SYNCT=setTimeout(folSyncFlush,15000); } }
 function folExtra(val){ try{ localStorage.dpacMktFolExtra=String(val||""); }catch(e){} }
 // herkomst + onderbouwing van één advies (uitklappaneel, gedeeld door Advies- en Opgevolgd-tab)
 function advSrc(ad){
@@ -949,47 +958,33 @@ function advSrc(ad){
   if(ad.type==="actie") return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname)}</b></div>${ad.sname?`<div><small>Adset / onderdeel</small><b>${esc(ad.sname)}</b></div>`:""}<div><small>Sinds</small><b>${esc(ad.since||"—")}</b></div></div><p style="margin:8px 0 0;font-size:12.5px"><b>Waarom:</b> ${esc(ad.why||"")}</p><p style="margin:4px 0 0;font-size:12.5px"><b>Waar:</b> ${esc(ad.doen||"")}</p><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY.actie}</p>`;
   return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname||ad.label)}</b></div>${ad.sname?`<div><small>${ad.type==="opvolging"?"Verkoper":"Adset"}</small><b>${esc(ad.sname)}</b></div>`:""}${ad.wa!=null?`<div><small>Meetvenster (leads)</small><b>${fmtY(ad.wa)} t/m ${fmtY(ad.wb)}</b></div>`:""}<div><small>Cijfers in dat venster</small><b>${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · "+eur0(ad.m.cpk)+"/klant":""}</b></div>${sn?`<div><small>Nu ingesteld</small><b>${sn.status==="uit"?"staat uit":(sn.budget!=null?eur0(sn.budget)+"/dag":"aan")}</b></div>`:""}</div><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY[ad.type]||""}</p>`;
 }
+let advSig=false;
 function drawAdvice(){
   const w=document.getElementById("advwrap");
-  let note=`<div class="cmp" style="padding:12px 16px;margin-bottom:10px"><b>Alles wat hier staat, kun je vandaag direct doorvoeren.</b> Elk advies is al door het juiste meetvenster gehaald: snelle signalen (shows) worden vers gemeten, kosten per klant pas als de leads hun doorlooptijd hebben gehad. Twijfelgevallen staan hier simpelweg niet tussen — klik een advies open voor de volledige herkomst en onderbouwing.</div>`;
-  const list=advList(0);
-  const ICON=ADV_ICON, LAB=ADV_LAB;
-  const sev=ad=> ad.rank>=1500 ? "hi" : ad.rank>=500 ? "mid" : "lo";
-  note+=aiPanelHtml();
-  const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
-  const CNT={}; for(const ad of list) CNT[ad.type]=(CNT[ad.type]||0)+1;
-  const PCNT={}; for(const ad of list) PCNT[ad.platform]=(PCNT[ad.platform]||0)+1;
-  let shown = advType==="all" ? list : list.filter(ad=>ad.type===advType);
-  if(advPlat) shown=shown.filter(ad=>ad.platform===advPlat);
-  note+=`<div class="wonchips"><span class="lbl">Soort advies:</span><div class="wchip sm${advType==="all"?" on":""}" onclick="advType='all';drawAdvice()">Alles <span class="n">${list.length}</span></div>`
-    +Object.keys(ICON).filter(t=>CNT[t]).map(t=>`<div class="wchip sm${advType===t?" on":""}" onclick="advType='${t}';drawAdvice()">${ICON[t]} ${LAB[t]} <span class="n">${CNT[t]}</span></div>`).join("")+`</div>`;
-  note+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${advPlat==null?" on":""}" onclick="advPlat=null;drawAdvice()">Alle <span class="n">${list.length}</span></div>`+["meta","google","tiktok"].filter(p=>PCNT[p]).map(p=>`<div class="wchip sm${advPlat===p?" on":""}" onclick="advPlat='${p}';drawAdvice()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]}</span></div>`).join("")+`</div>`;
-  const LIM=advAll?shown.length:12;
-  let h=note+`<div class="advrows">`+(shown.length?shown.slice(0,LIM).map((ad,i)=>{ const sv=sev(ad); const key=ad.type+"|"+ad.label; const opn=advOpen.has(key);
-    return `<div class="advrow ${sv}${opn?" open":""}" onclick="advTog(${jq(key)})">`
-      +`<span class="rank">${i+1}</span>`
-      +`<span class="sevb ${sv}">${SEVLAB[sv]}</span>`
-      +`<span class="advmain"><b>${ICON[ad.type]} ${LAB[ad.type]}</b> · <span class="dot" style="background:${PC(ad.platform)}"></span>${esc(ad.label)}</span>`
-      +`<span class="advdata">${ad.type==="actie"?`actiepunt media buyer · sinds ${esc(ad.since||"—")}`:`${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · <b>"+eur0(ad.m.cpk)+"/klant</b>":""}`}</span>`
-      +`<span class="advw">≈ ${eur0(ad.w)}/mnd op het spel</span><i class="chev${opn?" open":""}"></i>`
-      +(opn?`<div class="advx"><p>${esc(ad.txt)}</p>${advSrc(ad)}<div class="doen">${ad.months.length?`Geldt al ${ad.months.length} maand${ad.months.length===1?"":"en"} (${ad.months.map(m=>MND[d2s(m).getMonth()]).join(", ")})`:"Nieuw dit moment"}${ad.buiten?" · vuurt op dit moment niet, maar stond eerder dit jaar open":""}${ad.shift?" · <b>verschuif-advies</b>":""}</div></div>`:"")
-      +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Geen regels die vuren in deze periode (te weinig kosten of leads per campagne).</span></div>`)+`</div>`
-    +(shown.length>12?`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="advAll=!advAll;drawAdvice()">${advAll?"Toon alleen de top 12":"Toon alle "+shown.length+" adviezen"}</span></div>`:"");
-  h+=`<div class="cmp" style="margin-top:12px"><h3>Hoe de adviezen bepaald worden</h3><ul class="advul">
-    <li><b>Eén advies per dag</b>, los van de datumkiezer — de motor kiest per regel zelf het juiste meetvenster, dus alles wat hier staat is direct uitvoerbaar.</li>
-    <li><b>Stoppen</b>: € 400+ uitgegeven, 0 shows én 0 klanten in de laatste 30 dagen.</li>
-    <li><b>Halveren</b>: € 400+ uitgegeven, wél shows maar nog 0 klanten (laatste 30 dagen) — knijpen in plaats van stoppen, want de handtekening kan nog komen.</li>
-    <li><b>Opschalen</b>: kosten/klant onder 85% van ${eur0(MAXCPK())} bij leads van 2–6 weken oud (en ≥ 2 klanten of ≥ € 800) — narijpers maken dit alleen nog beter, dus dit mag vroeg.</li>
-    <li><b>Terugschroeven</b>: kosten/klant boven 125% van het plafond bij leads van 4–8 weken oud — dan heeft ~95% getekend, dus het oordeel is zeker.</li>
-    <li><b>⚠️ Leadkwaliteit</b>: leads van 2–8 weken oud, ≥ 30 stuks: kosten per lead ≤ 60% van gemiddeld maar plan % ≤ de helft van gemiddeld en hooguit 1 klant → goedkope leads zonder intentie (formulier verzwaren); of ≥ 25% rommel-leads (verkeerde gegevens, geen Nederlands, te jong) → targeting/formulier.</li>
-    <li><b>⏱ Vroeg signaal</b>: € 250+ in 14 dagen zonder één lead (tracking checken), of ≥ 20 leads van 7–20 dagen oud waarvan minder dan 40% van het gemiddelde plan % een intake plant. Geen eindoordeel — wel eerder kijken dan na 6 weken.</li>
-    <li><b>🎯 Actiepunt (instellingen)</b>: concrete instelling voor de media buyer (taalfilter, formulier, URL-parameters, structuur) met de cijfers erbij; niet automatisch meetbaar, dus afvinken op ✔️ Opgevolgd. Verdwijnt zodra doorgevoerd én bevestigd.</li>
-    <li><b>👤 Opvolging (sales)</b>: leads van 2–8 weken oud, per verkoper × campagne (beide ≥ 10 leads): plant een verkoper hooguit de helft van wat de rest van het team op dezelfde campagne plant (én ≥ 8 punten lager), dan is het een sales-punt en geen advertentiepunt. De ⚠️ Leadkwaliteit-regel slaat die campagne dan over. Details op 🤝 Sales × bron.</li>
-    <li>Alleen campagnes die de laatste 14 dagen nog draaien; wat al uit staat of al is doorgevoerd (≥ 75% van de geadviseerde stap gezet) verschijnt hier niet meer — dat vind je terug op ✔️ Opgevolgd.</li>
-    <li>Bij <b>Google</b> leeft het budget op campagneniveau (adviezen dus ook); bij <b>Meta/TikTok</b> per adset — campagne-adviezen zeggen er daarom bij dat je de wijziging over de best presterende adsets verdeelt.</li>
-    <li>Botst "campagne knijpen" met "adset opschalen" binnen dezelfde campagne, dan wordt dat één <b>verschuif-advies</b>. Adset-oordelen alleen als de leads goed aan advertenties toewijsbaar zijn.</li>
-    <li>Volgorde = € per maand op het spel (+25% per extra maand dat het advies al geldt). Er wordt <b>niets automatisch gewijzigd</b> — jij voert uit; opvolging zie je op <b>✔️ Opgevolgd</b>.</li>
-  </ul></div>`;
+  const ai=aiAdvList(); const eng=advList(0);
+  const run=AIADV?new Date(AIADV.run_at):null; const rl=run?`${run.getDate()} ${MND[run.getMonth()]} ${String(run.getHours()).padStart(2,"0")}:${String(run.getMinutes()).padStart(2,"0")}`:null;
+  const M=AI_MODELS[AIRUN.model]||AI_MODELS.fable;
+  let h=`<div class="aibar"><div><b>🤖 AI-advies${rl?` van ${rl}`:""}</b><span>${AIADV?`${aiModelLab(AIADV.model)} · ${AIADV.trigger==="donderdag"?"weekrun (donderdag 06:40)":"op de knop"} · leest de cijfers, de sales-data en jullie afrondingen met opmerkingen; het algoritme rekent alleen voor.`:"Nog geen AI-advies. Draait elke donderdag 06:40, of nu op de knop."}</span></div>`
+    +`<div class="aibtns"><select class="aisel" onchange="aiModelPick(this.value)" ${AIRUN.busy?"disabled":""}>${Object.entries(AI_MODELS).map(([k,v])=>`<option value="${k}"${AIRUN.model===k?" selected":""}>${v[0]} · ${v[1]}</option>`).join("")}</select><button class="rbtn sm2 pri" onclick="aiRunAdvice()" ${AIRUN.busy?"disabled":""}>${AIRUN.busy?"⏳ Bezig (± 1 minuut)…":"🔄 Opnieuw laten kijken"}</button></div></div>`;
+  if(AIRUN.err) h+=`<div class="aierr">AI-advies mislukt: ${esc(AIRUN.err)}.</div>`;
+  if(AIADV&&AIADV.advice.samenvatting) h+=`<div class="cmp aisum">${esc(AIADV.advice.samenvatting)}</div>`;
+  const PCNT={}; for(const ad of ai) PCNT[ad.platform]=(PCNT[ad.platform]||0)+1;
+  let shown=advPlat?ai.filter(ad=>ad.platform===advPlat):ai;
+  if(ai.length) h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${advPlat==null?" on":""}" onclick="advPlat=null;drawAdvice()">Alle <span class="n">${ai.length}</span></div>`+["google","meta","tiktok"].filter(p=>PCNT[p]).map(p=>`<div class="wchip sm${advPlat===p?" on":""}" onclick="advPlat='${p}';drawAdvice()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]}</span></div>`).join("")+`</div>`;
+  const sev=ad=> ad.prio<=2?"hi":ad.prio<=5?"mid":"lo"; const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
+  h+=`<div class="advrows">`+(shown.length?shown.map(ad=>{ const key=folKey(ad); const opn=advOpen.has(key); const sv=sev(ad); const F=folGet(ad); const V=advVerdict(ad);
+      const big=ad.manual?`<span class="advbig act">${ad.kant==="sales"?"👤 sales-punt":"instelling"}</span>`:`<span class="advbig"><span>${ad.absRef!=null?eur0(ad.absRef):"—"}</span> → <b>${ad.type==="stoppen"?"uit":eur0(ad.absTgt)}</b><small>${ad.type==="stoppen"?"":"per dag"}</small></span>`;
+      const st=F.rounded?`<span class="sevb ok">✅ afgerond</span>`:F.done?`<span class="sevb ok">☑ afgevinkt</span>`:V.st==="ok"?`<span class="sevb ok">✅ staat al zo</span>`:"";
+      return `<div class="advrow ${sv}${opn?" open":""}" onclick="advTog(${jq(key)})"><span class="rank">${ad.prio}</span><span class="sevb ${sv}">${SEVLAB[sv]}</span>`
+        +`<span class="advmain"><b>${ADV_ICON[ad.type]} ${esc(ad.titel||ADV_LAB[ad.type])}</b><br><small><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} · ${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}</small></span>`
+        +big+`<span class="advw">${st}${ad.w?`≈ ${eur0(ad.w)}/mnd`:""}</span><i class="chev${opn?" open":""}"></i>`
+        +(opn?`<div class="advx"><p>${esc(ad.txt)}</p><div class="doen">${esc(advShort(ad))} Zekerheid: ${esc(ad.zekerheid||"—")}.${F.note?` <b>📝 ${esc(F.note)}</b>`:""} · Afvinken en afronden doe je op ✔️ Opgevolgd.</div></div>`:"")+`</div>`; }).join("")
+    :`<div class="advrow lo"><span class="advmain">${AIADV?"Geen adviezen voor dit platform.":"Klik op 🔄 Opnieuw laten kijken voor het eerste AI-advies."}</span></div>`)+`</div>`;
+  if(AIADV){ const A=AIADV.advice; if(A.eerst_uitzoeken||A.niet_eens_met_algoritme) h+=`<div class="aigrid">${A.eerst_uitzoeken?`<div class="cmp"><h3>🔎 Eerst uitzoeken</h3><p>${esc(A.eerst_uitzoeken)}</p></div>`:""}${A.niet_eens_met_algoritme?`<div class="cmp"><h3>⚖️ Waar de AI het algoritme niet volgt</h3><p>${esc(A.niet_eens_met_algoritme)}</p></div>`:""}</div>`; }
+  // ruwe signalen van het algoritme (ingeklapt)
+  h+=`<div class="folgrp"><div class="folgrph" onclick="advSig=!advSig;drawAdvice()"><i class="chev${advSig?" open":""}"></i><b>🧮 Ruwe signalen van het algoritme</b><span class="n">${eng.length}</span><small>rekenregels zonder weging; de AI hierboven weegt ze mee met sales en jullie opmerkingen</small></div>`
+    +(advSig?`<div class="advrows">`+eng.slice(0,25).map(ad=>`<div class="advrow lo"><span class="advmain"><b>${ADV_ICON[ad.type]} ${ADV_LAB[ad.type]}</b> · <span class="dot" style="background:${PC(ad.platform)}"></span>${esc(ad.label)}</span><span class="advdata">${ad.type==="actie"?`sinds ${esc(ad.since||"—")}`:`${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}`}</span><span class="advw">≈ ${eur0(ad.w)}/mnd</span></div>`).join("")+`</div>`:"")+`</div>`;
+  h+=`<p class="note"><b>Hoe het werkt.</b> De AI (${M[0]}) leest elke donderdag om 06:40, en als je op 🔄 klikt, de cijfers per campagne en adset (vers en rijp), het ingestelde budget, de sales-cijfers per verkoper, de verliesredenen, en jullie afrondingen met opmerkingen van de laatste 6 weken. Volgorde: eerst sales, dan leadkwaliteit, dan geld per rijpheid (snel oordelen op shows, langzaam op kosten per klant), dan jullie eerdere keuzes. Het algoritme levert alleen signalen. Er wordt <b>niets automatisch gewijzigd</b>: jullie klikken, en op ✔️ Opgevolgd vink je af en rond je af. Het openen van het dashboard kost nooit iets; alleen de knop (${M[1]}).</p>`;
   w.innerHTML=h;
 }
 
@@ -1007,12 +1002,14 @@ const FOL_STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],man:["☐","No
 const FOL_GRP={todo:["🔴","Nog te doen","vink af wat je doet; de rij blijft staan tot je op Afronden klikt"],wacht:["🌙","Afgerond, controle vannacht","vannacht om 06:25 kijkt het dashboard of het zo in Google, Meta of TikTok staat"],ok:["✅","Doorgevoerd","bevestigd door de meting, of afgerond bij acties die niet meetbaar zijn"],ey:["⏳","Nog niet te beoordelen","nog niets om mee te vergelijken"]};
 function folMeasuredAfter(ms){ if(!ms) return false; return STAT_AT? STAT_AT>ms : STLAST>dayOfTs(ms); }
 function folRows(){
-  const list=advList(0);
-  // adviezen die vorige week nog golden en nu niet meer, tonen we ook (meestal: opgevolgd)
-  const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label&&c.type===p.type)).map(p=>({...p,vervallen:true}));
+  const ai=aiAdvList(); const aiKeys=new Set(ai.map(folKey));
+  const hasState=ad=>{ const F=folGet(ad); return !!(F.done||F.rounded||F.note||F.confirmed); };
+  // motor-adviezen alleen als jullie er iets mee gedaan hebben (afgevinkt/afgerond/opmerking); de AI-lijst is leidend
+  const list=ai.concat(advList(0).filter(ad=>!aiKeys.has(folKey(ad))&&hasState(ad)));
+  const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label&&c.type===p.type)&&hasState(p)).map(p=>({...p,vervallen:true}));
   let dirty=false;
-  const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const key=folKey(ad); let F=folGet(ad);
-    if(F.rounded&&V.src!=="manual"&&V.st==="ok"){ FOLST[key]={...F,rounded:0,confirmed:Date.now()}; F=FOLST[key]; dirty=true; }   // meting bevestigt → afronding valt weg, meting neemt over
+  const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const key=folKey(ad); let F=folGet(ad); ADVBYKEY.set(key,ad);
+    if(F.rounded&&V.src!=="manual"&&V.st==="ok"){ FOLST[key]={...F,rounded:0,confirmed:Date.now(),upd:Date.now()}; F=FOLST[key]; dirty=true; folSync(key); }   // meting bevestigt → afronding valt weg, meting neemt over
     let disp; if(V.src==="manual") disp=F.rounded?"afgerond":"";
     else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
     else if(V.bRef==null) disp="—";
@@ -1023,11 +1020,18 @@ function folRows(){
     const anders=!!(rd&&V.src!=="manual"&&V.st!=="ok"&&(changed||F.note)); // bewust anders gedaan dan het advies (opmerking legt uit waarom)
     let grp; if(V.src==="manual") grp=rd?"ok":"todo"; else if(V.st==="ok") grp="ok"; else if(rd&&!meas) grp="wacht"; else if(fout) grp="todo"; else if(rd) grp="ok"; else if(V.st==="ey") grp="ey"; else grp="todo";
     let uitleg=V.uitleg;
-    if(grp==="wacht") uitleg+=` 🌙 Afgerond ${whenTxt(rd)}. Vannacht om 06:25 controleert het dashboard of er iets is gewijzigd in het platform; alleen als er niets veranderd is én er geen opmerking staat, komt het terug als ⚠️.`;
-    if(fout) uitleg+=` ⚠️ Afgerond ${whenTxt(rd)}, maar de meting van ${whenTxt(STAT_AT)} ziet géén wijziging in het platform en er staat geen opmerking bij. Check of de wijziging echt is opgeslagen; klopt het toch, zet dan een opmerking en rond opnieuw af.`;
-    if(anders) uitleg+=` ✅ Afgerond ${whenTxt(rd)}: bewust anders gedaan dan het advies${F.note?" (zie opmerking)":""}. Het advies blijft 14 dagen van ⚡ Advies weg.`;
-    if(F.done&&grp==="todo") uitleg+=` ☑ Afgevinkt ${whenTxt(F.ts)}; klik bovenaan op Afronden om het definitief te maken.`;
+    const nuTxt=V.uit?"uit":(V.bNow!=null?eur0(V.bNow)+"/dag":"—"); const doelTxt=ad.type==="stoppen"?"uit":(V.tgt!=null?eur0(V.tgt)+"/dag":"—");
+    let kort;   // één korte zin: wat is de stand en waarom staat hij hier
+    if(V.src==="manual") kort=rd?`Afgerond ${whenTxt(rd)}.`:"Niet meetbaar in het platform: vink af zodra het gedaan is.";
+    else if(fout) kort=`Afgerond ${whenTxt(rd)}, maar in het platform is niets veranderd: staat nog op ${nuTxt}${ch?` (sinds ${fmtY(ch.d)})`:""}, advies was ${doelTxt}. Niet opgeslagen? Of zet een opmerking waarom jullie het anders deden.`;
+    else if(grp==="wacht") kort=`Afgerond ${whenTxt(rd)}; staat nu op ${nuTxt}. Vannacht 06:25 controleert het dashboard het.`;
+    else if(anders) kort=`Afgerond ${whenTxt(rd)}, bewust anders dan het advies: staat op ${nuTxt}, advies was ${doelTxt}.`;
+    else if(V.st==="ok") kort=`Doorgevoerd: staat op ${nuTxt}${ch?` sinds ${fmtY(ch.d)}`:""}${V.tgt!=null?` (advies ${doelTxt})`:""}.`;
+    else if(V.st==="ey") kort=`Nog niets om mee te vergelijken; staat op ${nuTxt}.`;
+    else kort=`${V.st==="mid"?"Deels gedaan":"Nog niet gedaan"}: staat op ${nuTxt}, advies ${doelTxt}.${F.done?` ☑ Afgevinkt ${whenTxt(F.ts)}; klik bovenaan op Afronden.`:""}`;
+    uitleg=kort;
     return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,fout,anders}; });
+  rows.forEach(r=>ADVBYKEY.set(folKey(r),r));
   if(dirty) folSave();
   const ORD={no:0,mid:1,man:2,ok:3,ey:4}, PO={google:0,meta:1,tiktok:2};
   rows.sort((x,y)=> ((PO[x.platform]??9)-(PO[y.platform]??9)) || (y.fout?1:0)-(x.fout?1:0) || ORD[x.st]-ORD[y.st] || y.rank-x.rank);
@@ -1036,8 +1040,8 @@ function folRows(){
 const folMB=rows=>rows.filter(r=>r.type!=="opvolging");   // sales-opvolging (👤) hoort niet in het rapport voor de media buyer
 function folGroups(rows){ const G={todo:[],wacht:[],ok:[],ey:[]}; for(const r of rows) (G[r.grp]||G.todo).push(r); return G; }
 // ✅ Afronden: alle afgevinkte punten verhuizen naar "Afgerond, controle vannacht" (niet-meetbare acties meteen naar Doorgevoerd)
-function folRound(){ const now=Date.now(); let n=0; for(const k in FOLST){ const F=FOLST[k]; if(F&&F.done){ FOLST[k]={...F,done:false,rounded:now}; n++; } } if(n) folSave(); drawFollow(); }
-function folUnround(key){ const F=FOLST[key]||{}; FOLST[key]={...F,rounded:0,done:true,ts:Date.now()}; folSave(); drawFollow(); }
+function folRound(){ const now=Date.now(); let n=0; for(const k in FOLST){ const F=FOLST[k]; if(F&&F.done){ FOLST[k]={...F,done:false,rounded:now,upd:now}; n++; folSync(k); } } if(n) folSave(); drawFollow(); }
+function folUnround(key){ const F=FOLST[key]||{}; FOLST[key]={...F,rounded:0,done:true,ts:Date.now(),upd:Date.now()}; folSave(); folSync(key); drawFollow(); }
 function drawFollow(){ const w=document.getElementById("folwrap"); if(w) keepScroll(w,drawFollowInner); }
 function drawFollowInner(){
   const w=document.getElementById("folwrap");
@@ -1058,11 +1062,11 @@ function drawFollowInner(){
       : r.grp==="wacht"?`<span class="folchk" onclick="event.stopPropagation()"><span class="lnk" onclick="folUnround(${jq(key)})" title="terug naar Nog te doen (als je het toch niet hebt gedaan)">↩︎</span></span>`:`<span class="folchk"></span>`;
     return `<div class="advrow ${cls}${opn?" open":""}${inTodo&&r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
       +chk+badge
-      +`<span class="advmain"><b>${ADV_ICON[r.type]} ${ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}${inTodo&&r.F.done?` <span class="doneTag">☑ afgevinkt</span>`:""}</span>`
+      +`<span class="advmain"><b>${ADV_ICON[r.type]} ${r.ai&&r.titel?esc(r.titel):ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}${r.ai?` <span class="aiTag">🤖</span>`:""}${inTodo&&r.F.done?` <span class="doneTag">☑ afgevinkt</span>`:""}</span>`
       +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span>`
       +`<input class="folnote-in${r.F.note?" has":""}" type="text" value="${esc(r.F.note||"")}" placeholder="opmerking (komt in het rapport)" title="Opmerking voor Ger én terugkoppeling voor Claude; komt letterlijk in het rapport" onclick="event.stopPropagation()" onchange="folNote(${jq(key)},this.value);this.classList.toggle('has',!!this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
       +`<i class="chev${opn?" open":""}"></i>`
-      +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div></div>`:"")
+      +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.ai&&r.titel?r.titel+". ":"")}${esc(r.txt.replace(/\s+/g," ").slice(0,300))}${r.txt.length>300?"…":""}</p><div class="doen ${r.fout?"bad":""}">${esc(r.uitleg)}</div>${r.F.note?`<div class="folnoteBig">📝 ${esc(r.F.note)}</div>`:""}${r.vervallen?`<div class="doen">Dit advies vuurde vorige week nog, nu niet meer.</div>`:""}</div>`:"")
       +`</div>`; };
   for(const g of ["todo","wacht","ok","ey"]){ const ls=G[g]; if(!ls.length&&g!=="todo") continue; const opn=folGrpOpen.has(g);
     h+=`<div class="folgrp ${g}"><div class="folgrph" onclick="folGrpTog('${g}')"><i class="chev${opn?" open":""}"></i><b>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</b><span class="n">${ls.length}</span><small>${FOL_GRP[g][2]}</small></div>`;
