@@ -933,12 +933,12 @@ function advVerdictCalc(ad){
   return {...P,st,uitleg};
 }
 // is dit advies al doorgevoerd? (dan hoeft het niet meer op ⚡ Advies, wel als ✅ op Opgevolgd)
-function advDone(ad){ return ad.manual ? !!folGet(ad).done : advVerdict(ad).st==="ok"; }
+function advDone(ad){ const F=folGet(ad); if(ad.manual) return !!(F.done||F.rounded); if(advVerdict(ad).st==="ok") return true; return !!(F.rounded&&Date.now()-F.rounded<14*864e5); }   // afgerond (bewust anders) → 14 dagen weg van ⚡ Advies
 // ---- afvinken + notities (per advies, in de browser bewaard) ----
 let FOLST={}; try{ FOLST=JSON.parse(localStorage.dpacMktFol||"{}"); }catch(e){ FOLST={}; }
 const folKey=ad=>ad.type+"|"+ad.label;
 function folGet(ad){ return FOLST[folKey(ad)]||{}; }
-function folSave(){ try{ const cut=Date.now()-60*864e5; for(const k in FOLST){ const F=FOLST[k]||{}; if(Math.max(F.ts||0,F.rounded||0,F.confirmed||0)<cut&&!F.note&&!F.done&&!F.rounded) delete FOLST[k]; } localStorage.dpacMktFol=JSON.stringify(FOLST); }catch(e){} }
+function folSave(){ try{ const cut=Date.now()-60*864e5; for(const k in FOLST){ const F=FOLST[k]||{}; if(Math.max(F.ts||0,F.rounded||0,F.confirmed||0)<cut&&!F.done) delete FOLST[k]; } localStorage.dpacMktFol=JSON.stringify(FOLST); }catch(e){} }
 function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now()}; folSave(); drawFollow(); }
 function folNote(key,val){ FOLST[key]={...(FOLST[key]||{}),note:String(val||"").trim(),ts:Date.now()}; folSave(); }
 function folExtra(val){ try{ localStorage.dpacMktFolExtra=String(val||""); }catch(e){} }
@@ -1017,14 +1017,17 @@ function folRows(){
     else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
     else if(V.bRef==null) disp="—";
     else disp=`${eur0(V.bRef)} → <b>${eur0(V.bNow)}/dag</b> ${V.src==="status"?"ingesteld":"besteed"}${V.tgt!=null?` <small>doel ≈ ${eur0(V.tgt)}</small>`:""}`;
-    const meas=!!(F.rounded&&V.src!=="manual"&&folMeasuredAfter(F.rounded));
-    const fout=!!(meas&&(V.st==="no"||V.st==="mid"));                     // afgerond, maar de meting daarna ziet het niet
-    let grp; if(V.src==="manual") grp=F.rounded?"ok":"todo"; else if(V.st==="ok") grp="ok"; else if(fout) grp="todo"; else if(F.rounded) grp="wacht"; else if(V.st==="ey") grp="ey"; else grp="todo";
+    const rd=F.rounded||0; const meas=!!(rd&&V.src!=="manual"&&folMeasuredAfter(rd));
+    const changed=!!(ch&&ch.d>=dayOfTs(rd||Date.now())-7);                 // in de week vóór het afronden is er iets gewijzigd in het platform
+    const fout=!!(meas&&V.st!=="ok"&&!changed&&!F.note);                   // afgerond, maar niets veranderd én geen opmerking: waarschijnlijk niet opgeslagen
+    const anders=!!(rd&&V.src!=="manual"&&V.st!=="ok"&&(changed||F.note)); // bewust anders gedaan dan het advies (opmerking legt uit waarom)
+    let grp; if(V.src==="manual") grp=rd?"ok":"todo"; else if(V.st==="ok") grp="ok"; else if(rd&&!meas) grp="wacht"; else if(fout) grp="todo"; else if(rd) grp="ok"; else if(V.st==="ey") grp="ey"; else grp="todo";
     let uitleg=V.uitleg;
-    if(grp==="wacht") uitleg+=` 🌙 Afgerond ${whenTxt(F.rounded)}. Vannacht om 06:25 controleert het dashboard of het zo in het platform staat; klopt het, dan schuift de rij naar ✅ Doorgevoerd.`;
-    if(fout) uitleg+=` ⚠️ Afgerond ${whenTxt(F.rounded)}, maar de meting van ${whenTxt(STAT_AT)} ziet het niet in het platform. Check of de wijziging echt is opgeslagen; vink daarna opnieuw af en rond af.`;
+    if(grp==="wacht") uitleg+=` 🌙 Afgerond ${whenTxt(rd)}. Vannacht om 06:25 controleert het dashboard of er iets is gewijzigd in het platform; alleen als er niets veranderd is én er geen opmerking staat, komt het terug als ⚠️.`;
+    if(fout) uitleg+=` ⚠️ Afgerond ${whenTxt(rd)}, maar de meting van ${whenTxt(STAT_AT)} ziet géén wijziging in het platform en er staat geen opmerking bij. Check of de wijziging echt is opgeslagen; klopt het toch, zet dan een opmerking en rond opnieuw af.`;
+    if(anders) uitleg+=` ✅ Afgerond ${whenTxt(rd)}: bewust anders gedaan dan het advies${F.note?" (zie opmerking)":""}. Het advies blijft 14 dagen van ⚡ Advies weg.`;
     if(F.done&&grp==="todo") uitleg+=` ☑ Afgevinkt ${whenTxt(F.ts)}; klik bovenaan op Afronden om het definitief te maken.`;
-    return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,fout}; });
+    return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,fout,anders}; });
   if(dirty) folSave();
   const ORD={no:0,mid:1,man:2,ok:3,ey:4}, PO={google:0,meta:1,tiktok:2};
   rows.sort((x,y)=> ((PO[x.platform]??9)-(PO[y.platform]??9)) || (y.fout?1:0)-(x.fout?1:0) || ORD[x.st]-ORD[y.st] || y.rank-x.rank);
@@ -1050,7 +1053,7 @@ function drawFollowInner(){
     +`</div><div class="folbtns"><button class="rbtn sm2${nChk?" pri":""}" onclick="folRound()" ${nChk?"":"disabled"} title="Zet alle afgevinkte punten op Afgerond. Vannacht om 06:25 controleert het dashboard of ze echt in het platform staan.">✅ Afgevinkte punten afronden${nChk?` (${nChk})`:""}</button><button class="rbtn sm2" onclick="folSendOpen()" title="Stuurt alles wat nog open staat als visueel rapport via de Slack-bot naar Ger en Abel (eerst zie je een voorbeeld)">📨 Naar Ger</button></div></div>`;
   h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${folPlat==null?" on":""}" onclick="folPlat=null;drawFollow()">Alle <span class="n">${GA.todo.length} te doen</span></div>`+["google","meta","tiktok"].filter(p=>all.some(r=>r.platform===p)).map(p=>`<div class="wchip sm${folPlat===p?" on":""}" onclick="folPlat='${p}';drawFollow()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]||0} te doen</span></div>`).join("")+`<span class="lbl" style="margin-left:auto">laatste controle: ${whenTxt(STAT_AT)} · volgende vannacht 06:25</span></div>`;
   const rowHtml=r=>{ const key=folKey(r); const opn=folOpen.has(key); const inTodo=r.grp==="todo"; const cls=r.fout?"hi":r.grp==="wacht"?"man":CLS[r.st];
-    const badge=r.fout?`<span class="sevb hi">⚠️ Klopt niet</span>`:r.grp==="wacht"?`<span class="sevb man">🌙 Controle vannacht</span>`:(r.V.src==="manual"&&r.F.rounded)?`<span class="sevb ok">✅ Afgerond</span>`:`<span class="sevb ${CLS[r.st]}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`;
+    const badge=r.fout?`<span class="sevb hi">⚠️ Klopt niet</span>`:r.grp==="wacht"?`<span class="sevb man">🌙 Controle vannacht</span>`:(r.V.src==="manual"&&r.F.rounded)?`<span class="sevb ok">✅ Afgerond</span>`:r.anders?`<span class="sevb ok" title="bewust anders gedaan dan het advies">✅ Anders dan advies</span>`:`<span class="sevb ${CLS[r.st]}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`;
     const chk=inTodo?`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = dit heb ik gedaan. De rij blijft staan; met Afronden (bovenaan) maak je het definitief."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
       : r.grp==="wacht"?`<span class="folchk" onclick="event.stopPropagation()"><span class="lnk" onclick="folUnround(${jq(key)})" title="terug naar Nog te doen (als je het toch niet hebt gedaan)">↩︎</span></span>`:`<span class="folchk"></span>`;
     return `<div class="advrow ${cls}${opn?" open":""}${inTodo&&r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
@@ -1066,7 +1069,7 @@ function drawFollowInner(){
     if(opn){ if(!ls.length) h+=`<div class="advrows"><div class="advrow ok"><span class="advmain">Niets meer te doen${folPlat?" voor "+esc(PN(folPlat)):""}. 👌</span></div></div>`;
       else { let lastP=null; h+=`<div class="advrows">`; for(const r of ls){ if(r.platform!==lastP){ lastP=r.platform; h+=`<div class="folplat"><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}<span class="n">${ls.filter(x=>x.platform===r.platform).length}</span></div>`; } h+=rowHtml(r); } h+=`</div>`; } }
     h+=`</div>`; }
-  h+=`<p class="note"><b>Hoe het werkt.</b> Overdag <b>vink je af</b> wat je doet; de rij blijft staan (groen) zodat je ziet wat je hebt aangevinkt. Aan het eind klik je op <b>✅ Afgevinkte punten afronden</b>: die rijen gaan naar 🌙 Afgerond. <b>Vannacht om 06:25</b> meet het dashboard het ingestelde budget en de aan/uit-status in Google, Meta en TikTok. Klopt het (minstens driekwart van de geadviseerde stap gezet, of uit), dan schuift de rij naar ✅ Doorgevoerd. Klopt het niet, dan komt hij terug bovenaan Nog te doen met ⚠️. Acties die niet meetbaar zijn (🎯 ⚠️ ⏱ 👤) zijn na afronden meteen ✅. <b>📨 Naar Ger</b> zet alles wat nog open staat (plus jullie opmerkingen) in een visueel rapport en stuurt de link via de Slack-bot naar Ger en Abel. Vinkjes en opmerkingen bewaart deze browser.</p>`;
+  h+=`<p class="note"><b>Hoe het werkt.</b> Overdag <b>vink je af</b> wat je doet; de rij blijft staan (groen) zodat je ziet wat je hebt aangevinkt. Aan het eind klik je op <b>✅ Afgevinkte punten afronden</b>: die rijen gaan naar 🌙 Afgerond. <b>Vannacht om 06:25</b> meet het dashboard het ingestelde budget en de aan/uit-status in Google, Meta en TikTok. Klopt het (minstens driekwart van de geadviseerde stap gezet, of uit), dan schuift de rij naar ✅ Doorgevoerd. Is er in het platform niets veranderd én staat er geen opmerking bij, dan komt hij terug bovenaan Nog te doen met ⚠️ (waarschijnlijk niet opgeslagen). Heb je bewust iets anders gedaan dan het advies, zet dat in de opmerking: dan telt het als doorgevoerd en blijft het advies 14 dagen van ⚡ Advies weg. Acties die niet meetbaar zijn (🎯 ⚠️ ⏱ 👤) zijn na afronden meteen ✅. <b>📨 Naar Ger</b> zet alles wat nog open staat (plus jullie opmerkingen) in een visueel rapport en stuurt de link via de Slack-bot naar Ger en Abel. Vinkjes en opmerkingen bewaart deze browser.</p>`;
   w.innerHTML=h;
 }
 // ---- rapport voor de media buyer: tekst (kopiëren) en visueel (HTML, via de Slack-bot) ----
@@ -1076,7 +1079,7 @@ function folReportText(rows){
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
   const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}*: ${r.label}`;
     if(V.src!=="manual"&&V.bRef!=null){ s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+folTarget(r)+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
-    if(r.fout) s+=` ⚠️ was afgerond, maar de meting ziet het niet in het platform`;
+    if(r.fout) s+=` ⚠️ was afgerond, maar in het platform is niets gewijzigd`;
     s+=`\n   _${r.txt.replace(/\s+/g," ").slice(0,220)}${r.txt.length>220?"…":""}_`;
     if(r.F.note) s+=`\n   📝 ${r.F.note}`;
     return s; };
@@ -1094,7 +1097,7 @@ function folReportHtml(rows,extra){
   const big=r=>{ const V=r.V; if(V.src==="manual"||V.bRef==null) return `<div class="big act">${r.type==="actie"?"instelling":"actie"}</div>`;
     const nu=V.uit?"uit":eur0(V.bNow), naar=r.type==="stoppen"?"uit":folTarget(r); return `<div class="big"><span>${nu}</span><i>→</i><b>${naar}</b>${r.type==="stoppen"?"":"<small>per dag</small>"}</div>`; };
   const wie=r=>`<div class="unit"><span class="pl" style="background:${PC(r.platform)}">${e(PN(r.platform))}</span>${e(r.cname||r.label)}${r.sname?` <em>›</em> ${e(r.sname)}`:""}</div>`;
-  const card=r=>`<div class="card${r.fout?" stale":""}"><div class="top"><div class="ty">${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])}</div>${big(r)}</div>${wie(r)}<p>${e(r.txt.replace(/\s+/g," ").slice(0,280))}${r.txt.length>280?"…":""}</p>${r.type==="actie"&&r.doen?`<p class="waar"><b>Waar:</b> ${e(r.doen)}</p>`:""}${r.fout?`<p class="warn">⚠️ Was afgerond als doorgevoerd, maar de meting van ${whenTxt(STAT_AT)} ziet het niet in het platform. Graag checken of het is opgeslagen.</p>`:""}${r.F.note?`<p class="note">📝 ${e(r.F.note)}</p>`:""}</div>`;
+  const card=r=>`<div class="card${r.fout?" stale":""}"><div class="top"><div class="ty">${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])}</div>${big(r)}</div>${wie(r)}<p>${e(r.txt.replace(/\s+/g," ").slice(0,280))}${r.txt.length>280?"…":""}</p>${r.type==="actie"&&r.doen?`<p class="waar"><b>Waar:</b> ${e(r.doen)}</p>`:""}${r.fout?`<p class="warn">⚠️ Was afgerond als doorgevoerd, maar de meting van ${whenTxt(STAT_AT)} ziet geen wijziging in het platform. Graag checken of het is opgeslagen.</p>`:""}${r.F.note?`<p class="note">📝 ${e(r.F.note)}</p>`:""}</div>`;
   const byP=ls=>["google","meta","tiktok"].map(p=>{ const x=ls.filter(r=>r.platform===p); return x.length?`<h3><span class="dot" style="background:${PC(p)}"></span>${e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
   const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.platform)}"></span> ${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])} · ${e(r.label)}${r.ch?` <small>(${fmtY(r.ch.d)})</small>`:""}${r.F.note?` <small>📝 ${e(r.F.note)}</small>`:""}</li>`).join("")}</ul>`;
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open punten media buyer · ${dat}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet"><style>
