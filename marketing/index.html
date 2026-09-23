@@ -551,6 +551,18 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
 .smtbl tr.smtot td{font-weight:700} .smtbl tr.smtot td:first-child{padding:4px 8px;font-size:12.5px}
 @media(max-width:900px){.modalgrid{grid-template-columns:1fr} .brktbl .barc{display:none} .dsum{min-width:88px} .smcard .smv{font-size:22px}}
 html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .obar{background:#2a2a2d} html[data-theme="dark"] .fpill{background:#1a2740;border-color:#2e4a78;color:#9cc0f5} html[data-theme="dark"] .brktbl tr.on td{background:#1a2740} html[data-theme="dark"] .brktbl tr:not(:first-child):hover td{background:#1c1c1f} html[data-theme="dark"] .folnote input,html[data-theme="dark"] .folnote-in,html[data-theme="dark"] .modalgrid textarea{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .folnote-in.has{background:#1a2740;border-color:#2e4a78} html[data-theme="dark"] .advrow.done{background:linear-gradient(90deg,rgba(49,162,76,.16),transparent 60%)} html[data-theme="dark"] .aibar{border-color:#2a2a2d} html[data-theme="dark"] .notetag{background:#1a2740;color:#9cc0f5} html[data-theme="dark"] .rbtn.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} html[data-theme="dark"] .smcell.sm-3{background:rgba(142,142,147,.18)} html[data-theme="dark"] .smcell.smt{background:#161618;border-color:#2a2a2d} html[data-theme="dark"] .smcell.sm-5{background:rgba(49,162,76,.45)}
+
+/* v2.11 · Opgevolgd in blokken + rapport naar Ger + zoekwoorden */
+.folbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.folkpis{display:flex;gap:8px;flex-wrap:wrap;flex:1}
+.folkpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 14px;cursor:pointer;min-width:130px}.folkpi b{display:block;font-size:22px;line-height:1.2}.folkpi span{font-size:12px;color:var(--mut)}
+.folkpi.todo b{color:#e04b4b}.folkpi.wacht b{color:#7a6ee0}.folkpi.ok b{color:#31a24c}.folkpi.on{border-color:var(--plan)}
+.folbtns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rbtn.warn{background:#e04b4b;color:#fff;border-color:#e04b4b}
+.folgrp{margin:14px 0}.folgrph{display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 2px;font-size:14.5px;flex-wrap:wrap}.folgrph small{color:var(--mut);font-size:12px}
+.folgrph .n,.folplat .n{background:var(--line);border-radius:10px;padding:0 8px;font-size:12px;font-weight:600}
+.folplat{font-weight:700;font-size:13px;margin:10px 0 4px;display:flex;align-items:center;gap:6px}
+.folprev{width:100%;height:62vh;border:1px solid var(--line);border-radius:12px;background:#0e0e0f}.folsendinfo{margin-top:10px;font-size:12.5px;line-height:1.55;color:var(--mut)}.folsendinfo b{color:var(--txt)}
+.kwtop{margin-top:12px;padding:12px 16px}.kwtoph{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}.kwtoph small{color:var(--mut)}.kwtoph .sm{margin-left:auto;cursor:pointer;color:var(--plan)}
+.kwls{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px}.kwls th,.kwls td{text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)}.kwls th{color:var(--mut);font-weight:600}
 </style>
 </head>
 <body>
@@ -600,6 +612,6 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>
