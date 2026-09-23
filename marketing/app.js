@@ -162,7 +162,7 @@ function dpPresetList(){
 //  DPAC · Marketing Dashboard — kern
 // ============================================================
 let CAMPS=new Map(), ADS=[], ADIDX=new Map(), CD=[], AD=[], FORMS=[];
-let STDATA=[], STNOW=new Map(), STPREV=new Map();   // dagsnapshots van ingestelde budgetten + aan/uit (dpac.ad_entity_status)
+let STDATA=[], STNOW=new Map(), STPREV=new Map(), STLAST=-1;   // dagsnapshots van ingestelde budgetten + aan/uit (dpac.ad_entity_status)
 let MODE="cohort";          // periode (leads op leaddatum, inschrijvingen op tekendatum) · cohort · gebeurd
 let GROUP="tree";            // tree (platform › campagne › adset › ad) · utm_source · placement · bron · temperature · owner · setter
 let PARTY=false;             // party/vacature-campagnes meetellen in totalen
@@ -186,7 +186,7 @@ function initApp(){
   const ADNORM=new Map(); for(const a of ADS){ const nn=_nrm(a.adName); if(nn&&nn.length>=6){ const kk=a.platform+"|"+nn; if(!ADNORM.has(kk)) ADNORM.set(kk,a); } }
   CD=(D.campaign_days||[]).map(r=>({d:dOf(r[0]),platform:r[1],cid:r[2],spend:+r[3]||0,clicks:+r[4]||0,imps:+r[5]||0,isr:r[6]==null?null:+r[6],conv:r[7]==null?null:+r[7],pl:r[8]==null?null:+r[8]}));
   AD=(D.ad_days||[]).map(r=>({d:dOf(r[0]),ad:ADS[r[1]],spend:+r[2]||0,clicks:+r[3]||0,imps:+r[4]||0})).filter(x=>x.ad);
-  L=objs(D.lead_cols,D.leads);
+  L=objs(D.lead_cols,D.leads); const KWC=new Map();
   for(const l of L){ l.nm=cap(l.name); l.cd=dOf(l.created_on); l.pd=dOf(l.planned_on); l.id_=dOf(l.intake_on); l.sd=dOf(l.signed_on); l.asd=dOf(l.asm_on);
     l.is_show=!!l.is_show; l.is_noshow=!!l.is_noshow; l.is_signed=!!l.is_signed; l.hard=!!l.hard; l.asm=!!l.asm; l.lost=l.status==="lost";
     l.platform=l.platform||"onbekend"; l.ckey=ck(l.platform,l.campaign_id); l.camp=CAMPS.get(l.ckey)||null; l.party=!!(l.camp&&l.camp.party);
@@ -196,7 +196,8 @@ function initApp(){
       if(hit&&l.camp&&hit.cid!==l.campaign_id) hit=null;   // nooit een ad uit een ándere campagne plakken
       if(hit){ l.adObj=hit; if(!l.camp&&hit.cid){ l.campaign_id=hit.cid; l.ckey=ck(l.platform,hit.cid); l.camp=CAMPS.get(l.ckey)||null; l.party=!!(l.camp&&l.camp.party); if(l.bron==="onbekend") l.bron="utm"; } } } }
     if((l.utm_content||"").toLowerCase()==="link_in_bio"){ l.bioLink=true; if(!l.session_source) l.session_source="Instagram bio-link"; }   // blijft bij Meta (ze zagen onze video's), maar duidelijk gelabeld
-    l.value=+(l.contract_value||OMZET()); }
+    l.value=+(l.contract_value||OMZET());
+    { let kw=l.platform==="google"?String(l.utm_term||"").trim():""; if(/^\{.*\}$/.test(kw)||/^\(not set\)$/i.test(kw)) kw=""; if(kw){ const kk=kw.toLowerCase().replace(/\s+/g," "); if(!KWC.has(kk)) KWC.set(kk,kw); kw=KWC.get(kk); } l.kw=kw; } }
   FORMS=(D.forms||[]).map(f=>({...f,d:dOf(f.on)}));
   const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate())); NOW=TODAY;
   const g=new Date(D.gen);
@@ -205,6 +206,7 @@ function initApp(){
   STDATA=(D.entity_status||[]).map(r=>({d:dOf(r[0]),key:r[1]+"|"+r[2]+"|"+(r[3]||""),platform:r[1],cid:r[2],sid:r[3]||"",level:r[4],status:r[5],budget:r[6]==null?null:+r[6],name:r[7]}));
   STNOW=new Map(); STPREV=new Map();
   for(const r of STDATA){ const a2=STNOW.get(r.key); if(!a2||r.d>a2.d) STNOW.set(r.key,r); if(r.d<=NOW-7){ const b2=STPREV.get(r.key); if(!b2||r.d>b2.d) STPREV.set(r.key,r); } }
+  STLAST=STDATA.reduce((m,r)=>Math.max(m,r.d),-1);
   A=NOW-29; B=NOW; memoReset();
   render();
 }
@@ -320,7 +322,7 @@ function drawKpis(){
   ];
   k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}${x[5]?" kclk":""}" ${x[5]?`onclick="kpiPick('${x[5]}')"`:""} ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
 }
-function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
+function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"camp"; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
 
 // ---- tabs ----
 function drawTabs(){
@@ -429,6 +431,10 @@ function adAdvice(m){ const MX=MAXCPK();
 function scoreCell(sc){ if(sc==null) return `<span class="scorep s0" title="minder dan € 100 kosten en minder dan 3 leads — te weinig om eerlijk te beoordelen">te weinig data</span>`;
   const cl=sc>=70?"s4":sc>=45?"s3":sc>=25?"s2":"s1", lab=sc>=70?"top":sc>=45?"goed":sc>=25?"matig":"slecht";
   return `<span class="scorep ${cl}">${sc} · ${lab}</span>`; }
+// zoekwoorden (Google): leads gegroepeerd per campagne × zoekwoord (kosten per zoekwoord zitten nog niet in de data)
+function kwGroups(){ const g=new Map(); for(const l of L){ if(l.platform!=="google"||(l.party&&!PARTY)) continue; const cn=l.camp?l.camp.name:"(campagne onbekend)"; const lab=kwLab(l); const key=cn+"|"+lab; if(!g.has(key)) g.set(key,{label:lab,camp:cn,ls:[]}); g.get(key).ls.push(l); } return [...g.values()]; }
+function kwLeadsHtml(r){ const ls=r.m.S.nieuw.slice().sort((x,y)=>(y.is_signed-x.is_signed)||(y.is_show-x.is_show)||(y.cd-x.cd));
+  return `<div class="bxg"><div><small>Zoekwoord</small><b>${esc(r.label)}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Intakes gepland</small><b>${r.m.g}</b></div><div><small>Shows</small><b>${r.m.sh}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div></div><table class="kwls"><tr><th>Naam</th><th>Binnen</th><th>Fase</th><th>Eigenaar</th></tr>${ls.slice(0,40).map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td>${fmt(l.cd)}</td><td>${esc(l.stage_name||"—")}${l.is_signed?" · ✅ ingeschreven":l.lost?" · verloren"+(l.lost_reason?` <small>(${esc(l.lost_reason)})</small>`:""):""}</td><td>${esc(l.owner||"—")}</td></tr>`).join("")}</table>${ls.length>40?`<div class="more">eerste 40 van ${ls.length}</div>`:""}`; }
 let bestPlat=null;
 function drawBest(){ keepScroll(document.getElementById("bestwrap"),drawBestInner); }
 function drawBestInner(){
@@ -447,6 +453,8 @@ function drawBestInner(){
     for(const g of seen.values()){ const set=new Set(g.ads);
       const ls=L.filter(l=>l.adObj&&set.has(l.adObj)&&(PARTY||!l.party)); const sp=spendAds(A,B,y=>set.has(y)); const m=metrics(ls,sp,A,B);
       if(m.n<1&&m.spend<0.5) continue; rows.push({label:g.label,camp:g.camp,campName:g.camp,adsetName:g.label,platform:g.platform,m,score:perfScore(m)}); }
+  } else if(bestLvl==="kw"){
+    for(const x of kwGroups()){ const m=metrics(x.ls,{spend:0,clicks:0,imps:0},A,B); if(m.n<1) continue; rows.push({label:x.label,camp:x.camp,campName:x.camp,adsetName:"",platform:"google",m,score:null,kw:true}); }
   } else {
     for(const [k,c] of CAMPS){ if(c.party&&!PARTY) continue;
       const ls=L.filter(l=>l.ckey===k&&(PARTY||!l.party)); const sp=spendIn(A,B,r=>r.platform===c.platform&&(r.cid||"")===(c.id||"")); const m=metrics(ls,sp,A,B);
@@ -456,7 +464,7 @@ function drawBestInner(){
   const preCamp=rows;
   if(bestLvl!=="camp"&&bestCamps.size) rows=rows.filter(r=>bestCamps.has(r.campName));
   const cols=[
-    {k:"label",t:bestLvl==="ad"?"Advertentie":bestLvl==="adset"?"Advertentiegroep":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<div class="adnm" title="${esc(r.label)}${r.camp?" — "+esc(r.camp):""}"><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</b>${r.camp?`<small>${esc(r.camp)}</small>`:""}</div>`,cls:"nmw"},
+    {k:"label",t:bestLvl==="kw"?"Zoekwoord":bestLvl==="ad"?"Advertentie":bestLvl==="adset"?"Advertentiegroep":"Campagne",v:r=>r.label.toLowerCase(),f:r=>`<div class="adnm" title="${esc(r.label)}${r.camp?" — "+esc(r.camp):""}"><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</b>${r.camp?`<small>${esc(r.camp)}</small>`:""}</div>`,cls:"nmw"},
     {k:"score",t:"Prestatie",v:r=>r.score,f:r=>scoreCell(r.score),tip:"0–100: kosten per klant laag (max 60) + genoeg klanten om erop te vertrouwen (max 20) + intakes en shows per uitgegeven euro (max 20)"},
     {k:"spend",t:"Kosten",v:r=>r.m.spend,f:r=>eur0(r.m.spend)},
     {k:"n",t:"Leads",v:r=>r.m.n,f:r=>r.m.n},
@@ -468,11 +476,12 @@ function drawBestInner(){
     {k:"sign",t:"Sign %",v:r=>r.m.sign,f:r=>r.m.sign==null?"—":r1(r.m.sign)+"%"},
     {k:"cpk",t:"Kosten / klant",v:r=>r.m.cpk,f:r=>r.m.cpk==null?"—":eur0(r.m.cpk),cf:r=>r.m.cpk==null?"":(r.m.cpk<=MAXCPK()*0.85?"good":r.m.cpk>MAXCPK()*1.25?"bad":"warn")},
   ];
-  const s=bestSort; const col=cols.find(c=>c.k===s.k)||cols[1];
+  if(bestLvl==="kw") for(const k of ["score","spend","cpl","cpk"]){ const i=cols.findIndex(c=>c.k===k); if(i>=0) cols.splice(i,1); }
+  const s=bestSort; const col=cols.find(c=>c.k===s.k)||(bestLvl==="kw"?cols.find(c=>c.k==="sg"):cols[1]);
   rows.sort((x,y)=>{ const a=col.v(x),b=col.v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
   const LIMN=bestAll?rows.length:40;
-  let h=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${bestPlat==null?" on":""}" onclick="bestPlat=null;bestCamps=new Set();bestfOpen=false;drawBest()">Alle</div>`+["meta","google","tiktok"].map(p=>`<div class="wchip sm${bestPlat===p?" on":""}" onclick="bestPlat='${p}';bestCamps=new Set();bestfOpen=false;drawBest()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
-  h+=`<div class="wonchips"><span class="lbl">Niveau:</span>`+[["camp","Campagne"],["adset","Advertentiegroep"],["ad","Advertentie"]].map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';bestCamps=new Set();bestfOpen=false;drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
+  let h=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${bestPlat==null?" on":""}" onclick="bestPlat=null;bestCamps=new Set();bestfOpen=false;drawBest()">Alle</div>`+["meta","google","tiktok"].map(p=>`<div class="wchip sm${bestPlat===p?" on":""}" onclick="bestPlat='${p}';if(bestLvl==='kw'&&'${p}'!=='google')bestLvl='ad';bestCamps=new Set();bestfOpen=false;drawBest()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)}</div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Niveau:</span>`+[["camp","Campagne"],["adset","Advertentiegroep"],["ad","Advertentie"]].concat((bestPlat==null||bestPlat==="google")?[["kw","🔎 Zoekwoord (Google)"]]:[]).map(x=>`<div class="wchip sm${bestLvl===x[0]?" on":""}" onclick="bestLvl='${x[0]}';${x[0]==="kw"?"bestPlat='google';bestSort={k:'sg',d:-1};":""}bestCamps=new Set();bestfOpen=false;drawBest()">${x[1]}</div>`).join("")+`<span style="flex:1"></span><span class="lbl">klik op een kolomkop om te sorteren</span></div>`;
   let bfPanel="";
   if(bestLvl!=="camp"&&bestfOpen){ const cnt=new Map(); preCamp.forEach(r=>cnt.set(r.campName,(cnt.get(r.campName)||0)+1));
     bfPanel=`<div class="wonchips" style="margin:0 0 8px"><span class="lbl">Filter campagne:</span><div class="wchip sm${bestCamps.size?"":" on"}" onclick="bestCamps=new Set();drawBest()">Alles <span class="n">${preCamp.length}</span></div>`
@@ -481,24 +490,30 @@ function drawBestInner(){
   h+=`<div class="wontbl"><table><tr>`+cols.map(c=>`<th ${c.tip?`title="${esc(c.tip)}"`:""}><span class="sortl" onclick="bestSort.k==='${c.k}'?bestSort.d=-bestSort.d:(bestSort={k:'${c.k}',d:-1});drawBest()">${c.t} <span class="arr">${s.k===c.k?(s.d>0?"▲":"▼"):""}</span></span>${c.k==="label"&&bestLvl!=="camp"?`<span class="fbtn${bestCamps.size?" on":""}" title="filter op campagne (met aantallen)" onclick="event.stopPropagation();bestfOpen=!bestfOpen;drawBest()">⏷</span>`:""}</th>`).join("")+`</tr>`
     + rows.slice(0,LIMN).map(r=>{ const bk=bestLvl+"|"+r.label+"|"+r.camp; const opn=bestOpen.has(bk);
       return `<tr class="clkrow${opn?" onrow":""}" onclick="bestTog(${jq(bk)})" title="klik voor de volledige opbouw">`+cols.map(c=>`<td class="${c.cls||""} ${c.cf?c.cf(r):""}">${c.f(r)}</td>`).join("")+`</tr>`
-        +(opn?`<tr class="bestx"><td colspan="${cols.length}"><div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div>${r.adsetName?`<div><small>Advertentiegroep</small><b>${esc(r.adsetName)}</b></div>`:""}${bestLvl==="ad"?`<div><small>Advertentie</small><b>${esc(r.label)}</b></div>`:""}<div><small>Kosten</small><b>${eur0(r.m.spend)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div>${r.m.cpk!=null?`<div><small>Kosten / klant</small><b>${eur0(r.m.cpk)}</b></div>`:""}</div>${(()=>{const [al,at]=adAdvice(r.m);return `<div class="bxadv"><small>Advies voor ${bestLvl==="ad"?"deze advertentie":bestLvl==="adset"?"deze advertentiegroep":"deze campagne"} (gekozen periode)</small><b>${al}</b> <span>${at}</span></div>`;})()}</td></tr>`:""); }).join("")
+        +(opn&&r.kw?`<tr class="bestx"><td colspan="${cols.length}">${kwLeadsHtml(r)}</td></tr>`:opn?`<tr class="bestx"><td colspan="${cols.length}"><div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}</b></div><div><small>Campagne</small><b>${esc(r.campName)}</b></div>${r.adsetName?`<div><small>Advertentiegroep</small><b>${esc(r.adsetName)}</b></div>`:""}${bestLvl==="ad"?`<div><small>Advertentie</small><b>${esc(r.label)}</b></div>`:""}<div><small>Kosten</small><b>${eur0(r.m.spend)}</b></div><div><small>Leads</small><b>${r.m.n}</b></div><div><small>Inschrijvingen</small><b>${r.m.sg}</b></div>${r.m.cpk!=null?`<div><small>Kosten / klant</small><b>${eur0(r.m.cpk)}</b></div>`:""}</div>${(()=>{const [al,at]=adAdvice(r.m);return `<div class="bxadv"><small>Advies voor ${bestLvl==="ad"?"deze advertentie":bestLvl==="adset"?"deze advertentiegroep":"deze campagne"} (gekozen periode)</small><b>${al}</b> <span>${at}</span></div>`;})()}</td></tr>`:""); }).join("")
     + (rows.length?"":`<tr><td colspan="${cols.length}" class="empty">Geen advertenties met leads of kosten in deze periode.</td></tr>`)+`</table></div>`;
+  if(bestPlat==="google"&&bestLvl!=="kw"){ const kr=kwGroups().map(x=>({x,m:metrics(x.ls,{spend:0,clicks:0,imps:0},A,B)})).filter(o=>o.m.n>0).sort((p,q)=>q.m.sg-p.m.sg||q.m.sh-p.m.sh||q.m.n-p.m.n).slice(0,10);
+    if(kr.length) h+=`<div class="cmp kwtop"><div class="kwtoph"><b>🔎 Beste zoekwoorden (Google)</b><small>zelfde periode · gesorteerd op inschrijvingen, dan shows · kosten per zoekwoord zitten nog niet in de data</small><span class="sm" onclick="bestLvl='kw';bestSort={k:'sg',d:-1};drawBest()">alle zoekwoorden →</span></div><div class="wontbl"><table><tr><th>Zoekwoord</th><th>Leads</th><th>Intakes gepland</th><th>Shows</th><th>Inschrijvingen</th></tr>${kr.map(o=>`<tr><td class="nmw"><div class="adnm"><b>${esc(o.x.label)}</b><small>${esc(o.x.camp)}</small></div></td><td>${o.m.n}</td><td>${o.m.g}</td><td>${o.m.sh}</td><td><b>${o.m.sg}</b></td></tr>`).join("")}</table></div></div>`; }
   if(rows.length>40) h+=`<div style="text-align:center;margin:10px 0"><span class="sm" onclick="bestAll=!bestAll;drawBest()">${bestAll?"Toon top 40":"Toon alle "+rows.length}</span></div>`;
+  if(bestLvl==="kw") h+=`<p class="note">Zoekwoord = het Google-zoekwoord waarop de lead binnenkwam (utm_keyword) · ${fmtY(A)} t/m ${fmtY(B)} · cohort. <b>Kosten per zoekwoord zitten nog niet in de data</b> (alleen per campagne), daarom hier geen kosten, CPL of prestatiescore. PMax geeft geen zoekwoorden door. Klik een rij voor de namen.</p>`; else
   h+=`<p class="note">Alle ${bestLvl==="ad"?"advertenties":"campagnes"} plat naast elkaar · ${fmtY(A)} t/m ${fmtY(B)} · telmodus ${MODE}. Standaard gesorteerd op <b>Prestatie</b>: van best naar slechtst presterend. De score (0–100) = <b>kosten per klant</b> t.o.v. het plafond van ${eur0(MAXCPK())} (laag = veel punten, max 60) + <b>zekerheid</b> (1 klant = 8, 2 = 14, 3+ = 20 punten — één toevalstreffer wint dus niet) + <b>funnel-rendement</b> (intakes gepland en shows per € 100, max 20). Iets met weinig kosten én weinig leads krijgt "te weinig data" en staat onderaan — goedkoop maar niks opleveren telt niet als goed. Party-campagnes ${PARTY?"tellen mee":"zijn verborgen"}.</p>`;
   w.innerHTML=h;
 }
 
 // ---- detail (namen) — met samenvatting gewonnen/verloren, uitsplitsing per dimensie en filters ----
 const SETLAB={nieuw:"Leads binnengekomen",gepland:"Intake gepland",shows:"Shows",sign:"Ingeschreven"};
-let dSort={c:1,d:-1}, dFilt={}, dfCol=null, dfAll={}, dDim="camp", dOut=null, dShowAll=false;
+let dSort={c:1,d:-1}, dFilt={}, dfCol=null, dfAll={}, dDim="camp", dOut=null, dShowAll=false, dDimAuto=true, dDimPrev="camp";
 const outc=l=> l.is_signed?"won" : l.lost?"lost" : "open";
 const OUTL={won:["Gewonnen","var(--sign-tx)"],lost:["Verloren","var(--close-tx)"],open:["Nog open","var(--mut)"]};
+const isPmax=l=>!!(l.camp&&/pmax|performance/i.test((l.camp.type||"")+" "+(l.camp.name||"")));
+const kwLab=l=> l.platform!=="google"?"(geen zoekwoord · niet Google)" : l.kw ? l.kw : isPmax(l)?"(PMax: geen zoekwoorden)":"(zoekwoord onbekend)";
 const campLab=l=> l.camp?l.camp.name : l.platform==="niet_betaald"?"(niet betaald)" : "(campagne onbekend) · "+PN(l.platform);
 const DIMS={
   plat:{t:"Platform",fv:l=>PN(l.platform)+(l.platform==="meta"&&l.placement?" · "+l.placement:"")+(l.bioLink?" · bio-link":"")},
   camp:{t:"Campagne",fv:campLab},
   adset:{t:"Adset",fv:l=>l.adObj&&l.adObj.adsetName?l.adObj.adsetName:"(geen adset bekend)"},
   ad:{t:"Advertentie",fv:l=>l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"(geen advertentie bekend)")},
+  kw:{t:"🔎 Zoekwoord",fv:kwLab},
   fase:{t:"Fase",fv:l=>l.stage_name+(l.lost&&l.stage_position!==0?" · verloren":"")},
   reden:{t:"Verliesreden",fv:l=>l.lost?(l.lost_reason||"(geen reden ingevuld)"):"(niet verloren)"},
   owner:{t:"Eigenaar",fv:l=>l.owner||"(geen eigenaar)"},
@@ -506,8 +521,8 @@ const DIMS={
 function dfToggle(dim,v){ if(!dFilt[dim]) dFilt[dim]=new Set(); const st=dFilt[dim]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete dFilt[dim]; drawDetail(); }
 function dfClear(dim){ if(dim) delete dFilt[dim]; else { dFilt={}; dOut=null; } drawDetail(); }
 function dOutPick(o){ dOut = dOut===o? null : o; if(o==="lost"&&dOut==="lost") dDim="reden"; drawDetail(); }
-function dDimPick(k){ dDim=k; drawDetail(); }
-function showDetail(key,set){ detail={key,set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
+function dDimPick(k){ dDim=k; dDimAuto=false; drawDetail(); }
+function showDetail(key,set){ detail={key,set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"camp"; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
 function drawDetail(){ const _el=document.getElementById("detail"); if(!detail||tab!=="tree"){ _el.style.display="none"; return; } keepScroll(_el,drawDetailInner); }
 function drawDetailInner(){
   const el=document.getElementById("detail"); if(!detail||tab!=="tree"){ el.style.display="none"; return; }
@@ -522,6 +537,10 @@ function drawDetailInner(){
   const pass=(l,skip)=>FE.every(([k,st])=>k===skip||st.has(DIMS[k].fv(l)));
   const rowsDim=rowsAll.filter(l=>pass(l));                       // alle dimensie-filters, nog zonder uitkomst-filter
   const rows=dOut? rowsDim.filter(l=>outc(l)===dOut) : rowsDim;      // + uitkomst
+  // Google → zoekwoorden: staat de selectie volledig op Google, dan splitst hij vanzelf uit op zoekwoord (tot je zelf een dimensie kiest)
+  const hasG=rowsAll.some(l=>l.platform==="google");
+  if(dDimAuto){ const gOnly=rowsDim.length>0&&rowsDim.every(l=>l.platform==="google"); if(gOnly&&dDim!=="kw"){ dDimPrev=dDim; dDim="kw"; } else if(!gOnly&&dDim==="kw"){ dDim=dDimPrev||"camp"; } }
+  if(dDim==="kw"&&!hasG) dDim="camp";
   const cnt=ls=>({n:ls.length,g:ls.filter(l=>l.pd>=0).length,sh:ls.filter(l=>l.is_show).length,won:ls.filter(l=>outc(l)==="won").length,lost:ls.filter(l=>outc(l)==="lost").length,open:ls.filter(l=>outc(l)==="open").length});
   const T=cnt(rowsDim);
   const bar=(c,h)=> c.n? `<span class="obar" style="height:${h||8}px"><i style="width:${c.won/c.n*100}%;background:var(--sign)"></i><i style="width:${c.open/c.n*100}%;background:#b8b4a6"></i><i style="width:${c.lost/c.n*100}%;background:var(--close)"></i></span>`:"";
@@ -538,7 +557,7 @@ function drawDetailInner(){
   const sel=dFilt[dDim];
   let ent=[...groups.entries()].map(([v,ls])=>[v,cnt(ls)]).sort((x,y)=>((sel&&sel.has(y[0]))?1:0)-((sel&&sel.has(x[0]))?1:0)||y[1].n-x[1].n);
   const CAP=14; let more=0; if(!dfAll[dDim]&&ent.length>CAP+2){ more=ent.length-CAP; ent=ent.slice(0,CAP); }
-  let brk=`<div class="dbrk"><div class="wonchips" style="margin:0 0 6px"><span class="lbl">Uitsplitsen op:</span>`+Object.entries(DIMS).map(([k,d])=>`<div class="wchip sm${dDim===k?" on":""}" onclick="dDimPick('${k}')">${d.t}${dFilt[k]?` <span class="n">${dFilt[k].size}</span>`:""}</div>`).join("")+`<span class="lbl" style="margin-left:auto">klik op een rij om te filteren · meerdere tegelijk kan</span></div>`;
+  let brk=`<div class="dbrk"><div class="wonchips" style="margin:0 0 6px"><span class="lbl">Uitsplitsen op:</span>`+Object.entries(DIMS).filter(([k])=>k!=="kw"||hasG).map(([k,d])=>`<div class="wchip sm${dDim===k?" on":""}" onclick="dDimPick('${k}')">${d.t}${dFilt[k]?` <span class="n">${dFilt[k].size}</span>`:""}</div>`).join("")+`<span class="lbl" style="margin-left:auto">klik op een rij om te filteren · meerdere tegelijk kan</span></div>`;
   brk+=`<table class="brktbl"><tr><th></th><th>${esc(DIMS[dDim].t)}</th><th class="num">Leads</th><th class="num">Gepland</th><th class="num">Shows</th><th class="num won">Gewonnen</th><th class="num lost">Verloren</th><th class="num">Open</th><th class="barc">verdeling</th><th class="num">verloren %</th></tr>`
     + (ent.length? ent.map(([v,c])=>`<tr class="${sel&&sel.has(v)?"on":""}" onclick="dfToggle('${dDim}',${jq(v)})"><td class="ck">${sel&&sel.has(v)?"☑":"☐"}</td><td class="val" title="${esc(v)}">${esc(v)}</td><td class="num"><b>${c.n}</b></td><td class="num">${c.g||"—"}</td><td class="num">${c.sh||"—"}</td><td class="num won">${c.won||"—"}</td><td class="num lost">${c.lost||"—"}</td><td class="num">${c.open||"—"}</td><td class="barc">${bar(c)}</td><td class="num">${c.n?fpct(c.lost,c.n):"—"}</td></tr>`).join("") : `<tr><td colspan="10" class="empty">—</td></tr>`)
     + (more?`<tr><td colspan="10" class="morec"><span class="sm" onclick="dfAll['${dDim}']=true;drawDetail()">nog ${more} meer ⏷</span></td></tr>`:"")+`</table></div>`;
@@ -553,6 +572,7 @@ function drawDetailInner(){
     {t:"Advertentie",v:l=>l.adObj?l.adObj.adName:"",k:l=>`<small>${esc(l.adObj?(l.adObj.adName||l.adObj.adId):(l.utm_content||"—"))}</small>`},
     {t:"Eigenaar",v:l=>l.owner||"",k:l=>esc(l.owner||"—")},
   ];
+  if(hasG) cols.splice(7,0,{t:"Zoekwoord",v:l=>(l.kw||"").toLowerCase(),k:l=>l.platform==="google"?`<small><b>${esc(kwLab(l))}</b></small>`:"<small>—</small>"});
   const s=dSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
   const LIM=dShowAll?sorted.length:150;
   el.style.display="block";
@@ -756,7 +776,7 @@ function adviceActies(N){
 function smCls(r,ref,n){ if(r==null||n<5) return "sm-na"; if(!ref) return "sm-3"; const q=r/ref; return q<0.5?"sm-1":q<0.8?"sm-2":q<=1.2?"sm-3":q<=1.5?"sm-4":"sm-5"; }
 function smPick(met){ smMetric=met; drawSales(); }
 function smTog(k){ smOpen.has(k)?smOpen.delete(k):smOpen.add(k); drawSales(); }
-function smDetail(c,o){ tab="tree"; detail={key:"__ALL__",set:"nieuw"}; dFilt={}; if(c) dFilt.camp=new Set([c]); if(o&&o!=="Overig") dFilt.owner=new Set([o]); dOut=null; dfAll={}; dShowAll=false; dDim=o?"fase":"owner"; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
+function smDetail(c,o){ tab="tree"; detail={key:"__ALL__",set:"nieuw"}; dFilt={}; if(c) dFilt.camp=new Set([c]); if(o&&o!=="Overig") dFilt.owner=new Set([o]); dOut=null; dfAll={}; dShowAll=false; dDim=o?"fase":"owner"; dDimAuto=false; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
 function drawSales(){
   const w=document.getElementById("saleswrap"); const SM=salesMatrix(A,B); const MT=SM_MET[smMetric]; const F=MT.f;
   const pc=o=>o&&o.n?F(o)/o.n:null; const refR=pc(SM.all); const fresh=B>NOW-14;
@@ -974,78 +994,161 @@ function drawAdvice(){
 }
 
 // ---- opgevolgd: is elk advies daadwerkelijk uitgevoerd? (ingesteld budget/aan-uit uit het platform; terugval = besteding) ----
-let folOpen=new Set(), folSt="all";
+// v2.11: vier blokken (Nog te doen · Afgevinkt, meting volgt · Doorgevoerd · Nog niet te beoordelen). Vinkje = "net gedaan in het overleg";
+// het verdwijnt vanzelf zodra de ochtendmeting (06:25) het als ✅ ziet. Afgevinkt maar na de volgende meting nog ❌ → terug naar Nog te doen met ⚠️.
+let folOpen=new Set(), folPlat=null, folClr=0, folGrpOpen=new Set(["todo","wacht"]);
 function folTog(k){ folOpen.has(k)?folOpen.delete(k):folOpen.add(k); drawFollow(); }
+function folGrpTog(g){ folGrpOpen.has(g)?folGrpOpen.delete(g):folGrpOpen.add(g); drawFollow(); }
+const dayOfTs=ts=>{ const t=new Date(ts); return s2d(new Date(t.getFullYear(),t.getMonth(),t.getDate())); };
+const FOL_STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],man:["☐","Zelf afvinken"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
+const FOL_GRP={todo:["🔴","Nog te doen","volgens de meting niet (genoeg) doorgevoerd, en nog niet afgevinkt"],wacht:["☑","Afgevinkt · meting volgt","door jullie afgevinkt; de meting van 06:25 bevestigt het en haalt het vinkje dan vanzelf weg"],ok:["✅","Doorgevoerd","bevestigd door de meting, of zelf afgevinkt bij acties die niet meetbaar zijn"],ey:["⏳","Nog niet te beoordelen","nog niets om mee te vergelijken"]};
 function folRows(){
   const list=advList(0);
   // adviezen die vorige week nog golden en nu niet meer, tonen we ook (meestal: opgevolgd)
   const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label&&c.type===p.type)).map(p=>({...p,vervallen:true}));
-  const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const F=folGet(ad);
+  let dirty=false;
+  const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const key=folKey(ad); let F=folGet(ad);
+    if(F.done&&V.src!=="manual"&&V.st==="ok"){ FOLST[key]={...F,done:false,autoOk:Date.now()}; F=FOLST[key]; dirty=true; }   // meting ziet het → vinkje vanzelf weg
     let disp; if(V.src==="manual") disp=F.done?"afgevinkt":"zelf afvinken";
     else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
     else if(V.bRef==null) disp="—";
     else disp=`${eur0(V.bRef)} → <b>${eur0(V.bNow)}/dag</b> ${V.src==="status"?"ingesteld":"besteed"}${V.tgt!=null?` <small>doel ≈ ${eur0(V.tgt)}</small>`:""}`;
-    return {...ad,V,st:V.st,uitleg:V.uitleg+(F.done?" ☑ Door jullie afgevinkt — de meting blijft leidend: staat het morgen nog op ❌, dan is het niet doorgevoerd.":""),disp,ch,F}; });
-  const ORD={no:0,mid:1,man:2,ok:3,ey:4};
-  rows.sort((x,y)=> ORD[x.st]-ORD[y.st] || y.rank-x.rank);
+    const cday=F.done&&F.ts?dayOfTs(F.ts):null;
+    const stale=!!(F.done&&V.src!=="manual"&&cday!=null&&STLAST>cday&&(V.st==="no"||V.st==="mid"));
+    let grp; if(V.src==="manual") grp=F.done?"ok":"todo"; else if(V.st==="ok") grp="ok"; else if(V.st==="ey") grp="ey"; else if(F.done&&!stale) grp="wacht"; else grp="todo";
+    let uitleg=V.uitleg;
+    if(grp==="wacht") uitleg+=` ☑ Door jullie afgevinkt op ${fmtY(cday)}. De meting van ${cday>=STLAST?"morgen ":""}06:25 bevestigt het; dan verdwijnt het vinkje vanzelf en schuift de rij naar Doorgevoerd.`;
+    if(stale) uitleg+=` ⚠️ Afgevinkt op ${fmtY(cday)}, maar de meting van ${fmtY(STLAST)} ziet het nog niet in het platform: check of de wijziging echt is opgeslagen.`;
+    return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,stale,cday}; });
+  if(dirty) folSave();
+  const ORD={no:0,mid:1,man:2,ok:3,ey:4}, PO={google:0,meta:1,tiktok:2};
+  rows.sort((x,y)=> ((PO[x.platform]??9)-(PO[y.platform]??9)) || ORD[x.st]-ORD[y.st] || y.rank-x.rank);
   return rows;
 }
-const FOL_STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],man:["☐","Zelf afvinken"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
-function drawFollow(){
+const folMB=rows=>rows.filter(r=>r.type!=="opvolging");   // sales-opvolging (👤) hoort niet in het rapport voor de media buyer
+function folGroups(rows){ const G={todo:[],wacht:[],ok:[],ey:[]}; for(const r of rows) (G[r.grp]||G.todo).push(r); return G; }
+function folClearAll(){ if(!folClr){ folClr=1; drawFollow(); setTimeout(()=>{ if(folClr){ folClr=0; drawFollow(); } },4000); return; }
+  folClr=0; for(const k in FOLST){ if(FOLST[k]&&FOLST[k].done) FOLST[k]={...FOLST[k],done:false}; } folSave(); drawFollow(); }
+function drawFollow(){ const w=document.getElementById("folwrap"); if(w) keepScroll(w,drawFollowInner); }
+function drawFollowInner(){
   const w=document.getElementById("folwrap");
-  const rows=folRows();
+  const all=folRows(); const GA=folGroups(all);
+  const PCNT={}; for(const r of GA.todo) PCNT[r.platform]=(PCNT[r.platform]||0)+1;
+  const rows=folPlat?all.filter(r=>r.platform===folPlat):all; const G=folGroups(rows);
+  const nChk=Object.values(FOLST).filter(x=>x&&x.done).length;
   const CLS={no:"hi",mid:"mid",man:"man",ok:"ok",ey:"ey"};
-  const CNT={}; for(const r of rows) CNT[r.st]=(CNT[r.st]||0)+1;
-  const nDone=rows.filter(r=>r.F.done).length, nNote=rows.filter(r=>r.F.note).length;
-  let note=`<div class="wonchips"><span class="lbl">Status:</span><div class="wchip sm${folSt==="all"?" on":""}" onclick="folSt='all';drawFollow()">Alles <span class="n">${rows.length}</span></div>`
-    +["no","mid","man","ok","ey"].filter(s=>CNT[s]).map(s=>`<div class="wchip sm${folSt===s?" on":""}" onclick="folSt='${s}';drawFollow()">${FOL_STL[s][0]} ${FOL_STL[s][1]} <span class="n">${CNT[s]}</span></div>`).join("")
-    +`<span style="flex:1"></span><button class="rbtn sm2 pri" onclick="folReport()" title="Maakt een Slack-klare tekst met alles wat nog moet gebeuren, jullie notities en een vrij veld voor extra punten">📋 Rapport voor media buyer</button></div>`;
-  const shown = folSt==="all" ? rows : rows.filter(r=>r.st===folSt);
-  let h=note+`<div class="advrows">`+(shown.length?shown.map(r=>{ const key=folKey(r); const opn=folOpen.has(key); const cls=CLS[r.st];
+  let h=`<div class="folbar"><div class="folkpis">`+["todo","wacht","ok","ey"].map(g=>`<div class="folkpi ${g}${folGrpOpen.has(g)?" on":""}" onclick="folGrpTog('${g}')" title="klik om dit blok open/dicht te klappen"><b>${G[g].length}</b><span>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</span></div>`).join("")
+    +`</div><div class="folbtns"><button class="rbtn sm2${folClr?" warn":""}" onclick="folClearAll()" ${nChk?"":"disabled"} title="Haalt alle vinkjes weg (opmerkingen blijven staan). Voor een nieuwe ronde.">${folClr?"Zeker? Klik nog een keer":"☐ Vinkjes wissen"+(nChk?` (${nChk})`:"")}</button><button class="rbtn sm2" onclick="folReport()" title="Tekstversie om zelf te kopiëren">📋 Tekst</button><button class="rbtn sm2 pri" onclick="folSendOpen()" title="Maakt het visuele rapport met alles wat nog open staat en stuurt het via de Slack-bot naar Ger en Abel (eerst zie je een voorbeeld)">📨 Stuur rapport naar Ger</button></div></div>`;
+  h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${folPlat==null?" on":""}" onclick="folPlat=null;drawFollow()">Alle <span class="n">${GA.todo.length} te doen</span></div>`+["google","meta","tiktok"].filter(p=>all.some(r=>r.platform===p)).map(p=>`<div class="wchip sm${folPlat===p?" on":""}" onclick="folPlat='${p}';drawFollow()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]||0} te doen</span></div>`).join("")+`</div>`;
+  const rowHtml=r=>{ const key=folKey(r); const opn=folOpen.has(key); const cls=r.stale?"hi":r.grp==="wacht"?"man":CLS[r.st];
+    const badge=r.stale?`<span class="sevb hi">⚠️ Afgevinkt, niet gezien</span>`:r.grp==="wacht"?`<span class="sevb man">☑ Meting volgt</span>`:`<span class="sevb ${CLS[r.st]}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`;
     return `<div class="advrow ${cls}${opn?" open":""}${r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
-      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = wij hebben dit gedaan/besproken. De status ernaast blijft de meting; de rij blijft staan waar hij staat."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
-      +`<span class="sevb ${cls}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`
+      +`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = dit hebben we net doorgevoerd. De meting van 06:25 bevestigt het en haalt het vinkje dan vanzelf weg."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
+      +badge
       +`<span class="advmain"><b>${ADV_ICON[r.type]} ${ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}</span>`
       +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span>`
-      +`<input class="folnote-in${r.F.note?" has":""}" type="text" value="${esc(r.F.note||"")}" placeholder="opmerking (komt in het rapport)" title="Opmerking voor Ger én terugkoppeling voor Claude — komt letterlijk in het rapport" onclick="event.stopPropagation()" onchange="folNote(${jq(key)},this.value);this.classList.toggle('has',!!this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
+      +`<input class="folnote-in${r.F.note?" has":""}" type="text" value="${esc(r.F.note||"")}" placeholder="opmerking (komt in het rapport)" title="Opmerking voor Ger én terugkoppeling voor Claude; komt letterlijk in het rapport" onclick="event.stopPropagation()" onchange="folNote(${jq(key)},this.value);this.classList.toggle('has',!!this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
       +`<i class="chev${opn?" open":""}"></i>`
       +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.txt)}</p>${advSrc(r)}<div class="doen">${r.uitleg}${r.ch?` · Laatste wijziging in het platform: <b>${fmtY(r.ch.d)}</b> (${r.ch.van.status==="uit"?"uit":eur0(r.ch.van.budget||0)+"/dag"} → ${r.ch.naar.status==="uit"?"uit":eur0(r.ch.naar.budget||0)+"/dag"})`:""}${r.vervallen?" · Dit advies vuurde vorige week nog, nu niet meer.":""}</div></div>`:"")
-      +`</div>`; }).join(""):`<div class="advrow lo"><span class="advmain">Niets te tonen — geen adviezen in deze periode.</span></div>`)+`</div>`;
-  h+=`<p class="note">Automatisch beoordeeld op het <b>ingestelde budget en de aan/uit-status</b> in het advertentieplatform (dagelijkse meting om 06:25 — een wijziging is dezelfde dag zichtbaar, met datum). Waar die meting ontbreekt geldt de terugval: besteding per dag, laatste 7 volle dagen. <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit; <b>Deels</b> = een kwart tot driekwart; <b>Niet doorgevoerd</b> = ongewijzigd (binnen ±10%, max € 5 — dat is ruis) of tegengesteld. Formulier-, targeting- en tracking-acties (⚠️ ⏱) zijn niet automatisch meetbaar — die vink je zelf af. <b>Het vinkje is jullie eigen aantekening</b> ("dit hebben we net gedaan"): de rij blijft staan en de status blijft de meting — staat hij morgen nog op ❌, dan is het echt niet doorgevoerd (en heb je per ongeluk geklikt). Vinkjes + opmerkingen bewaart de browser; <b>📋 Rapport</b> zet alles in één Slack-bericht voor de media buyer, met de opmerkingen als terugkoppeling voor Claude.${nDone||nNote?` Nu ${nDone} afgevinkt, ${nNote} met notitie.`:""}</p>`;
+      +`</div>`; };
+  for(const g of ["todo","wacht","ok","ey"]){ const ls=G[g]; if(!ls.length&&g!=="todo") continue; const opn=folGrpOpen.has(g);
+    h+=`<div class="folgrp ${g}"><div class="folgrph" onclick="folGrpTog('${g}')"><i class="chev${opn?" open":""}"></i><b>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</b><span class="n">${ls.length}</span><small>${FOL_GRP[g][2]}</small></div>`;
+    if(opn){ if(!ls.length) h+=`<div class="advrows"><div class="advrow ok"><span class="advmain">Niets meer te doen${folPlat?" voor "+esc(PN(folPlat)):""}. 👌</span></div></div>`;
+      else { let lastP=null; h+=`<div class="advrows">`; for(const r of ls){ if(r.platform!==lastP){ lastP=r.platform; h+=`<div class="folplat"><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}<span class="n">${ls.filter(x=>x.platform===r.platform).length}</span></div>`; } h+=rowHtml(r); } h+=`</div>`; } }
+    h+=`</div>`; }
+  h+=`<p class="note"><b>Hoe het werkt.</b> Elke ochtend om 06:25 meet het dashboard het <b>ingestelde budget en de aan/uit-status</b> in Google, Meta en TikTok (terugval: besteding per dag, laatste 7 volle dagen). <b>Doorgevoerd</b> = minstens driekwart van de geadviseerde stap gezet (of vrijwel op het doel), of uit. <b>Vinkje</b> = "dit hebben we net gedaan" (bijvoorbeeld tijdens het overleg met Ger): de rij gaat naar <b>Afgevinkt · meting volgt</b>. Ziet de meting van de volgende ochtend het, dan verdwijnt het vinkje vanzelf en staat hij bij Doorgevoerd. Ziet de meting het dan nog níet, dan komt hij terug bij Nog te doen met ⚠️. Acties die niet meetbaar zijn (🎯 ⚠️ ⏱ 👤) zijn klaar zodra je ze afvinkt. <b>📨 Stuur rapport naar Ger</b> maakt een visueel rapport van wat nog open staat (plus jullie opmerkingen) en stuurt de link via de Slack-bot naar Ger en Abel. Vinkjes en opmerkingen bewaart deze browser.</p>`;
   w.innerHTML=h;
 }
-// ---- rapport voor de media buyer (Slack-klare tekst) ----
+// ---- rapport voor de media buyer: tekst (kopiëren) en visueel (HTML, via de Slack-bot) ----
 function folReportText(rows){
-  const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW);
+  const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW); const G=folGroups(rows);
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const todo=rows.filter(r=>(r.st==="no"||r.st==="mid"||r.st==="man")&&!r.F.done), just=rows.filter(r=>(r.st==="no"||r.st==="mid"||r.st==="man")&&r.F.done), done=rows.filter(r=>r.st==="ok"), wait=rows.filter(r=>r.st==="ey");
-  const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}* — ${r.label}`;
-    if(V.src!=="manual"&&V.bRef!=null){ s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+eur0(V.tgt)+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
+  const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}*: ${r.label}`;
+    if(V.src!=="manual"&&V.bRef!=null){ const mt=/zet naar ≈ € ([\d.]+)\/dag/.exec(r.txt||""); s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+(mt?"€ "+mt[1]:eur0(V.tgt))+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
+    if(r.stale) s+=` ⚠️ was afgevinkt, meting ziet het nog niet`;
     s+=`\n   _${r.txt.replace(/\s+/g," ").slice(0,220)}${r.txt.length>220?"…":""}_`;
     if(r.F.note) s+=`\n   📝 ${r.F.note}`;
     return s; };
-  const byPlat=list=>["meta","google","tiktok"].map(p=>{ const ls=list.filter(r=>r.platform===p); return ls.length?`*${PN(p)}*\n`+ls.map(line).join("\n"):""; }).filter(Boolean).join("\n\n");
-  let out=`*Marketing · acties voor deze week* — ${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
-  out+= todo.length? `*Nog te doen (${todo.length})*\n\n`+byPlat(todo) : "*Nog te doen*: niets open — alles is doorgevoerd. 👌";
-  if(just.length) out+=`\n\n*Net doorgevoerd / besproken, meting bevestigt nog (${just.length})* ☑\n`+just.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}${r.F.note?` — 📝 ${r.F.note}`:""}`).join("\n");
+  const byPlat=list=>["google","meta","tiktok"].map(p=>{ const ls=list.filter(r=>r.platform===p); return ls.length?`*${PN(p)}*\n`+ls.map(line).join("\n"):""; }).filter(Boolean).join("\n\n");
+  let out=`*Marketing · acties voor deze week* (${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()})\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
+  out+= G.todo.length? `*Nog te doen (${G.todo.length})*\n\n`+byPlat(G.todo) : "*Nog te doen*: niets open, alles is doorgevoerd. 👌";
+  if(G.wacht.length) out+=`\n\n*Net doorgevoerd / besproken, meting bevestigt nog (${G.wacht.length})* ☑\n`+G.wacht.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
   if(extra.trim()) out+=`\n\n*Extra punten*\n${extra.trim()}`;
-  const notes=rows.filter(r=>r.F.note); if(notes.length) out+=`\n\n_📝 = onze opmerkingen; die gaan ook terug naar Claude als terugkoppeling op de adviezen._`;
-  if(done.length) out+=`\n\n*Al doorgevoerd (${done.length})* ✅\n`+done.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}${r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` — 📝 ${r.F.note}`:""}`).join("\n");
-  if(wait.length) out+=`\n\n*Nog niet te beoordelen (${wait.length})* ⏳\n`+wait.map(r=>`• ${ICO[r.type]} ${LAB[r.type]} — ${r.label}`).join("\n");
+  if(rows.some(r=>r.F.note)) out+=`\n\n_📝 = onze opmerkingen; die gaan ook terug naar Claude als terugkoppeling op de adviezen._`;
+  if(G.ok.length) out+=`\n\n*Al doorgevoerd (${G.ok.length})* ✅\n`+G.ok.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
+  if(G.ey.length) out+=`\n\n*Nog niet te beoordelen (${G.ey.length})* ⏳\n`+G.ey.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}`).join("\n");
   return out;
 }
+function folReportHtml(rows,extra){
+  const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const G=folGroups(rows); const e=esc;
+  const big=r=>{ const V=r.V; if(V.src==="manual"||V.bRef==null) return `<div class="big act">${r.type==="actie"?"instelling":"actie"}</div>`;
+    const mt=/zet naar ≈ € ([\d.]+)\/dag/.exec(r.txt||"");   // zelfde doelbedrag als in de adviestekst (huidig ingesteld × factor)
+    const nu=V.uit?"uit":eur0(V.bNow), naar=r.type==="stoppen"?"uit":(mt?"€ "+mt[1]:eur0(V.tgt)); return `<div class="big"><span>${nu}</span><i>→</i><b>${naar}</b>${r.type==="stoppen"?"":"<small>per dag</small>"}</div>`; };
+  const wie=r=>`<div class="unit"><span class="pl" style="background:${PC(r.platform)}">${e(PN(r.platform))}</span>${e(r.cname||r.label)}${r.sname?` <em>›</em> ${e(r.sname)}`:""}</div>`;
+  const card=r=>`<div class="card${r.stale?" stale":""}"><div class="top"><div class="ty">${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])}</div>${big(r)}</div>${wie(r)}<p>${e(r.txt.replace(/\s+/g," ").slice(0,280))}${r.txt.length>280?"…":""}</p>${r.type==="actie"&&r.doen?`<p class="waar"><b>Waar:</b> ${e(r.doen)}</p>`:""}${r.stale?`<p class="warn">⚠️ Was afgevinkt, maar de meting ziet het nog niet in het platform.</p>`:""}${r.F.note?`<p class="note">📝 ${e(r.F.note)}</p>`:""}</div>`;
+  const byP=ls=>["google","meta","tiktok"].map(p=>{ const x=ls.filter(r=>r.platform===p); return x.length?`<h3><span class="dot" style="background:${PC(p)}"></span>${e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
+  const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.platform)}"></span> ${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])} · ${e(r.label)}${r.ch?` <small>(${fmtY(r.ch.d)})</small>`:""}${r.F.note?` <small>📝 ${e(r.F.note)}</small>`:""}</li>`).join("")}</ul>`;
+  return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport media buyer · ${dat}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet"><style>
+:root{--bg:#0e0e0f;--card:#17171a;--line:#2a2a2e;--tx:#f2efe8;--mut:#9a968c;--roze:#c927b4;--rood:#e04b4b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 Barlow,system-ui,sans-serif;padding:28px 16px}
+.w{max-width:980px;margin:0 auto}h1,h2,h3{font-family:"IBM Plex Sans Condensed",Barlow,sans-serif;font-weight:700;margin:0}
+h1{font-size:34px;line-height:1.1}h1 b{color:var(--roze)}.sub{color:var(--mut);margin:6px 0 22px;font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}.kpi{background:var(--card);border:1px solid var(--line);padding:14px 16px}.kpi b{display:block;font:700 34px "IBM Plex Sans Condensed",Barlow,sans-serif}.kpi span{color:var(--mut);font-size:13px}.kpi.todo b{color:var(--roze)}
+h2{font-size:22px;margin:28px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}h3{font-size:17px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}h3 span{color:var(--mut);font-weight:600}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+.cards{display:grid;gap:10px}.card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--roze);padding:14px 16px}.card.stale{border-left-color:var(--rood)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.ty{font-weight:600;color:var(--mut);font-size:12.5px;text-transform:uppercase;letter-spacing:.5px}
+.big{font:700 28px "IBM Plex Sans Condensed",Barlow,sans-serif;display:flex;align-items:baseline;gap:8px}.big span{color:var(--mut)}.big i{font-style:normal;color:var(--mut)}.big small{font:500 13px Barlow,sans-serif;color:var(--mut)}.big.act{font:600 13px Barlow,sans-serif;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+.unit{font-weight:600;margin:6px 0 4px}.unit em{color:var(--mut);font-style:normal}.pl{display:inline-block;color:#fff;font-size:11px;padding:1px 7px;margin-right:6px;vertical-align:2px}
+p{margin:4px 0;color:#d6d2c8;font-size:14px}p.note{color:var(--tx);background:#1d1a24;padding:6px 10px;border-left:3px solid var(--roze)}p.warn{color:var(--rood)}p.waar{font-size:13px}
+.mini{list-style:none;padding:0;margin:0}.mini li{padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}.mini small{color:var(--mut)}
+.extra{background:var(--card);border:1px solid var(--line);padding:12px 16px;white-space:pre-wrap}.foot{color:var(--mut);font-size:12.5px;margin-top:30px}
+@media(max-width:600px){.kpis{grid-template-columns:1fr}h1{font-size:28px}.big{font-size:24px}}
+</style></head><body><div class="w">
+<h1>Marketing · acties voor <b>deze week</b></h1><div class="sub">${dat} · uit het DPAC-marketingdashboard (tabblad Opgevolgd) · budgetten per adset bij Meta en TikTok, per campagne bij Google</div>
+<div class="kpis"><div class="kpi todo"><b>${G.todo.length}</b><span>nog te doen</span></div><div class="kpi"><b>${G.wacht.length}</b><span>net doorgevoerd, meting bevestigt nog</span></div><div class="kpi"><b>${G.ok.length}</b><span>al doorgevoerd</span></div></div>
+<h2>Nog te doen</h2>${G.todo.length?byP(G.todo):`<p>Niets open, alles is doorgevoerd. 👌</p>`}
+${extra&&extra.trim()?`<h2>Extra punten</h2><div class="extra">${e(extra.trim())}</div>`:""}
+${G.wacht.length?`<h2>Net doorgevoerd of besproken</h2><p style="color:var(--mut)">Afgevinkt in het overleg; de dagelijkse meting (06:25) bevestigt het.</p>${mini(G.wacht)}`:""}
+${G.ok.length?`<h2>Al doorgevoerd ✅</h2>${mini(G.ok)}`:""}
+<div class="foot">📝 = opmerkingen van Abel en Ger; die gaan ook terug naar Claude als terugkoppeling op de adviezen. Er wordt niets automatisch gewijzigd in de advertentieplatforms.</div>
+</div></body></html>`;
+}
+function folModal(){ let m=document.getElementById("folmodal"); if(!m){ m=document.createElement("div"); m.id="folmodal"; m.className="modal"; document.body.appendChild(m); } return m; }
 function folReport(){
-  const rows=folRows(); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  let m=document.getElementById("folmodal"); if(!m){ m=document.createElement("div"); m.id="folmodal"; m.className="modal"; document.body.appendChild(m); }
-  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📋 Rapport voor de media buyer</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
-    <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="4" placeholder="bv. nieuwe video's van Emiel klaar donderdag · TikTok-formulier 'juiste UTM' aan GHL koppelen · …" oninput="folExtra(this.value);folReportRefresh()">${esc(extra)}</textarea></div>
-    <div><label>Bericht (bewerkbaar — Slack-opmaak)</label><textarea id="foltxt" rows="18" oninput="this.dataset.edited=1">${esc(folReportText(rows))}</textarea></div></div>
-    <div class="modalft"><span class="lbl" id="folcopied"></span><button class="rbtn sm2" onclick="folReportRefresh(true)">↺ Opnieuw genereren</button><button class="rbtn sm2 pri" onclick="folCopy()">Kopieer voor Slack</button></div></div>`;
+  const rows=folMB(folRows()); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const m=folModal();
+  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📋 Rapport als tekst</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+    <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="4" placeholder="bv. nieuwe video's klaar donderdag · TikTok-formulier aan GHL koppelen · …" oninput="folExtra(this.value);folReportRefresh()">${esc(extra)}</textarea></div>
+    <div><label>Bericht (bewerkbaar, Slack-opmaak)</label><textarea id="foltxt" rows="18" oninput="this.dataset.edited=1">${esc(folReportText(rows))}</textarea></div></div>
+    <div class="modalft"><span class="lbl" id="folcopied"></span><button class="rbtn sm2" onclick="folReportRefresh(true)">↺ Opnieuw genereren</button><button class="rbtn sm2 pri" onclick="folCopy()">Kopieer</button></div></div>`;
   m.style.display="flex"; m.onclick=folReportClose;
 }
-function folReportRefresh(force){ const ta=document.getElementById("foltxt"); if(!ta) return; if(force||!ta.dataset.edited) ta.value=folReportText(folRows()); }
+function folReportRefresh(force){ const ta=document.getElementById("foltxt"); if(!ta) return; if(force||!ta.dataset.edited) ta.value=folReportText(folMB(folRows())); }
 function folReportClose(){ const m=document.getElementById("folmodal"); if(m) m.style.display="none"; }
-async function folCopy(){ const ta=document.getElementById("foltxt"); const lb=document.getElementById("folcopied"); try{ await navigator.clipboard.writeText(ta.value); lb.textContent="gekopieerd — plak in Slack"; }catch(e){ ta.select(); document.execCommand("copy"); lb.textContent="gekopieerd (fallback)"; } setTimeout(()=>{ if(lb) lb.textContent=""; },3000); }
+async function folCopy(){ const ta=document.getElementById("foltxt"); const lb=document.getElementById("folcopied"); try{ await navigator.clipboard.writeText(ta.value); lb.textContent="gekopieerd"; }catch(e){ ta.select(); document.execCommand("copy"); lb.textContent="gekopieerd (fallback)"; } setTimeout(()=>{ if(lb) lb.textContent=""; },3000); }
+function folSendOpen(){
+  let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const G=folGroups(folMB(folRows())); const m=folModal();
+  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📨 Rapport voor Ger (media buyer)</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+    <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="6" placeholder="bv. nieuwe video's klaar donderdag · TikTok-formulier aan GHL koppelen · …" oninput="folExtra(this.value);folSendPreview()">${esc(extra)}</textarea>
+      <div class="folsendinfo"><b>${G.todo.length}</b> nog te doen · <b>${G.wacht.length}</b> net afgevinkt · <b>${G.ok.length}</b> al doorgevoerd<br>Gaat als <b>DM via de Slack-bot</b> naar <b>Ger</b> én naar <b>Abel</b>, met een link naar dit rapport. Opmerkingen (📝) gaan mee. Sales-opvolging (👤) blijft eruit: dat is niet voor de media buyer.</div></div>
+    <div><label>Voorbeeld (zo ziet Ger het)</label><iframe id="folprev" class="folprev" title="voorbeeld rapport"></iframe></div></div>
+    <div class="modalft"><span class="lbl" id="folsent"></span><button class="rbtn sm2 pri" id="folsendbtn" onclick="folSend()">📨 Verstuur naar Ger en Abel</button></div></div>`;
+  m.style.display="flex"; m.onclick=folReportClose; folSendPreview();
+}
+function folSendPreview(){ const f=document.getElementById("folprev"); if(!f) return; let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){} f.srcdoc=folReportHtml(folMB(folRows()),extra); }
+async function folSend(test){
+  const b=document.getElementById("folsendbtn"), lb=document.getElementById("folsent"); if(!b||b.disabled) return; b.disabled=true; lb.textContent="versturen…";
+  const rows=folMB(folRows()); const G=folGroups(rows); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const pp={}; G.todo.forEach(r=>pp[r.platform]=(pp[r.platform]||0)+1); const t=d2s(NOW);
+  const summary={datum:`${t.getDate()} ${MNDF[t.getMonth()]}`,todo:G.todo.length,just:G.wacht.length,done:G.ok.length,perPlatform:["google","meta","tiktok"].filter(p=>pp[p]).map(p=>({name:PN(p),n:pp[p]})),test:!!test};
+  try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"mb_report",summary,html:folReportHtml(rows,extra)})});
+    const j=await resp.json().catch(()=>null);
+    if(!resp.ok||!j||!j.ok) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||("server gaf "+resp.status));
+    lb.innerHTML=`✅ Verstuurd naar ${esc((j.sent_to||["Ger","Abel"]).join(" en "))} · <a href="${esc(j.url||"#")}" target="_blank" rel="noopener">rapport openen</a>`; b.textContent="✅ Verstuurd";
+  }catch(e){ lb.textContent="❌ Niet gelukt: "+e.message; b.disabled=false; }
+}
 // ---- inschrijvingen ----
 let sgSort={c:0,d:-1}, sgcSort={k:"sg",d:-1}, sgPlat=null, sgMode="sign", sgNF=false, sgFilt={}, sgfCol=null;
 function sgfToggle(i,v){ if(!sgFilt[i]) sgFilt[i]=new Set(); const st=sgFilt[i]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete sgFilt[i]; drawSign(); }
