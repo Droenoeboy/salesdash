@@ -13,7 +13,7 @@ const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","de
 const MNDF=["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
 const PAL=["#1f6fd8","#1a9a3d","#dc2a1e","#c99a00","#8f845e","#5856d6","#0e0e0f","#2c8f9b"];
 
-let D=null, GCODE="", L=[], AP=[], EV=[], FT=new Map(), DEFS={}, STAGES=[], P=[], REPS=[], REPS_ALL=[], REPS_UNK=[], RCOL={}, PAY_MIN=1000;
+let D=null, GCODE="", L=[], AP=[], EV=[], RD=[], FT=new Map(), DEFS={}, STAGES=[], P=[], REPS=[], REPS_ALL=[], REPS_UNK=[], RCOL={}, PAY_MIN=1000;
 let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false;
 let MODE="rol";   // "rol" = rolzuiver (v2) · "rep" = per rep zoals v1 (plan op setter, rest op eigenaar)
 let THEME="dark"; try{ THEME=localStorage.dpacTheme||"dark"; }catch(e){}
@@ -91,6 +91,7 @@ function initApp(){
   STAGES=(D.stages||[]).map(s=>s[1]);
   L=objs(D.lead_cols, D.leads); AP=objs(D.appt_cols, D.appointments); EV=objs(D.event_cols, D.events);
   FT=new Map((D.ft_cols&&D.first_touch)? objs(D.ft_cols, D.first_touch).map(x=>[String(x.lead_id),x]) : []);   // v3.6: reactietijd + toewijzing uit dpac.v_lead_first_touch
+  RD=(D.rep_dag_cols&&D.rep_dag)? objs(D.rep_dag_cols, D.rep_dag).map(r=>Object.assign(r,{dg:dOf(r.dag)})) : [];   // v3.9: dagsamenvatting per rep uit dpac.v_rep_dag
   for(const l of L){
     l.name=cap(l.contact_name); l.cd=dOf(l.created_on); l.pd=dOf(l.planned_on); l.id_=dOf(l.intake_on); l.payd=dOf(l.paid_on);
     l.scd=dOf(l.status_changed_on); l.stgd=dOf(l.stage_changed_on); l.insd=dOf(l.signed_form_on); l.insE=l.insd>=0?l.insd:l.stgd; // inschrijfdatum = PA-formulier, val terug op fasewissel
@@ -635,6 +636,27 @@ function weekPick(r,d){ weekSel=(weekSel&&weekSel.r===r&&weekSel.d===d)?null:{r,
 function dagGa(d){ dagSel=Math.min(TODAY,d); dagUur=null; drawDag(); }
 function dagToggle(k){ dagOpen.has(k)?dagOpen.delete(k):dagOpen.add(k); dagUur=null; drawDag(); }
 function dagPikUur(k,u){ dagUur=(dagUur&&dagUur.rep===k&&dagUur.uur===u)?null:{rep:k,uur:u}; drawDag(); }
+// ---- v3.9: samenvatting per rep (dpac.v_rep_dag) ----
+function repDagHtml(d){
+  const rows=RD.filter(r=>r.dg===d);
+  if(!rows.length) return "";
+  const n=v=>(+v||0);
+  const cel=(v,t)=>`<td${t?` title="${esc(t)}"`:""}>${n(v)?`<b>${n(v)}</b>`:`<span style="color:var(--mut)">0</span>`}</td>`;
+  rows.sort((x,y)=>n(y.stage_acties_totaal)+n(y.belpogingen)-n(x.stage_acties_totaal)-n(x.belpogingen));
+  const onb=n(rows[0].belpogingen_niet_toegeschreven);
+  let h=`<div class="cmp weekcard"><div class="chhead"><div><h3 style="margin:0">🧾 Samenvatting per rep · ${fmtY(d)}</h3><div class="chsub">wat elke rep deze dag zelf heeft gedaan (acties op naam in het CRM) · wachttijd alleen over leads die dezelfde dag binnenkwamen</div></div></div>
+  <div style="overflow-x:auto"><table class="weektbl"><tr><th style="text-align:left">Rep</th><th>Actief</th><th>📅 Intake gepland</th><th>📤 Agreement</th><th>👻 No-show</th><th>❌ Lost</th><th>✍️ Gewonnen</th><th>📞 Belpogingen</th><th>✨ Nieuwe leads opgepakt</th><th>⏱️ Gem. wachttijd</th><th>🔁 Oude leads nagebeld</th></tr>`;
+  for(const r of rows){ const color=RCOL[r.owner_short]||"#8a94a8";
+    h+=`<tr><td class="mt" style="text-align:left"><span class="ava" style="display:inline-flex;width:20px;height:20px;font-size:10px;margin-right:6px;background:${color}">${esc((r.owner_short||"?").slice(0,2).toUpperCase())}</span><b>${esc(r.owner_short||"?")}</b></td>
+      <td title="eerste tot laatste actie">${esc(r.actief_vanaf||"—")}–${esc(r.actief_tot||"—")}<br><span style="color:var(--mut);font-size:11px">${String(r.actieve_uren||0).replace(".",",")} u</span></td>
+      ${cel(r.intakes_gepland,"naar Intake gepland gezet")}${cel(r.agreement_sent,"naar Agreement Sent gezet")}${cel(r.no_shows,"op No Show gezet")}${cel(r.leads_lost,"op verloren gezet")}${cel(r.gewonnen,"gewonnen/betaald gezet")}${cel(r.belpogingen,"taken zonder naam, toegeschreven aan wie binnen 15 min ervoor/erna actief was")}${cel(r.eerste_contacten_nieuw,"leads van vandaag die vandaag zijn opgepakt")}
+      <td>${r.gem_wachttijd_min==null?`<span style="color:var(--mut)">—</span>`:`<b>${fmin(r.gem_wachttijd_min)}</b><br><span style="color:var(--mut);font-size:11px">max ${fmin(r.max_wachttijd_min)}</span>`}</td>
+      ${cel(r.opvolging_oude_leads,"leads van eerdere dagen die vandaag voor het eerst zijn aangeraakt")}</tr>`; }
+  h+=`</table></div>`;
+  if(onb) h+=`<p class="note" style="margin:8px 0 0">📞 ${onb} belpoging${onb===1?"":"en"} zonder naam kon${onb===1?"":"den"} niet eenduidig aan één rep worden gekoppeld (meerdere of geen reps actief binnen 15 minuten).</p>`;
+  h+=`</div>`;
+  return h;
+}
 function drawDag(){
   const dw=document.getElementById("dagwrap");
   if(dagSel===null||dagSel>TODAY) dagSel=TODAY;
@@ -650,6 +672,7 @@ function drawDag(){
   let h=`<div class="dgkies"><button onclick="dagStap(-1)">‹</button><span class="dgdag">${wd} ${fmtY(dagSel)}</span><button onclick="dagStap(1)" ${dagSel>=TODAY?"disabled":""}>›</button><span class="dgvand" onclick="dagGa(TODAY)">vandaag</span>
     <span style="font-size:11.5px;color:var(--mut)">· ✨ ${nieuw} nieuwe leads · ${apts.length} intakes op de agenda (${apts.filter(a=>a.is_show).length} show, ${apts.filter(a=>a.is_noshow).length} no-show, ${apts.filter(a=>a.is_cancelled).length} geannuleerd) · ${evts.length} live-events met tijd</span></div>`;
   h+=weekHtml();
+  h+=repDagHtml(dagSel);
   if(!keys.length){ h+=`<div class="dgleeg">Geen sales-activiteit gevonden op deze dag${nieuw?` (wel ${nieuw} nieuwe leads binnengekomen)`:""}.</div>`; }
   else for(const k of keys){
     const list=per.get(k)||[], c=crm.get(k), color=RCOL[k]||"#8a94a8", ini=(k||"?").split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase(), open=dagOpen.has(k);
