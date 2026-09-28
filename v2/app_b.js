@@ -498,7 +498,7 @@ function chartWidget(who, phase){
 }
 
 // ---- 🗓 intakes: wie komt wanneer, bevestigd of niet ----
-let intScope="komend", intFilt="all", intWho=null, intSort={};
+let intScope="komend", intFilt="all", intWho=null, intSort={}, intKind=null;   // intKind: null=alles, "fysiek", "google_meet" (v4.0)
 const DAGN=["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
 function intStat(x){ if(x.is_show) return ["show","win"]; if(x.is_noshow) return ["no-show","lost"]; if(x.is_late_cancel) return ["late cancel","lost"]; if(x.is_cancelled) return ["geannuleerd","lost"]; if(x.is_unresolved) return ["zonder uitkomst",""]; if(x.status==="confirmed") return ["✅ bevestigd","win"]; return ["⏳ nog niet bevestigd","warn"]; }
 const intStatPill=x=>{ const [t,c]=intStat(x); return `<span class="stg ${c}">${t}</span>`; };
@@ -508,31 +508,35 @@ function drawInt(){
   const F={all:x=>!x.is_cancelled, conf:x=>x.status==="confirmed"&&!x.is_cancelled&&!x.is_show&&!x.is_noshow, unconf:x=>x.status!=="confirmed"&&!x.is_cancelled&&!x.is_show&&!x.is_noshow&&!x.is_unresolved, show:x=>x.is_show, noshow:x=>x.is_noshow, unres:x=>x.is_unresolved, cancel:x=>x.is_cancelled};
   const FL=[["all","Alles"],["conf","✅ Bevestigd"],["unconf","⏳ Niet bevestigd"],["show","Show"],["noshow","No-show"],["unres","Zonder uitkomst"],["cancel","Geannuleerd"]];
   const who=intWho; const byWho=x=>who==null||x.setter===who;
-  const list=base.filter(byWho).filter(F[intFilt]||F.all).sort((a,b)=> intScope==="komend" ? (a.starts_at<b.starts_at?-1:1) : (a.starts_at<b.starts_at?1:-1));
+  const byKind=x=>intKind==null||x.kind===intKind;
+  const list=base.filter(byWho).filter(byKind).filter(F[intFilt]||F.all).sort((a,b)=> intScope==="komend" ? (a.starts_at<b.starts_at?-1:1) : (a.starts_at<b.starts_at?1:-1));
   const names=[...new Set(base.map(x=>x.setter))].filter(n=>n&&!/^[A-Za-z0-9]{18,}$/.test(n)).sort();
-  const setCnt=n=>base.filter(x=>x.setter===n).filter(F[intFilt]||F.all).length;
+  const setCnt=n=>base.filter(byKind).filter(x=>x.setter===n).filter(F[intFilt]||F.all).length;
   // samenvatting
-  const up=base.filter(byWho).filter(x=>!x.is_cancelled), conf=up.filter(F.conf).length, unconf=up.filter(F.unconf).length;
+  const up=base.filter(byWho).filter(byKind).filter(x=>!x.is_cancelled), conf=up.filter(F.conf).length, unconf=up.filter(F.unconf).length;
   const vandaag=up.filter(x=>x.sd===TODAY).length, morgen=up.filter(x=>x.sd===TODAY+1).length, week=up.filter(x=>x.sd>=TODAY&&x.sd<TODAY+7).length;
   let h=`<div class="wonchips"><div class="wchip${intScope==="komend"?" on":""}" onclick="intScope='komend';drawInt()">📅 Komend (vanaf vandaag)</div><div class="wchip${intScope==="periode"?" on":""}" onclick="intScope='periode';drawInt()">In gekozen periode · ${fmtY(A)} t/m ${fmtY(B)}</div></div>`;
-  h+=`<div class="wonchips"><span class="lbl">Status:</span>`+FL.map(f=>`<div class="wchip sm${intFilt===f[0]?" on":""}" onclick="intFilt='${f[0]}';drawInt()">${f[1]}<span class="n">${base.filter(byWho).filter(F[f[0]]).length}</span></div>`).join("")+`</div>`;
-  h+=`<div class="wonchips"><span class="lbl">Setter:</span><div class="wchip sm${who==null?" on":""}" onclick="intWho=null;drawInt()">Iedereen<span class="n">${base.filter(F[intFilt]||F.all).length}</span></div>`+names.map(n=>`<div class="wchip sm${who===n?" on":""}" onclick="intWho=${jq(n)};drawInt()"><span class="dot" style="background:${repCol(n)}"></span>${esc(n)}<span class="n">${setCnt(n)}</span></div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Status:</span>`+FL.map(f=>`<div class="wchip sm${intFilt===f[0]?" on":""}" onclick="intFilt='${f[0]}';drawInt()">${f[1]}<span class="n">${base.filter(byWho).filter(byKind).filter(F[f[0]]).length}</span></div>`).join("")+`</div>`;
+  const kindN=k=>base.filter(byWho).filter(F[intFilt]||F.all).filter(x=>k==null||x.kind===k).length;
+  h+=`<div class="wonchips"><span class="lbl">Soort:</span><div class="wchip sm${intKind==null?" on":""}" onclick="intKind=null;drawInt()">Alles<span class="n">${kindN(null)}</span></div>`+Object.keys(KIND_LBL).map(k=>`<div class="wchip sm${intKind===k?" on":""}" onclick="intKind=${jq(k)};drawInt()">${KIND_LBL[k]}<span class="n">${kindN(k)}</span></div>`).join("")+`</div>`;
+  h+=`<div class="wonchips"><span class="lbl">Setter:</span><div class="wchip sm${who==null?" on":""}" onclick="intWho=null;drawInt()">Iedereen<span class="n">${base.filter(byKind).filter(F[intFilt]||F.all).length}</span></div>`+names.map(n=>`<div class="wchip sm${who===n?" on":""}" onclick="intWho=${jq(n)};drawInt()"><span class="dot" style="background:${repCol(n)}"></span>${esc(n)}<span class="n">${setCnt(n)}</span></div>`).join("")+`</div>`;
   if(intScope==="komend") h+=`<div class="kpis ikp"><div class="kpi"><b>${up.length}</b><span>Komende intakes</span></div><div class="kpi"><b>${conf}</b><span>Bevestigd</span></div><div class="kpi ${unconf?"warnk":""}"><b>${unconf}</b><span>Nog niet bevestigd</span></div><div class="kpi"><b>${vandaag}</b><span>Vandaag</span></div><div class="kpi"><b>${morgen}</b><span>Morgen</span></div><div class="kpi"><b>${week}</b><span>Komende 7 dagen</span></div></div>`;
   // per dag
   const days=[...new Set(list.map(x=>x.sd))];
-  if(!days.length) h+=`<div class="cmp"><div class="empty">Geen intakes${intFilt!=="all"?" met deze status":""}${who?" voor "+esc(who):""}${intScope==="komend"?" vanaf vandaag":" in deze periode"}.</div></div>`;
+  if(!days.length) h+=`<div class="cmp"><div class="empty">Geen intakes${intFilt!=="all"?" met deze status":""}${intKind?" van soort "+KIND_LBL[intKind]:""}${who?" voor "+esc(who):""}${intScope==="komend"?" vanaf vandaag":" in deze periode"}.</div></div>`;
   const IC=[
     {t:"Tijd",v:x=>x.hm,k:x=>`<b>${x.hm}</b>`},
     {t:"Naam",v:x=>x.name.toLowerCase(),k:x=>ghl(x.contact_id,x.name)},
     {t:"Setter",v:x=>x.setter||"",k:x=>esc(x.setter||"—")},
     {t:"Intaker",v:x=>x.intaker||"",k:x=>esc(x.intaker||"—")},
+    {t:"Soort",v:x=>x.kindL,k:x=>`<span class="stg">${x.kindL}</span>`},
     {t:"Status",v:x=>x.status||"",k:x=>intStatPill(x)},
     {t:"Geboekt",v:x=>x.bd,k:x=>`<small>${x.bd>=0?fmt(x.bd)+" "+x.bhm:"—"}</small>`},
     {t:"Poging",v:x=>x.attempt_number,k:x=>`<small>${x.attempt_number}e van ${x.attempts_total}</small>`},
     {t:"Lead-fase",v:x=>x.lead_stage||"",k:x=>x.lead_stage?`<span class="stg${x.lead_status==="lost"?" lost":""}">${esc(x.lead_stage)}${x.lead_status==="lost"?" · verloren":""}</span>`:"—"},
   ];
   for(const d of days.slice(0,60)){ let xs=list.filter(x=>x.sd===d); const c=xs.filter(x=>x.status==="confirmed"&&!x.is_cancelled).length, u=xs.filter(F.unconf).length, sh=xs.filter(x=>x.is_show).length, ns=xs.filter(x=>x.is_noshow).length;
-    const dayAll=base.filter(F[intFilt]||F.all).filter(x=>x.sd===d);
+    const dayAll=base.filter(byKind).filter(F[intFilt]||F.all).filter(x=>x.sd===d);
     const perS=names.map(n=>[n,dayAll.filter(x=>x.setter===n).length]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]);
     const chips=perS.length?`<span class="daysetters">`+perS.map(([n,c2])=>`<span class="wchip${who===n?" on":""}" onclick="intWho=intWho===${jq(n)}?null:${jq(n)};drawInt()" title="klik: alleen ${esc(n)} tonen (nog een keer klikken = filter weg)"><span class="dot" style="background:${repCol(n)}"></span>${esc(n)} <b>${c2}</b></span>`).join("")+`</span>`:"";
     const sub = d>=TODAY ? `${xs.length} intake${xs.length===1?"":"s"} · ${c} bevestigd${u?` · <b class="warnt">${u} nog niet bevestigd</b>`:""}` : `${xs.length} intake${xs.length===1?"":"s"} · ${sh} show · ${ns} no-show`;
@@ -542,7 +546,7 @@ function drawInt(){
       <table><tr>`+IC.map((cD,i)=>`<th><span class="sortl" onclick="(intSort[${jq(sK)}]=intSort[${jq(sK)}]&&intSort[${jq(sK)}].c===${i}?{c:${i},d:-intSort[${jq(sK)}].d}:{c:${i},d:1});drawInt()">${cD.t} <span class="arr">${st.c===i?(st.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+
       xs.map(x=>`<tr>`+IC.map(cD=>`<td>${cD.k(x)}</td>`).join("")+`</tr>`).join("")+`</table></div>`; }
   if(days.length>60) h+=`<div class="more">eerste 60 dagen getoond — kies een kortere periode</div>`;
-  h+=`<p class="note">Rechtstreeks uit de GHL-intakekalender. <b>Bevestigd</b> = de afspraak staat in GHL op <i>confirmed</i> (de klant heeft bevestigd of iemand heeft hem op bevestigd gezet); <b>nog niet bevestigd</b> = status <i>new</i>. Setter = wie boekte (filter en aantallen bovenaan gaan over de setter), intaker = in wiens agenda hij staat. Klik op een kolomkop om te sorteren. Klik op een naam om de contactkaart in GHL te openen.</p>`;
+  h+=`<p class="note">Rechtstreeks uit de GHL-intakekalenders (🏢 Intakegesprek op locatie en 💻 Google Meet). <b>Bevestigd</b> = de afspraak staat in GHL op <i>confirmed</i> (de klant heeft bevestigd of iemand heeft hem op bevestigd gezet); <b>nog niet bevestigd</b> = status <i>new</i>. Setter = wie boekte (filter en aantallen bovenaan gaan over de setter), intaker = in wiens agenda hij staat. Klik op een kolomkop om te sorteren. Klik op een naam om de contactkaart in GHL te openen.</p>`;
   w.innerHTML=h;
 }
 
