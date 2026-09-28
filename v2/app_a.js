@@ -96,6 +96,7 @@ function initApp(){
     l.name=cap(l.contact_name); l.cd=dOf(l.created_on); l.pd=dOf(l.planned_on); l.id_=dOf(l.intake_on); l.payd=dOf(l.paid_on);
     l.scd=dOf(l.status_changed_on); l.stgd=dOf(l.stage_changed_on); l.insd=dOf(l.signed_form_on); l.insE=l.insd>=0?l.insd:l.stgd; // inschrijfdatum = PA-formulier, val terug op fasewissel
     l.setter=l.setter_name||""; l.owner=l.owner_short||"";
+    l.kind=l.intake_kind||null; l.kindL=KIND_LBL[l.kind]||"—";   // v4.0: soort intake (fysiek / google_meet) uit dpac.v_leads_sales
     l.is_show=!!l.is_show; l.is_noshow=!!l.is_noshow; l.is_signed=!!l.is_signed; l.is_paid=!!l.is_paid; l.has_planned=!!l.has_planned; l.lost_in_lead_stage=!!l.lost_in_lead_stage;
     l.lost=l.status==="lost"; l.open=l.status==="open"; l.paid_amount=+l.paid_amount||0;
     l.intaker=""; l.attempt=null;
@@ -106,7 +107,7 @@ function initApp(){
   const byC=new Map(); for(const l of L){ if(!byC.has(l.contact_id)) byC.set(l.contact_id,[]); byC.get(l.contact_id).push(l); }
   for(const a of AP){
     a.name=cap(a.contact_name); a.sd=dOf(a.starts_on); a.bd=tsDay(a.booked_at); a.hm=tsHM(a.starts_at); a.bhm=tsHM(a.booked_at);
-    a.setter=a.setter_short||""; a.intaker=a.intaker_short||"";
+    a.setter=a.setter_short||""; a.intaker=a.intaker_short||""; a.kind=a.calendar_kind||null; a.kindL=KIND_LBL[a.kind]||"—";
     // intaker + poging aan de lead hangen (afspraak op de intakedatum van de lead)
     const ls=byC.get(a.contact_id)||[];
     for(const l of ls){ if(l.id_>=0 && l.id_===a.sd){ l.intaker=a.intaker; l.attempt=a.attempt_number; l.appt=a; } }
@@ -168,7 +169,8 @@ function initApp(){
 // owner   : close rate (ingeschreven vs verloren van de dossiers na show) en pay rate
 let HF=null;   // uur-filter (alleen voor de per-uur weergave van de grafiekwidget)
 function funnel(who, a, b){
-  const LL = HF ? L.filter(HF) : L;
+  let LL = HF ? L.filter(HF) : L;
+  if(tab==="tot" && kindSel.size<2) LL = LL.filter(l=> l.pd<0 || !l.kind || kindSel.has(l.kind));   // v4.0: soort-intake-chips (Totaal): uitgevinkte soort telt als niet gepland
   const isS = l => who==null || l.setter===who;
   const isI = l => who==null || l.intaker===who;
   const isO = l => who==null || l.owner===who;
@@ -231,6 +233,16 @@ function teamNone(){ teamSel=new Set(); teamSave(); drawCols(); }
 function teamChipsHtml(){
   const chips=REPS.map(p=>{ const f=funnel(p.n,A,B); const beh=f.gepland.length+f.verloren.length; return `<div class="wchip sm${teamOn(p.n)?" on":""}" onclick="teamToggle(${jq(p.n)})"><span class="dot" style="background:${RCOL[p.n]};display:inline-block;width:8px;height:8px;border-radius:50%"></span>${esc(p.n)}<span class="n">${beh}</span></div>`; }).join("");
   return `<div class="wonchips teamchips" style="flex:0 0 100%;margin:0 0 2px"><span class="lbl">Team:</span>${chips}<div class="wchip sm" onclick="teamAll()">alles</div><div class="wchip sm" onclick="teamNone()">niemand</div></div>`;
+}
+// ---- soort intake (v4.0): 🏢 fysiek / 💻 Google Meet — allebei standaard aan, niet onthouden ----
+const KIND_LBL={fysiek:"🏢 Fysiek", google_meet:"💻 Google Meet"};
+let kindSel=new Set(["fysiek","google_meet"]);
+function kindToggle(k){ kindSel.has(k)? kindSel.delete(k) : kindSel.add(k); drawCols(); }
+function kindChipsHtml(){
+  const cnt=k=>L.filter(l=> l.stage_position!==0 && inR(l.pd,A,B) && l.kind===k && (!teamSel||teamOn(l.setter)||!l.setter)).length;
+  const chips=Object.keys(KIND_LBL).map(k=>`<div class="wchip sm${kindSel.has(k)?" on":""}" onclick="kindToggle(${jq(k)})" title="aan/uit: telt deze soort intake wel/niet mee in gepland, show en sign">${KIND_LBL[k]}<span class="n">${cnt(k)}</span></div>`).join("");
+  const off=Object.keys(KIND_LBL).filter(k=>!kindSel.has(k)).map(k=>KIND_LBL[k]);
+  return `<div class="wonchips teamchips" style="flex:0 0 100%;margin:0 0 6px"><span class="lbl">Intake:</span>${chips}${off.length?`<span class="lbl" style="opacity:.75">· ${off.join(", ")} telt nu niet mee</span>`:""}</div>`;
 }
 function unkColHtml(){
   if(!REPS_UNK.length) return "";
@@ -351,7 +363,7 @@ function drawCols(){
   if(tab==="dag"){ dw.style.display="block"; drawDag(); return; }
   if(tab==="apt"){ pw.style.display="block"; drawApt(); return; }
   if(tab==="int"){ iw.style.display="block"; drawInt(); return; }
-  if(tab==="tot"){ el.style.display="flex"; el.style.flexWrap="wrap"; el.innerHTML=teamChipsHtml()+colHtml(null,"Totaal","#1a2233",true)+REPS.filter(p=>teamOn(p.n)).map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join("")+unkColHtml(); return; }
+  if(tab==="tot"){ el.style.display="flex"; el.style.flexWrap="wrap"; el.innerHTML=teamChipsHtml()+kindChipsHtml()+colHtml(null,"Totaal","#1a2233",true)+REPS.filter(p=>teamOn(p.n)).map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join("")+unkColHtml(); return; }
   if(tab==="ov"){ el.style.display="block"; el.innerHTML=repPage(null); return; }
   const n=repOf(); el.style.display="block"; el.innerHTML=repPage(n);
 }
@@ -420,6 +432,7 @@ function colDefs(phase,win){
   ];
   if(phase==="show") cols.push({t:"Poging", v:l=>l.attempt||0, k:l=>l.attempt?String(l.attempt)+"e":"—", f:true});
   if(phase==="pay") cols.push({t:"Betaald", v:l=>l.paid_amount, k:l=>l.paid_amount>1?eur(l.paid_amount):(l.paid_check?"✅":"—"), f:true});
+  if(win) cols.push({t:"Soort", v:l=>l.kindL, k:l=>l.kindL, f:true});
   cols.push({t:"Kanaal", v:l=>l.kanaal||"", k:l=>l.kanaal||"—", f:true});
   if(phase==="plan") cols.push({t:"Reactietijd", v:l=>l.s2l==null?1e9:l.s2l, k:l=>l.s2lOut?"buiten venster":(fmin(l.s2l)+(l.s2lBy?" · "+esc(l.s2lBy)+((l.s2lHow||"").startsWith("gok")?" (gok)":(l.s2lHow||"").startsWith("zeer")?" (~)":""):"")), f:false});
   if(phase==="plan"&&!win) cols.push({t:"Dagen tot verlies", v:l=>l.dagenPijp==null?-1:l.dagenPijp, k:l=>l.dagenPijp==null?"—":l.dagenPijp+" d", f:false});
