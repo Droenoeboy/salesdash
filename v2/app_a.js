@@ -49,16 +49,24 @@ async function laad(code){
   if(!Array.isArray(data.leads)) throw new Error("onbruikbaar antwoord");
   return data;
 }
+let GBUSY=false;
+function gBusy(on,msg){ GBUSY=on; const b=document.querySelector("#gate button"), i=document.getElementById("gcode"), f=document.getElementById("gfout");
+  if(b){ b.disabled=on; b.textContent=on?"⟳ Laden…":"Openen"; } if(i) i.disabled=on; if(f){ f.style.color=on?"var(--mut)":""; f.textContent=on?(msg||"gegevens ophalen, dit duurt een paar seconden…"):""; } }
 async function gTry(code, stil){
+  if(GBUSY) return false;
+  gBusy(true, stil?"code van vorige keer gevonden, dashboard wordt geladen…":"code controleren en gegevens ophalen (± 5 sec)…");
   try{
     let data;
     if(location.search.indexOf("local=1")>=0){ data=await (await fetch("dashboard_data.json")).json(); }
     else data=await laad(code);
-    GCODE=code; try{sessionStorage.dpacSalesCode=code;}catch(e){}
-    document.getElementById("gate").style.display="none";
+    GCODE=code; try{ sessionStorage.dpacSalesCode=code; if(code) localStorage.dpacSalesCode=JSON.stringify({c:code,t:Date.now()}); }catch(e){}   // v4.1: 30 dagen onthouden op dit apparaat
+    gBusy(false); document.getElementById("gate").style.display="none";
     D=data; initApp(); return true;
   }catch(e){
-    if(!stil){ document.getElementById("gfout").textContent = e.message==="code"?"Onjuiste code":"Laden mislukt ("+e.message+")"; document.getElementById("gcode").value=""; }
+    gBusy(false);
+    if(e.message==="code"){ try{ localStorage.removeItem("dpacSalesCode"); sessionStorage.removeItem("dpacSalesCode"); }catch(x){} }
+    if(!stil){ document.getElementById("gfout").textContent = e.message==="code"?"Onjuiste code":"Laden mislukt ("+e.message+"), probeer het nog eens"; document.getElementById("gcode").value=""; }
+    else if(e.message!=="code"){ document.getElementById("gfout").textContent="Laden mislukt ("+e.message+"), voer de code in en probeer opnieuw"; }
     return false;
   }
 }
