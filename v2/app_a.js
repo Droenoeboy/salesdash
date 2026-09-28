@@ -178,30 +178,31 @@ function initApp(){
 let HF=null;   // uur-filter (alleen voor de per-uur weergave van de grafiekwidget)
 function funnel(who, a, b){
   let LL = HF ? L.filter(HF) : L;
-  if(tab==="tot" && kindSel.size<2) LL = LL.filter(l=> l.pd<0 || !l.kind || kindSel.has(l.kind));   // v4.0: soort-intake-chips (Totaal): uitgevinkte soort telt als niet gepland
+  // v4.2: soort-intake-chips (Totaal) filteren op intakes, niet op leads: plan rate en afgehandeld blijven totaal, show/sign/close/pay per soort
+  const kOk = l => tab!=="tot" || kindSel.size===2 || !l.kind || kindSel.has(l.kind);
   const isS = l => who==null || l.setter===who;
   const isI = l => who==null || l.intaker===who;
   const isO = l => who==null || l.owner===who;
   const gepland  = LL.filter(l=> l.stage_position!==0 && inR(l.pd,a,b) && isS(l));
   const verloren = LL.filter(l=> l.lost_in_lead_stage && inR(l.scd,a,b) && isO(l));
   if(MODE==="rep"){   // v1-logica: alles na de planfase op de eigenaar van de deal (4 rijen, geen aparte close-rij)
-    const ag=LL.filter(l=> inR(l.id_,a,b) && isO(l)), sh=ag.filter(l=>l.is_show), gs=ag.filter(l=>!l.is_show), sg=sh.filter(l=>l.is_signed), ns=sh.filter(l=>!l.is_signed);
+    const ag=LL.filter(l=> inR(l.id_,a,b) && isO(l) && kOk(l)), sh=ag.filter(l=>l.is_show), gs=ag.filter(l=>!l.is_show), sg=sh.filter(l=>l.is_signed), ns=sh.filter(l=>!l.is_signed);
     return {gepland, verloren, agenda:ag, show:sh, geenShow:gs, signS:sg, nietSignS:ns, agendaI:ag, showI:sh, sign:sg, nietSign:ns, dossiers:sh, closed:sg, closeLost:ns.filter(l=>l.lost), closeOpen:ns.filter(l=>!l.lost), signO:sg, paid:sg.filter(l=>l.is_paid), nietPaid:sg.filter(l=>!l.is_paid)};
   }
-  const agenda   = LL.filter(l=> inR(l.id_,a,b) && isS(l));            // intakes op de agenda van deze setter
+  const agenda   = LL.filter(l=> inR(l.id_,a,b) && isS(l) && kOk(l));            // intakes op de agenda van deze setter
   const show     = agenda.filter(l=> l.is_show);
   const geenShow = agenda.filter(l=> !l.is_show);
   const signS    = show.filter(l=> l.is_signed);                    // sign rate setter: van jouw shows, hoeveel ingeschreven (ongeacht wie tekent)
   const nietSignS= show.filter(l=> !l.is_signed);
-  const agendaI  = LL.filter(l=> inR(l.id_,a,b) && isI(l));            // intakes gevoerd door deze intaker
+  const agendaI  = LL.filter(l=> inR(l.id_,a,b) && isI(l) && kOk(l));            // intakes gevoerd door deze intaker
   const showI    = agendaI.filter(l=> l.is_show);
   const sign     = showI.filter(l=> l.is_signed);
   const nietSign = showI.filter(l=> !l.is_signed);
-  const dossiers = LL.filter(l=> inR(l.id_,a,b) && l.is_show && isO(l)); // dossiers na show, van deze eigenaar
+  const dossiers = LL.filter(l=> inR(l.id_,a,b) && l.is_show && isO(l) && kOk(l)); // dossiers na show, van deze eigenaar
   const closed   = dossiers.filter(l=> l.is_signed);
   const closeLost= dossiers.filter(l=> !l.is_signed && l.lost);
   const closeOpen= dossiers.filter(l=> !l.is_signed && !l.lost);
-  const signO    = LL.filter(l=> inR(l.id_,a,b) && l.is_signed && isO(l));
+  const signO    = LL.filter(l=> inR(l.id_,a,b) && l.is_signed && isO(l) && kOk(l));
   const paid     = signO.filter(l=> l.is_paid);
   const nietPaid = signO.filter(l=> !l.is_paid);
   return {gepland, verloren, agenda, show, geenShow, signS, nietSignS, agendaI, showI, sign, nietSign, dossiers, closed, closeLost, closeOpen, signO, paid, nietPaid};
@@ -246,11 +247,17 @@ function teamChipsHtml(){
 const KIND_LBL={fysiek:"🏢 Fysiek", google_meet:"💻 Google Meet"};
 let kindSel=new Set(["fysiek","google_meet"]);
 function kindToggle(k){ kindSel.has(k)? kindSel.delete(k) : kindSel.add(k); drawCols(); }
+function kindSplitHtml(gep){
+  if(!gep.length) return "";
+  const nF=gep.filter(l=>l.kind==="fysiek").length, nG=gep.filter(l=>l.kind==="google_meet").length;
+  if(!nG) return "";
+  return `<div class="fsub" style="margin-top:-4px" title="soort intake van de geplande leads; plan rate blijft altijd totaal">waarvan 🏢 ${nF} · 💻 ${nG} (${fpct(nG,gep.length)} online)</div>`;
+}
 function kindChipsHtml(){
   const cnt=k=>L.filter(l=> l.stage_position!==0 && inR(l.pd,A,B) && l.kind===k && (!teamSel||teamOn(l.setter)||!l.setter)).length;
-  const chips=Object.keys(KIND_LBL).map(k=>`<div class="wchip sm${kindSel.has(k)?" on":""}" onclick="kindToggle(${jq(k)})" title="aan/uit: telt deze soort intake wel/niet mee in gepland, show en sign">${KIND_LBL[k]}<span class="n">${cnt(k)}</span></div>`).join("");
+  const chips=Object.keys(KIND_LBL).map(k=>`<div class="wchip sm${kindSel.has(k)?" on":""}" onclick="kindToggle(${jq(k)})" title="aan/uit: show, sign, close en pay rate alleen voor deze soort intake; plan rate blijft totaal">${KIND_LBL[k]}<span class="n">${cnt(k)}</span></div>`).join("");
   const off=Object.keys(KIND_LBL).filter(k=>!kindSel.has(k)).map(k=>KIND_LBL[k]);
-  return `<div class="wonchips teamchips" style="flex:0 0 100%;margin:0 0 6px"><span class="lbl">Intake:</span>${chips}${off.length?`<span class="lbl" style="opacity:.75">· ${off.join(", ")} telt nu niet mee</span>`:""}</div>`;
+  return `<div class="wonchips teamchips" style="flex:0 0 100%;margin:0 0 6px"><span class="lbl">Intake:</span>${chips}${off.length?`<span class="lbl" style="opacity:.75">· ${off.join(", ")} telt niet mee vanaf de agenda (plan rate blijft totaal)</span>`:""}</div>`;
 }
 function unkColHtml(){
   if(!REPS_UNK.length) return "";
@@ -350,6 +357,7 @@ function colHtml(who, name, color, tot){
     <div class="fsub" title="${esc(sub)}">${sub}</div>
     <div class="grp first">Setter <i>· wat lever jij aan?</i></div>
     ${rowHtml("p","Plan rate",ROL("plan"),f.gepland.length,behandeld,`${f.verloren.length} verloren`,"plan",repKey)}
+    ${kindSplitHtml(f.gepland)}
     ${MODE==="rep"?`<div class="grp">Eigenaar <i>· v1: show, sign en pay op de deal-eigenaar</i></div>`:""}
     ${rowHtml("h","Show rate",ROL("show"),f.show.length,f.agenda.length,`${f.geenShow.length} geen show${openGS?` · ${openGS} nog open`:""}`,"show",repKey)}
     ${rowHtml("s","Sign rate",ROL("signS"),f.signS.length,f.show.length,(o=>o?`${f.nietSignS.length} (nog) niet · ${o} open`:`${f.nietSignS.length} niet`)(f.nietSignS.filter(l=>l.open).length),"signS",repKey)}
