@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPAC · Marketing (mock-up v5)</title>
+</head>
+<body>
+<script>
+// Mock-up v5: laadt de live pagina marketing/ (opmaak + app.js) en legt er preview.js overheen. Geen kopie van de code.
+(async()=>{
+  const base="../marketing/";
+  const t=await (await fetch(base+"index.html",{cache:"no-store"})).text();
+  const doc=new DOMParser().parseFromString(t,"text/html");
+  doc.querySelectorAll("script").forEach(s=>s.remove());
+  document.head.append(...doc.head.querySelectorAll("link,style"));
+  document.body.className=doc.body.className; document.body.innerHTML=doc.body.innerHTML;
+  const load=src=>new Promise((ok,err)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=err; document.body.appendChild(s); });
+  const v=(doc.querySelector('script[src^="app.js"]')||{}).getAttribute?.("src")||"app.js";
+  await load(base+v); await load("preview.js?v=1");
+})();
+</script>
+</body>
+</html>
