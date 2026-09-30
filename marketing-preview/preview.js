@@ -1,7 +1,7 @@
 // Mock-up v2 marketingdashboard: 2 tabs. Ligt bovenop ../marketing/app.js en vervangt alleen tekenfuncties.
 (function(){
   const st=document.createElement("style");
-  st.textContent=".sub,#rtxt,#note{display:none!important}.kpis{grid-template-columns:repeat(6,1fr)}@media(max-width:900px){.kpis{grid-template-columns:repeat(3,1fr)}}.kpi.on{box-shadow:inset 0 0 0 1px var(--plan,#1f6fd8)}#kpitrend{margin:-6px 0 16px}.arow.al{border-left-color:#8e8e93}.arow .anote{max-width:220px}.chart circle{transition:r .12s;cursor:pointer}.chart circle:hover{r:7px}#itip{position:fixed;z-index:9999;pointer-events:none;background:var(--card,#1c1c1f);color:var(--tx,#f2efe8);border:1px solid var(--line,#3a3a3e);border-radius:8px;padding:6px 9px;font-size:12.5px;line-height:1.35;max-width:340px;display:none;box-shadow:0 4px 14px rgba(0,0,0,.35)}";
+  st.textContent=".sub,#rtxt,#note{display:none!important}.kpis{grid-template-columns:repeat(6,1fr)}@media(max-width:900px){.kpis{grid-template-columns:repeat(3,1fr)}}.kpi.on{box-shadow:inset 0 0 0 1px var(--plan,#1f6fd8)}#kpitrend{margin:-6px 0 16px}.arow.al{border-left-color:#8e8e93}.arow .anote{max-width:220px}.chart circle{transition:r .12s;cursor:pointer;stroke:transparent;stroke-width:22px;paint-order:stroke}.chart circle:hover{r:7px}#itip{position:fixed;z-index:9999;pointer-events:none;background:var(--card,#1c1c1f);color:var(--tx,#f2efe8);border:1px solid var(--line,#3a3a3e);border-radius:8px;padding:6px 9px;font-size:12.5px;line-height:1.35;max-width:340px;display:none;box-shadow:0 4px 14px rgba(0,0,0,.35)}";
   document.head.appendChild(st);
   document.title="DPAC · Marketing (mock-up v2)";
   // directe tooltip: elke title en elke svg-title verschijnt meteen bij hover
@@ -194,7 +194,7 @@ function hkGroups(key){
 }
 function hkHtml(key){
   const D=HKDEF[key]; if(!D) return "";
-  const zero=o=>key==='cpk'||key==='roas'||key==='sg'?(o.m.sg===0&&o.m.spend>=100):key==='spend'?false:((D.den(o.m)||0)>=5&&D.num(o.m)===0);
+  const zero=o=>key==='cpk'||key==='roas'?(o.m.sg===0&&o.m.spend>=100):(key==='spend'||key==='sg')?false:((D.den(o.m)||0)>=5&&D.num(o.m)===0);
   const all=hkGroups(key).filter(o=>(D.num(o.m)||0)>0||zero(o));
   const PL=["meta","google","tiktok"]; const cnt={}; all.forEach(o=>{ cnt[o.plat]=(cnt[o.plat]||0)+D.num(o.m); });
   const tot=all.reduce((s,o)=>s+D.num(o.m),0);
@@ -207,7 +207,7 @@ function hkHtml(key){
   const tRate={spend:T.n?T.spend/T.n:null,plan:T.n?T.g/T.n*100:null,show:T.i?T.sh/T.i*100:null,sg:T.n?T.sg/T.n*100:null,cpk:T.sg?T.spend/T.sg:null,roas:T.sg?T.spend/T.sg:null}[key];
   const CPKT=key==='cpk'||key==='roas';
   const grey=o=>CPKT?(o.m.sg===0?o.m.spend<100:false):((D.den(o.m)||0)<5||D.rate(o.m)==null);
-  const cls=o=>{ if(CPKT){ if(o.m.sg===0) return o.m.spend>=400?'bad':o.m.spend>=100?'warn':'nd'; const v=o.m.cpk; return v==null?'nd':v<=MAXCPK()*0.85?'good':v>MAXCPK()*1.25?'bad':'warn'; } if(key==='sg'&&o.m.sg===0) return 'bad'; if(grey(o)||tRate==null) return "nd"; const v=D.rate(o.m); const better=D.low?v<=tRate*0.9:v>=tRate*1.1, worse=D.low?v>=tRate*1.1:v<=tRate*0.9; return better?"good":worse?"bad":""; };
+  const cls=o=>{ if(CPKT){ if(o.m.sg===0) return o.m.spend>=400?'bad':o.m.spend>=100?'warn':'nd'; const v=o.m.cpk; return v==null?'nd':v<=MAXCPK()*0.85?'good':v>MAXCPK()*1.25?'bad':'warn'; } if(grey(o)||tRate==null) return "nd"; const v=D.rate(o.m); const better=D.low?v<=tRate*0.9:v>=tRate*1.1, worse=D.low?v>=tRate*1.1:v<=tRate*0.9; return better?"good":worse?"bad":""; };
   const nul=o=>D.rate(o.m)==null&&!(CPKT&&o.m.sg===0);
   rows.sort((x,y)=> hkSort==="r" ? ((nul(x)?1:0)-(nul(y)?1:0) || (grey(x)?1:0)-(grey(y)?1:0) || (D.low?1:-1)*(((CPKT&&x.m.sg===0)?x.m.spend*9:(D.rate(x.m)??0))-((CPKT&&y.m.sg===0)?y.m.spend*9:(D.rate(y.m)??0))) || D.num(y.m)-D.num(x.m)) : (D.num(y.m)-D.num(x.m) || y.m.n-x.m.n));
   const CAP=10; const shown=rows.filter((o,i)=>hkAll||i<CAP||cls(o)==="bad"||cls(o)==="warn");
