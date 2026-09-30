@@ -619,7 +619,7 @@ function drawNote(){
 function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
   if((tab.startsWith("p")||tab==="ov") && !sel){ sel={repKey:tab==="ov"?"tot":tab.slice(1), phase:"plan"}; resetDetailState(); }
-  drawTabs(); drawKpis(); drawCols(); drawDetail(); drawNote();
+  drawStand(); drawTabs(); drawKpis(); drawCols(); drawDetail(); drawNote();
 }
 let _rz=null; window.addEventListener("resize",()=>{ if(!D) return; clearTimeout(_rz); _rz=setTimeout(()=>{ if(["trend","lost"].includes(tab)) drawCols(); if(sel) drawDetail(); },250); });
 setTimeout(()=>{ const g=document.getElementById("gcode"); if(g && document.getElementById("gate").style.display!=="none") g.focus(); },50);
