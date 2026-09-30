@@ -14,7 +14,7 @@ const MNDF=["januari","februari","maart","april","mei","juni","juli","augustus",
 const PAL=["#1f6fd8","#8b5cf6","#0e9aa7","#d95fa2","#6b7a99","#3f51b5","#a0785a","#5f9ea0"];   // v4.3: persoonskleuren zonder rood en groen (die zijn voor oordeel)
 
 let D=null, GCODE="", L=[], AP=[], EV=[], RD=[], FT=new Map(), DEFS={}, STAGES=[], P=[], REPS=[], REPS_ALL=[], REPS_UNK=[], RCOL={}, PAY_MIN=1000;
-let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false;
+let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false, LAATSTE=null;
 let MODE="rol";   // "rol" = rolzuiver (v2) · "rep" = per rep zoals v1 (plan op setter, rest op eigenaar)
 let THEME="dark"; try{ THEME=localStorage.dpacTheme||"dark"; }catch(e){}
 function applyTheme(){ document.documentElement.dataset.theme=THEME; const b=document.getElementById("thbtn"); if(b) b.textContent=THEME==="dark"?"☀︎":"☾"; const m=document.querySelector('meta[name=theme-color]'); if(m) m.content=THEME==="dark"?"#0e0e0f":"#0e0e0f"; }
@@ -169,6 +169,7 @@ function initApp(){
   const g=new Date(D.gen); NOW=TODAY;
   document.getElementById("gen").textContent=isNaN(g)?"—":(g.getDate()+" "+MND[g.getMonth()]+" "+String(g.getHours()).padStart(2,"0")+":"+String(g.getMinutes()).padStart(2,"0"));
   const tx=document.getElementById("rtxt"); if(tx&&!tx.textContent) tx.textContent=L.length+" leads · "+AP.length+" intake-afspraken · "+EV.length+" live-events";
+  LAATSTE=null; for(const e of EV){ const t=new Date(e.occurred_at).getTime(); if(!isNaN(t)&&t<=Date.now()+6e4&&(!LAATSTE||t>LAATSTE)) LAATSTE=t; }   // v4.3: stand van de data
   A=s2d(new Date(_n.getFullYear(),_n.getMonth(),1)); B=NOW;
   dagSel=null; dagOpen=new Set(); dagUur=null;
   if(!vdInit){ vdInit=true; if(ikBen&&REPS.some(p=>p.n===ikBen)) tab="vandaag"; }   // v4.3: bekende rep opent op zijn eigen bellijst
@@ -418,6 +419,15 @@ function drawCols(){
   const n=repOf(); el.style.display="block"; el.innerHTML=repPage(n);
 }
 
+// ---- 🕒 stand van de data, bovenaan elke pagina (v4.3) ----
+function drawStand(){
+  const el=document.getElementById("standbar"); if(!el||!D) return;
+  const dt=t=>{ const d=new Date(t); return d.getDate()+" "+MND[d.getMonth()]+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); };
+  const ago=t=>{ const m=Math.max(0,Math.round((Date.now()-t)/6e4)); return m<1?"zojuist":m<60?m+" min geleden":m<1440?(Math.round(m/6)/10+"").replace(".",",")+" uur geleden":Math.round(m/1440)+" d geleden"; };
+  const g=new Date(D.gen).getTime();
+  el.innerHTML=`<span title="Live-events (taken, fasewissels, afspraken, verloren/gewonnen) komen realtime uit GHL binnen; de laatste daarvan laat zien hoe vers de data is. Opgehaald = wanneer dit dashboard de gegevens uit de datalaag las.">🕒 <b>Stand van de data</b> · laatste gebeurtenis uit GHL: <b>${LAATSTE?dt(LAATSTE):"—"}</b>${LAATSTE?` (${ago(LAATSTE)})`:""} · opgehaald: ${isNaN(g)?"—":dt(g)}</span>${GCODE?` <a href="#" onclick="ververs();return false">⟳ verversen</a>`:""}`;
+}
+
 // ---- 📊 weekpuls (v4.3) ----
 // Besluit Abel 30-09: kleur t.o.v. het eigen gemiddelde van de vorige 4 weken (zelfde weekdagen, samen geteld):
 // rood onder 85%, amber 85 tot 100%, groen vanaf 100%. Geen vaste weekdoelen. Alleen volle dagen; vandaag loopt nog.
@@ -540,7 +550,7 @@ function drawVandaag(){
   if(!ikBen||vdKies) h+=`<div class="vdkies"><b>Wie ben jij?</b><span class="chsub">Dit dashboard onthoudt je keuze in deze browser en opent daarna meteen op jouw lijst. Geen inlog, alleen een voorkeur.</span><div class="wonchips" style="margin:8px 0 0">${repChips}${ikBen?`<div class="wchip sm" onclick="vdKies=false;drawVandaag()">annuleren</div><div class="wchip sm" onclick="ikBenZet(null)">vergeet mij</div>`:""}</div></div>`;
   else h+=`<div class="vdik"><span class="ava" style="background:${RCOL[ikBen]||"#8a94a8"};width:28px;height:28px;font-size:12px">${esc(ikBen.slice(0,2).toUpperCase())}</span><span>Ik ben <b>${esc(ikBen)}</b></span><button class="vdwissel" onclick="vdKies=true;drawVandaag()">🔄 Wissel van persoon</button></div>`;
   h+=`<div class="wonchips" style="margin:0"><span class="lbl">Bekijk:</span>${ikBen?`<div class="wchip sm${who===ikBen?" on":""}" onclick="vdWho=undefined;drawVandaag()">Mijn lijst</div>`:""}<div class="wchip sm${who==null?" on":""}" onclick="vdWho=null;drawVandaag()">Hele team<span class="n">${all.length}</span></div>`+REPS.filter(p=>p.n!==ikBen).map(p=>`<div class="wchip sm${who===p.n&&vdWho!==undefined?" on":""}" onclick="vdWho=${jq(p.n)};drawVandaag()">${esc(p.n)}</div>`).join("")+`</div></div>`;
-  h+=`<div class="vdsum">${nR?`<span class="vdw rood">🔴 ${nR} ${nR===1?"lead wacht":"leads wachten"} langer dan ${S2L_ROOD} min</span>`:""}${nA?`<span class="vdw amber">🟠 ${nA} langer dan ${S2L_AMBER} min</span>`:""}${!nR&&!nA?`<span class="vdw ok">✓ geen nieuwe lead wacht langer dan ${S2L_AMBER} min</span>`:""}<span class="chsub">stand van de data: ${esc(document.getElementById("gen").textContent||"—")} · ververs voor de nieuwste stand</span></div>`;
+  h+=`<div class="vdsum">${nR?`<span class="vdw rood">🔴 ${nR} ${nR===1?"lead wacht":"leads wachten"} langer dan ${S2L_ROOD} min</span>`:""}${nA?`<span class="vdw amber">🟠 ${nA} langer dan ${S2L_AMBER} min</span>`:""}${!nR&&!nA?`<span class="vdw ok">✓ geen nieuwe lead wacht langer dan ${S2L_AMBER} min</span>`:""}</div>`;
   h+=`<div class="wonchips"><span class="lbl">Reden:</span><div class="wchip sm${vdGrp==null?" on":""}" onclick="vdGrp=null;drawVandaag()">Alles<span class="n">${mine.length}</span></div>`+Object.entries(VD_GRP).map(([g,t])=>{ const n=mine.filter(r=>r.grp===+g).length; return `<div class="wchip sm${vdGrp===+g?" on":""}${n?"":" dim"}" onclick="vdGrp=${g};drawVandaag()">${g} · ${t}<span class="n">${n}</span></div>`; }).join("")+`</div>`;
   const cols=[
     {t:"#",v:r=>r.prio},{t:"Naam",v:r=>(r.naam||"").toLowerCase()},{t:"Reden",v:r=>r.grp*1e9-(r.wacht||0)},{t:"Wachttijd",v:r=>r.wacht??-1},
