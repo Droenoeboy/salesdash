@@ -308,7 +308,7 @@ function drawTabs(){
   const sw=document.createElement("div"); sw.className="modesw"; sw.title="Rollen = elke rate op de persoon die er echt over gaat (setter / intaker / eigenaar). Per rep = de oude v1-telling: plan op de setter, show/sign/pay op de eigenaar van de deal.";
   sw.innerHTML=`<span class="${MODE==="rol"?"on":""}" onclick="setMode('rol')">Rollen</span><span class="${MODE==="rep"?"on":""}" onclick="setMode('rep')">Per rep (v1)</span>`;
   const mb=document.getElementById("modebar"); mb.innerHTML=""; mb.appendChild(sw);
-  const on=el.querySelector(".tab.on"); if(on&&on.scrollIntoView) try{ on.scrollIntoView({block:"nearest",inline:"nearest"}); }catch(e){}
+  const on=el.querySelector(".tab.on"); if(on){ const L=on.offsetLeft-el.offsetLeft; if(L<el.scrollLeft||L+on.offsetWidth>el.scrollLeft+el.clientWidth) el.scrollLeft=Math.max(0,L-16); }   // alleen de tabbalk horizontaal, nooit de pagina
 }
 function persoonMenu(anchor){
   const el=document.getElementById("fdrop"); if(el.dataset.open==="persoon"&&el.style.display==="block"){ el.style.display="none"; el.dataset.open=""; return; }
@@ -551,7 +551,7 @@ const PH={
   close:{t:"Close rate", ok:"Ingeschreven", bad:"Verloren na show", d:"id_", bd:"scd", who:"owner"},
   pay:{t:"Pay rate", ok:"Betaald", bad:"Getekend, nog niet betaald", d:"id_", bd:"id_", who:"owner"},
   l2s:{t:"Lead → sign", ok:"Getekend (lead kwam binnen in deze periode)", bad:"(nog) niet getekend", d:"stgd", bd:"cd", who:"setter"}};
-function pick(repKey,phase){ sel={repKey, phase}; resetDetailState(); drawCols(); drawDetail(); document.getElementById("detail").scrollIntoView({behavior:"smooth",block:"nearest"}); }
+function pick(repKey,phase){ sel={repKey, phase}; resetDetailState(); drawCols(); drawDetail(); }   // geen automatisch scrollen naar wat opent (Abel, 30 sep)
 function sortDetail(tbl,c){ const s=sortSt[tbl]; if(s.c===c) s.d=-s.d; else {s.c=c; s.d=1;} fClose(); drawDetail(); }
 function selRows(f){
   if(sel.phase==="l2s"){ const w=sel.repKey==="tot"?null:sel.repKey; const co=L.filter(l=>inR(l.cd,A,B)&&(w==null||l.setter===w)); return [co.filter(l=>l.is_signed), co.filter(l=>!l.is_signed)]; }
