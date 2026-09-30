@@ -3,109 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Marketingdashboard v3 — werkbare preview</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#f6f7f9; --panel:#ffffff; --ink:#101114; --muted:#6b7280; --soft:#eef1f5; --line:#dfe4ea;
-  --brand:#2563eb; --brand2:#1d4ed8; --red:#dc2626; --amber:#d97706; --green:#16a34a; --violet:#7c3aed;
-  --redbg:#fff1f2; --amberbg:#fffbeb; --greenbg:#ecfdf5; --bluebg:#eff6ff; --violetbg:#f5f3ff;
-  --shadow:0 1px 2px rgba(16,17,20,.05),0 14px 36px rgba(16,17,20,.08);
-}
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} button,input,textarea{font:inherit}
-.page{max-width:1280px;margin:0 auto;padding:24px}.top{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:18px}.brand{display:flex;gap:12px;align-items:center}.logo{width:42px;height:42px;border-radius:12px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:800}.title h1{font-size:24px;line-height:1.1;margin:0}.title p{margin:4px 0 0;color:var(--muted);font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 13px;font-weight:700;cursor:pointer}.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}.btn:focus-visible,.field:focus-visible{outline:3px solid rgba(37,99,235,.2);outline-offset:2px}
-.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(16,17,20,.04)}.stat b{font-size:26px;display:block;letter-spacing:-.03em}.stat span{color:var(--muted);font-weight:650}.stat.red b{color:var(--red)}.stat.amber b{color:var(--amber)}.stat.green b{color:var(--green)}.stat.blue b{color:var(--brand)}
-.layout{display:grid;grid-template-columns:240px 1fr 310px;gap:16px;align-items:start}.side,.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow)}.side h2,.panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}.filter{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--soft);font-weight:700}.filter:last-child{border-bottom:0}.count{min-width:26px;height:24px;padding:0 8px;border-radius:999px;background:var(--soft);display:grid;place-items:center;color:#374151}.filter.on{color:var(--brand)}.filter.on .count{background:var(--bluebg);color:var(--brand)}
-.board{display:grid;grid-template-columns:1fr;gap:12px}.section{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}.section-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);background:#fbfcfd}.section-head h2{font-size:16px;margin:0}.hint{color:var(--muted);font-size:13px}.cards{display:flex;flex-direction:column;gap:10px;padding:12px}.card{display:grid;grid-template-columns:24px 1fr 190px 40px;gap:12px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px}.card.urgent{border-left:5px solid var(--red)}.card.warn{border-left:5px solid var(--amber)}.card.done{border-left:5px solid var(--green);background:linear-gradient(90deg,var(--greenbg),#fff 55%)}.check{width:22px;height:22px;border:2px solid #c5ccd6;border-radius:6px;display:grid;place-items:center;color:#fff}.done .check{background:var(--green);border-color:var(--green)}.card h3{font-size:15px;margin:0 0 3px}.card p{margin:0;color:var(--muted);font-size:13px}.badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 9px;font-weight:800;font-size:11px;text-transform:uppercase}.badge.red{background:var(--redbg);color:var(--red)}.badge.amber{background:var(--amberbg);color:var(--amber)}.badge.green{background:var(--greenbg);color:var(--green)}.badge.violet{background:var(--violetbg);color:var(--violet)}.metric{text-align:right;color:#4b5563;font-weight:800;font-size:13px}.field{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#f9fafb;color:#111827;resize:vertical}.chev{color:#9ca3af;text-align:center;font-weight:900}
-.panel{position:sticky;top:18px}.ai-box{border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px;background:#fbfcfd}.ai-box strong{display:block;margin-bottom:5px}.ai-box p{margin:0;color:var(--muted);font-size:13px}.track-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.mini{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}.mini b{display:block;font-size:22px}.mini span{font-size:12px;color:var(--muted);font-weight:650}.callout{margin-top:12px;border-radius:14px;padding:12px;background:#111827;color:#fff}.callout p{margin:5px 0 0;color:#d1d5db;font-size:13px}
-.mobile-note{display:none;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:14px;padding:12px;margin-bottom:14px;font-weight:650}
-@media(max-width:1050px){.layout{grid-template-columns:1fr}.side{display:none}.panel{position:static}.summary{grid-template-columns:repeat(2,1fr)}.mobile-note{display:block}.card{grid-template-columns:24px 1fr}.metric,.field,.chev{grid-column:2}.metric{text-align:left}.top{align-items:flex-start;flex-direction:column}}
-@media(max-width:640px){.page{padding:14px}.summary{grid-template-columns:1fr}.title h1{font-size:20px}.actions{width:100%}.btn{flex:1}.cards{padding:10px}.card{padding:10px}}
-</style>
+<title>DPAC · Marketing (mock-up)</title>
 </head>
 <body>
-<div class="page">
-  <header class="top">
-    <div class="brand"><div class="logo">DP</div><div class="title"><h1>Marketingdashboard</h1><p>Werkbord voor Abel + Ger — alleen beslissingen, checks en opvolging.</p></div></div>
-    <div class="actions"><button class="btn">Ververs data</button><button class="btn">Laatste 30 dagen</button><button class="btn primary">AI check opmerkingen</button></div>
-  </header>
-
-  <div class="mobile-note">Nieuwe v3-preview: veel rustiger, smaller, betere contrasten, geen nep-dark-mode over witte kaarten.</div>
-
-  <section class="summary" aria-label="samenvatting">
-    <div class="stat red"><b>3</b><span>moet vandaag</span></div>
-    <div class="stat amber"><b>2</b><span>bespreken met Ger</span></div>
-    <div class="stat blue"><b>4</b><span>tracking issues</span></div>
-    <div class="stat green"><b>7</b><span>afgerond</span></div>
-  </section>
-
-  <div class="layout">
-    <aside class="side">
-      <h2>Filters</h2>
-      <div class="filter on">Alle acties <span class="count">5</span></div>
-      <div class="filter">Meta <span class="count">3</span></div>
-      <div class="filter">Google <span class="count">1</span></div>
-      <div class="filter">TikTok <span class="count">1</span></div>
-      <div class="filter">Tracking <span class="count">4</span></div>
-      <div class="filter">Afgerond <span class="count">7</span></div>
-    </aside>
-
-    <main class="board">
-      <section class="section">
-        <div class="section-head"><h2>Nu beslissen</h2><span class="hint">loop deze lijst samen langs</span></div>
-        <div class="cards">
-          <article class="card urgent">
-            <span class="check"></span>
-            <div><span class="badge red">Klopt niet</span><h3>Meta UTM URL-parameters herstellen</h3><p>Campagne/adset-id ontbreekt bij betaalde leads.</p></div>
-            <div class="metric">8% bron onbekend</div>
-            <textarea class="field">We hebben template aangepast, maar nog niet op oude ads gezet.</textarea>
-            <div class="chev">⌄</div>
-          </article>
-          <article class="card urgent">
-            <span class="check"></span>
-            <div><span class="badge red">Super belangrijk</span><h3>TikTok-formulier telefoonnummer verplicht maken</h3><p>3 leads zonder nummer; opvolging valt weg.</p></div>
-            <div class="metric">3 leads mist nr.</div>
-            <textarea class="field" placeholder="opmerking: waarom anders gedaan?"></textarea>
-            <div class="chev">⌄</div>
-          </article>
-          <article class="card warn">
-            <span class="check"></span>
-            <div><span class="badge amber">Belangrijk</span><h3>Beste Meta-adset opschalen</h3><p>Video 3 · Hook 1 presteert beter dan baseline.</p></div>
-            <div class="metric">€45 → €65/dag</div>
-            <textarea class="field" placeholder="opmerking: waarom anders gedaan?"></textarea>
-            <div class="chev">⌄</div>
-          </article>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-head"><h2>Besproken / bewust anders</h2><span class="hint">gaat mee naar rapport + volgende AI-run</span></div>
-        <div class="cards">
-          <article class="card done">
-            <span class="check">✓</span>
-            <div><span class="badge green">Verwerkt</span><h3>Google 2.1 Search niet opschalen</h3><p>Bewust niet gedaan; 2.0 en 2.1 zijn zoekwoordtests.</p></div>
-            <div class="metric">met opmerking</div>
-            <textarea class="field">Niet opschalen tot test volledig is.</textarea>
-            <div class="chev">⌄</div>
-          </article>
-        </div>
-      </section>
-    </main>
-
-    <aside class="panel">
-      <h2>AI controle</h2>
-      <div class="ai-box"><strong>Wat controleert AI?</strong><p>Of jullie opmerking logisch is met de data, of het advies moet wijzigen, en of tracking betrouwbaar genoeg is.</p></div>
-      <div class="ai-box"><strong>Volgende stap</strong><p>Klik na overleg op “AI check opmerkingen”. Daarna ontstaat een kort rapport voor Ger.</p></div>
-      <h2>Tracking-check</h2>
-      <div class="track-grid">
-        <div class="mini"><b style="color:var(--red)">6</b><span>campagne onbekend</span></div>
-        <div class="mini"><b style="color:var(--amber)">24</b><span>advertentie onbekend</span></div>
-        <div class="mini"><b style="color:var(--violet)">11</b><span>zachte koppeling</span></div>
-        <div class="mini"><b style="color:var(--red)">4</b><span>open tracking-acties</span></div>
-      </div>
-      <div class="callout"><strong>Eerlijk oordeel</strong><p>Als tracking rood is, geen budget opschalen zonder menselijke check.</p></div>
-    </aside>
-  </div>
-</div>
+<script>
+// Mock-up: laadt de live pagina (opmaak + app.js) en legt er preview.js overheen. Geen kopie van de code.
+(async()=>{
+  const t=await (await fetch((location.pathname.indexOf("/marketing-preview/")>=0?"../marketing/":"../")+"index.html",{cache:"no-store"})).text();
+  const doc=new DOMParser().parseFromString(t,"text/html");
+  doc.querySelectorAll("script").forEach(s=>s.remove());
+  document.head.append(...doc.head.querySelectorAll("link,style"));
+  document.body.className=doc.body.className; document.body.innerHTML=doc.body.innerHTML;
+  const load=src=>new Promise((ok,err)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=err; document.body.appendChild(s); });
+  const base=location.pathname.indexOf("/marketing-preview/")>=0?"../marketing/":"../"; await load(base+"app.js?v=35"); await load("preview.js?v=1");
+})();
+</script>
 </body>
 </html>
