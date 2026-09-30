@@ -301,6 +301,7 @@ const SORTS={spend:n=>n.m.spend,n:n=>n.m.n,cpl:n=>n.m.cpl,g:n=>n.m.g,plan:n=>n.m
 function sortNodes(ns,top){ const f=SORTS[sortKey]||SORTS.spend; if(!(top&&GROUP==="tree")) ns.sort((x,y)=>{ const a=f(x),b=f(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a-b)*sortDir; }); ns.sort((x,y)=>(y.pin?1:0)-(x.pin?1:0)); ns.forEach(n=>sortNodes(n.children,false)); }
 
 // ---- KPI's ----
+const keten=m=>`${m.n} leads › ${m.g} gepland${m.plan!=null?` (${r1(m.plan)}%)`:""} › ${m.i} geweest › ${m.sh} opgedaagd${m.show!=null?` (${r1(m.show)}%)`:""}`;   // v4.0.2: de hele keten in elke tooltip, zodat de noemer nooit een raadsel is
 // ---- v4 tegels: getal, label, verschil; hover = de getallen erachter. Klik = weeklijn eronder met herkomstlijst (Alles · Meta · Google · TikTok). Klanten staat standaard open. ----
 let kpiTrend="sg", TOTM=null;
 const PAIDP=p=>p==="meta"||p==="google"||p==="tiktok";
@@ -317,8 +318,8 @@ function drawKpis(){
   const roasCls=m.roas==null?"":(m.roas>=ROAS_OK()?"good":m.roas<ROAS_BAD()?"bad":"warn");
   const items=[
     ["spend",eur0(m.spend),"Uitgegeven",dlt(m.spend,pm.spend,eur0,true),"",`${eur0(m.spend)} aan advertenties · ${m.n} leads · ${m.cpl==null?"—":eur0(m.cpl)} per lead`],
-    ["plan",m.plan==null?"—":r1(m.plan)+"%","Plan %",dlt(m.plan,pm.plan,pt),"",`${m.g} van ${m.n} leads plannen een intake`],
-    ["show",m.show==null?"—":r1(m.show)+"%","Show %",dlt(m.show,pm.show,pt),"",`${m.sh} van ${m.i} intakes kwamen opdagen`],
+    ["plan",m.plan==null?"—":r1(m.plan)+"%","Plan %",dlt(m.plan,pm.plan,pt),"",keten(m)],
+    ["show",m.show==null?"—":r1(m.show)+"%","Show %",dlt(m.show,pm.show,pt),"",keten(m)],
     ["sg",m.sg,"Klanten",dlt(m.sg,pm.sg,v=>v),"",`${m.sg} van ${m.n} leads tekenden${m.l2k!=null?` (${r1(m.l2k)}%)`:""} · ${m.ps} uit betaalde kanalen`],
     ["cpk",m.cpkPaid==null?"—":eur0(m.cpkPaid),"Kosten per klant",dlt(m.cpkPaid,pm.cpkPaid,eur0,true),cpkCls,`${eur0(m.spend)} ÷ ${m.ps} betaalde klanten · plafond ${eur0(MAXCPK())}`],
     ["roas",m.roas==null?"—":rx(m.roas),"ROAS",dlt(m.roas,pm.roas,rx),roasCls,`${eur0(m.omzet)} omzet ÷ ${eur0(m.spend)} kosten · groen vanaf ${r1(ROAS_OK())}×, rood onder ${r1(ROAS_BAD())}×`]];
@@ -331,7 +332,7 @@ function kpiTrendHtml(key){
   const LAB={spend:["Uitgegeven","€"],plan:["Plan %","%"],show:["Show %","%"],sg:["Klanten","#"],cpk:["Kosten per klant","€"],roas:["ROAS","×"]}[key];
   const val=m=>({spend:m.spend,plan:m.plan,show:m.show,sg:m.sg,cpk:m.cpkPaid,roas:m.roas})[key];
   const vals=rows.map(m=>{ const v=val(m); return v==null?null:(LAB[1]==="€"?Math.round(v):Math.round(v*10)/10); });
-  const tipOf=m=>({spend:`${m.n} leads · ${m.cpl==null?"—":eur0(m.cpl)} per lead`,plan:`${m.g} van ${m.n} leads`,show:`${m.sh} van ${m.i} intakes`,sg:`${m.sg} van ${m.n} leads${m.l2k!=null?` (${r1(m.l2k)}%)`:""}`,cpk:`${eur0(m.spend)} ÷ ${m.ps} betaalde klanten`,roas:`${eur0(m.omzet)} ÷ ${eur0(m.spend)}`})[key];
+  const tipOf=m=>({spend:`${m.n} leads · ${m.cpl==null?"—":eur0(m.cpl)} per lead`,plan:keten(m),show:keten(m),sg:`${m.sg} van ${m.n} leads${m.l2k!=null?` (${r1(m.l2k)}%)`:""}`,cpk:`${eur0(m.spend)} ÷ ${m.ps} betaalde klanten`,roas:`${eur0(m.omzet)} ÷ ${eur0(m.spend)}`})[key];
   const labels=bk.map(([a])=>"wk "+isoWeek(a));
   const S=[{name:LAB[0],color:"var(--plan)",rows,values:vals,tips:rows.map(tipOf),width:2.2}];
   const cw=Math.max(320,(document.getElementById("kpis").clientWidth||900)-34);
@@ -353,8 +354,8 @@ const paidN=m=>m.S.sign.filter(l=>PAIDP(l.platform)).length;
 const COLS=[
   {k:"spend",t:"Kosten",f:m=>eur0(m.spend),w:"num",tipc:m=>m.spend?`${eur0(m.spend)} · ${m.clicks} kliks${m.cpl!=null?` · ${eur0(m.cpl)} per lead`:""}`:""},
   {k:"n",t:"Leads",f:m=>m.n,w:"num",click:"nieuw",tipc:m=>m.n?`${m.n} leads · klik voor de namen`:""},
-  {k:"plan",t:"Plan %",f:m=>m.plan==null?"—":r1(m.plan)+"%",w:"pct",cls:m=>TOTM&&m!==TOTM?relCls(m.plan,TOTM.plan):"",sub:m=>TOTM&&m!==TOTM?relSub(m.plan,TOTM.plan):"",tip:"intake gepland ÷ leads · groen boven, rood onder het totaal",tipc:m=>m.n?`${m.g} van ${m.n} leads plannen een intake`:""},
-  {k:"show",t:"Show %",f:m=>m.show==null?"—":r1(m.show)+"%",w:"pct",cls:m=>TOTM&&m!==TOTM?relCls(m.show,TOTM.show):"",sub:m=>TOTM&&m!==TOTM?relSub(m.show,TOTM.show):"",tip:"shows ÷ intakes die al geweest zijn · groen boven, rood onder het totaal",tipc:m=>m.i?`${m.sh} van ${m.i} intakes kwamen opdagen`:""},
+  {k:"plan",t:"Plan %",f:m=>m.plan==null?"—":r1(m.plan)+"%",w:"pct",cls:m=>TOTM&&m!==TOTM?relCls(m.plan,TOTM.plan):"",sub:m=>TOTM&&m!==TOTM?relSub(m.plan,TOTM.plan):"",tip:"intake gepland ÷ leads · groen boven, rood onder het totaal",tipc:m=>m.n?keten(m):""},
+  {k:"show",t:"Show %",f:m=>m.show==null?"—":r1(m.show)+"%",w:"pct",cls:m=>TOTM&&m!==TOTM?relCls(m.show,TOTM.show):"",sub:m=>TOTM&&m!==TOTM?relSub(m.show,TOTM.show):"",tip:"shows ÷ geplande intakes die al geweest zijn · groen boven, rood onder het totaal",tipc:m=>m.n?keten(m):""},
   {k:"sg",t:"Klanten",f:m=>m.sg,w:"num",click:"sign",tipc:m=>m.sg?`${m.sg} van ${m.n} leads tekenden · klik voor de namen`:""},
   {k:"cpk",t:"Kosten / klant",f:m=>m===TOTM?(paidN(m)&&m.spend?eur0(m.spend/paidN(m)):"—"):(m.cpk!=null?eur0(m.cpk):(m.sg===0&&m.spend>=100?eur0(m.spend):"—")),w:"num",cls:m=>m.cpk!=null?(m.cpk<=MAXCPK()*0.85?"good":m.cpk>MAXCPK()*1.25?"bad":"warn"):(m.sg===0&&m.spend>=400?"bad":m.sg===0&&m.spend>=100?"warn":""),sub:m=>m.cpk==null&&m.sg===0&&m.spend>=100?"0 klanten":"",tip:"kosten ÷ klanten · plafond € 1.700",tipc:m=>m===TOTM?`${eur0(m.spend)} ÷ ${paidN(m)} betaalde klanten`:(m.cpk!=null?`${eur0(m.spend)} ÷ ${m.sg} klanten`:(m.spend>=100?`${eur0(m.spend)} uitgegeven zonder klant`:""))},
 ];
@@ -1265,8 +1266,8 @@ try{ const c=sessionStorage.dpacMktCode; if(c) gTry(c, true); else if(location.s
 let hkPlat=null, hkSort="n", hkAll=false, NMOPEN=new Set(), NMALL=new Set();
 const HKDEF={   // per tegel: welk aantal, welk percentage (of bedrag), welke namen
   spend:{n:"Kosten",r:"Per lead",eur:true,low:true,set:"nieuw",num:m=>m.spend,rate:m=>m.cpl,den:m=>m.n,tip:m=>`${eur0(m.spend)} ÷ ${m.n} leads`},
-  plan:{n:"Gepland",r:"Plan %",set:"gepland",num:m=>m.g,rate:m=>m.plan,den:m=>m.n,tip:m=>`${m.g} van ${m.n} leads plannen een intake`},
-  show:{n:"Shows",r:"Show %",set:"shows",num:m=>m.sh,rate:m=>m.show,den:m=>m.i,tip:m=>`${m.sh} van ${m.i} intakes kwamen opdagen`},
+  plan:{n:"Gepland",r:"Plan %",set:"gepland",num:m=>m.g,rate:m=>m.plan,den:m=>m.n,tip:keten},
+  show:{n:"Shows",r:"Show %",set:"shows",num:m=>m.sh,rate:m=>m.show,den:m=>m.i,tip:keten},
   sg:{n:"Klanten",r:"Klant %",set:"sign",num:m=>m.sg,rate:m=>m.l2k,den:m=>m.n,tip:m=>`${m.sg} van ${m.n} leads tekenden`},
   cpk:{n:"Klanten",r:"€ / klant",eur:true,low:true,set:"sign",num:m=>m.sg,rate:m=>m.cpk,den:m=>m.sg,tip:m=>`${eur0(m.spend)} ÷ ${m.sg} klanten`},
   roas:{n:"Klanten",r:"€ / klant",eur:true,low:true,set:"sign",num:m=>m.sg,rate:m=>m.cpk,den:m=>m.sg,tip:m=>`${eur0(m.spend)} ÷ ${m.sg} klanten · ${eur0(m.omzet)} omzet`}};
