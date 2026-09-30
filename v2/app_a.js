@@ -333,13 +333,16 @@ function drawKpis(){
   const s2l=median(L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2l!=null).length, nOut=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2lOut).length;
   const insN=(x,y)=>L.filter(l=>l.is_signed&&inR(l.insE,x,y)&&(who==null||l.owner===who)).length; const ins=insN(A,B), pins=insN(pA,pB);
   const s2b=median(L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)).map(l=>l.s2b)), n2b=L.filter(l=>inR(l.cd,A,B)&&(who==null||l.setter===who)&&l.s2b!=null).length;
-  const items=[[first[0],first[1],null,dlt(first[0],prevFirst)],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length)],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length)],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length)],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length)],[ins,who?"Ingeschreven · eigenaar":"Ingeschreven","geteld op inschrijfdatum (formulier) — zelfde telling als de Gewonnen-tab en het CRM",dlt(ins,pins)],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length)],
-    [held?fpct(s.show.length,held):"—","Show rate per slot",`${s.show.length} show · ${s.noshow.length} no-show · ${s.late.length} late cancel${s.unres.length?` · ${s.unres.length} zonder uitkomst`:""}`,""],
-    [fmin(s2l),"Reactietijd (mediaan)",`Tijd van binnenkomst lead tot de eerste menselijke actie (taak/belpoging/afspraak/fasewissel; de binnenkomst zelf telt niet), toegerekend aan wie die actie deed (taak-eigenaar, anders wie het dossier daarna afhandelde, anders de enige actieve rep in dat uur) — bekend voor ${n2l} leads uit deze periode (alleen sinds het live-eventlog draait). ${nOut} lead${nOut===1?"":"s"} buiten het werkvenster (’s nachts/weekend, vóór de eerste of na de laatste actie van de dag) niet meegeteld. Tijd tot eerste intake-boeking: mediaan ${s2b==null?"—":(s2b+"").replace(".",",")+" uur"} (${n2b} leads).`,s2b!=null?`<i class="dlt eq">${(s2b+"").replace(".",",")} u tot boeking</i>`:""]];
-  k.innerHTML=items.map(x=>`<div class="kpi" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[3]||""}</div>`).join("")+
+  const items=[[first[0],first[1],null,dlt(first[0],prevFirst),who==null?"kpiPick('l2s')":"kpiPick('plan')"],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length),"kpiPick('plan','ok')"],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length),"kpiPick('show')"],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length),"kpiPick('show','ok')"],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length),"kpiPick('show','bad','noshow')"],[ins,who?"Ingeschreven · eigenaar":"Ingeschreven","geteld op inschrijfdatum (formulier) — zelfde telling als de Gewonnen-tab en het CRM · klik: Gewonnen-tab",dlt(ins,pins),`wonRep=${who?jq(who):"null"};tab='won';sel=null;render()`],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length),"kpiPick('pay','ok')"],
+    [held?fpct(s.show.length,held):"—","Show rate per slot",`${s.show.length} show · ${s.noshow.length} no-show · ${s.late.length} late cancel${s.unres.length?` · ${s.unres.length} zonder uitkomst`:""} · klik: Intakes-tab`,"",`tab='int';intScope='periode';intFilt='all';intWho=${who?jq(who):"null"};sel=null;render()`],
+    [fmin(s2l),"Reactietijd (mediaan)",`Tijd van binnenkomst lead tot de eerste menselijke actie (taak/belpoging/afspraak/fasewissel; de binnenkomst zelf telt niet), toegerekend aan wie die actie deed (taak-eigenaar, anders wie het dossier daarna afhandelde, anders de enige actieve rep in dat uur) — bekend voor ${n2l} leads uit deze periode (alleen sinds het live-eventlog draait). ${nOut} lead${nOut===1?"":"s"} buiten het werkvenster (’s nachts/weekend, vóór de eerste of na de laatste actie van de dag) niet meegeteld. Tijd tot eerste intake-boeking: mediaan ${s2b==null?"—":(s2b+"").replace(".",",")+" uur"} (${n2b} leads).`,s2b!=null?`<i class="dlt eq">${(s2b+"").replace(".",",")} u tot boeking</i>`:"","kpiPick('plan')"]];
+  k.innerHTML=items.map(x=>`<div class="kpi${x[4]?" clk":""}" ${x[2]?`title="${esc(x[2])}"`:x[4]?`title="klik voor de namen"`:""} ${x[4]?`onclick="${x[4]}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[3]||""}</div>`).join("")+
     `<div class="kpinote">▲▼ t.o.v. ${esc(vglTxt)}${lopend?` · <b>week ${isoWeek(B)} is lopend t/m ${dgn(B)}, nog onvolledig</b>`:""}</div>`;
 }
 const dgn = d => ["ma","di","wo","do","vr","za","zo"][(d2s(d).getDay()+6)%7];   // korte dagnaam
+// v4.3: KPI-tegel → namentabel van die stap (op Totaal, Persoon of Vergelijk; anders eerst naar Totaal)
+function kpiPick(phase,side,flt){ const who=repOf(); if(!who&&!["tot","ov","cmp"].includes(tab)){ tab="tot"; sel=null; render(); }
+  pick(who==null?"tot":who, phase); if(side||flt){ if(side) dSide=side; if(flt) sel.flt=flt; drawDetail(); } }
 
 // ---- funnelkolommen ----
 const PH_ICO={plan:"📅",show:"🪑",signS:"✍️",sign:"✍️",close:"🤝",pay:"💶",l2s:"➡️"};   // v4.3: fase = icoon, geen eigen kleur
@@ -517,7 +520,7 @@ function sortDetail(tbl,c){ const s=sortSt[tbl]; if(s.c===c) s.d=-s.d; else {s.c
 function selRows(f){
   if(sel.phase==="l2s"){ const w=sel.repKey==="tot"?null:sel.repKey; const co=L.filter(l=>inR(l.cd,A,B)&&(w==null||l.setter===w)); return [co.filter(l=>l.is_signed), co.filter(l=>!l.is_signed)]; }
   if(sel.phase==="plan") return [f.gepland, f.verloren];
-  if(sel.phase==="show") return [f.show, f.geenShow];
+  if(sel.phase==="show") return [f.show, sel.flt==="noshow"? f.geenShow.filter(l=>l.is_noshow) : f.geenShow];   // flt: vanaf de KPI-tegel No-shows
   if(sel.phase==="signS") return [f.signS, f.nietSignS];
   if(sel.phase==="sign") return [f.sign, f.nietSign];
   if(sel.phase==="close") return [f.closed, f.closeLost.concat(f.closeOpen)];
@@ -608,7 +611,7 @@ function drawDetailIn(el,who,name,ph,ok,bad){
   document.getElementById("dhead").innerHTML=`<b>${esc(name)} · ${ph.t} (${ROL(sel.phase)})</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${ok.length} wel · ${bad.length} niet${nf?` · <a href="#" onclick="colF={ok:{},bad:{}};drawDetail();return false" style="color:var(--plan)">filters wissen (${nf})</a>`:""}</span>`;
   document.getElementById("dchart").innerHTML = tab==="tot" ? "" : chartWidget(who, sel.phase);   // homepage: geen grafiekblok, alleen wel/niet-kolommen
   const side = dSide || (bad.length||!ok.length ? "bad" : "ok");   // standaard de kant waar actie nodig is
-  const badLab = bad.length&&!bad.some(l=>l.open)?ph.bad.replace("(nog) ",""):ph.bad;
+  const badLab = sel.flt==="noshow" ? "No-show" : bad.length&&!bad.some(l=>l.open)?ph.bad.replace("(nog) ",""):ph.bad;
   const sw=`<div class="dside"><span class="${side==="bad"?"on":""}" onclick="dSide='bad';fClose();drawDetail()"><i class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</i> ${badLab}</span><span class="${side==="ok"?"on":""}" onclick="dSide='ok';fClose();drawDetail()"><i class="pill ok">${okF!==ok.length?okF+" van "+ok.length:ok.length}</i> ${ph.ok}</span></div>`;
   document.getElementById("dcols").innerHTML = `<div class="dcol">${sw}${side==="ok"?rowsTable(ok,sel.phase,true,"ok"):rowsTable(bad,sel.phase,false,"bad")}</div>`;
 }
