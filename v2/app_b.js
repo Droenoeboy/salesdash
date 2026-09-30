@@ -94,7 +94,7 @@ function drawCmp(){
   }
   h+=`</table></div>
   <p class="note">Elke rij is één KPI, elke kolom één persoon — zo vergelijk je Django en Marcel direct naast elkaar. <b>Groen</b> = minstens 2 procentpunt beter dan het teamgemiddelde van die rij, <b>rood</b> = minstens 2 pp slechter; het verschil staat onder elke waarde. Het teamgemiddelde zelf staat links onder de KPI-naam. Grijs = te weinig volume om eerlijk te vergelijken (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}). Klik op een cel voor de namen erachter. Schakel bovenin naar <i>Per rep (v1)</i> voor de oude telling.</p>`;
-  el.innerHTML=h;
+  keepScroll(el,()=>{ el.innerHTML=h; });
 }
 
 // ---- 📈 trend: percentages per week, grafiek + week-op-week verandering ----
@@ -182,7 +182,7 @@ function drawTrend(){
   for(let i=rows.length-1;i>=0;i--){ const r=rows[i]; h+=`<tr class="${i===last?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(r.a)}${part[i]?" · onvolledig":""}</small></td><td>${r.nieuw}</td><td>${r.beh}</td><td>${r.gepland}</td>${rc(r.pr,r.gepland,r.beh)}<td>${r.agenda}</td><td>${r.show}</td>${rc(r.sr,r.show,r.agenda)}<td>${r.signS}</td>${rc(r.gs,r.signS,r.show)}${rc(r.cr,r.closed,r.closed+r.closeLost)}${rc(r.l2s,r.sign,r.beh)}<td>${r.verloren}</td>${rc(r.slot,r.slotShow,r.held)}</tr>`; }
   h+=`</table></div>
   <p class="note">Rates per ISO-week (ma t/m zo) met dezelfde definities als de funnelkolommen: nieuwe leads op aanmaakdatum, gepland op inplandatum, intakes/shows/inschrijvingen op intakedatum, verloren op datum van afboeken. Absolute aantallen bewegen mee met het aantal leads; de <b>percentages</b> laten zien of het team beter of slechter wordt. Een open bolletje/grijze cel = te weinig volume in die week (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}) — dan zegt het percentage weinig.</p>`;
-  tw.innerHTML=h;
+  keepScroll(tw,()=>{ tw.innerHTML=h; });
 }
 
 // ---- 📣 bronnen & ads ----
@@ -222,7 +222,7 @@ function drawBron(){
     h+=`<tr class="tot"><td><b>Totaal</b></td>`+E.map(([k])=>`<td class="${k===bronEvt?"on":""}"><b>${sets[k].length}</b></td>`).join("")+`<td></td></tr></table>${rws.length>80?`<div class="more">eerste 80 van ${rws.length}</div>`:""}</div>`;
     if(bronPick!=null){ const ls=sets[bronEvt].filter(l=>kf(l)===bronPick); h+=bronLijst(ls,BRON_EVT[bronEvt][2],`${BRON_EVT[bronEvt][0]} via ${BRON_KEYS[bronBy][0].toLowerCase()} "${esc(bronPick)}" · ${ls.length}`); }
     h+=`<p class="note">Telt wat er <b>in de gekozen periode gebeurde</b> — binnengekomen op aanmaakdatum, gepland op inplandatum, intakes/shows/inschrijvingen/betaald op intakedatum — en laat zien via welk kanaal, welke campagne of advertentie die mensen ooit binnenkwamen. De totalen sluiten aan op de KPI-tegels bovenin. Bron = de UTM-velden op de <b>opportunity</b> (custom fields utm source/campaign/content), niet het standaard GHL-contactveld; Kanaal = utm_source samengevoegd (facebook/fb/meta → Facebook / Meta, ig → Instagram) met terugval op de GHL-contactbron.</p>`;
-    bw.innerHTML=h; return;
+    keepScroll(bw,()=>{ bw.innerHTML=h; }); return;
   }
   const rows=bronRows(co,kf);
   const cols=[["k","Bron"],["n","Leads"],["open","Nog open"],["beh","Afgehandeld"],["gep","Intake gepland"],["pr","Plan rate"],["intake","Intakes"],["show","Shows"],["sr","Show rate"],["sign","Ingeschr."],["gr","Sign rate"],["l2s","Lead → sale"],["lostShare","Verloren %"],["top","Top verliesreden"],["paid","Betaald"],["s2l","Reactietijd"]];
@@ -251,7 +251,7 @@ function drawBron(){
       <div class="cmp"><h3>Verliesredenen per kanaal (aandeel van de leads)</h3><table><tr><th>Kanaal</th>${rsn.map(r=>`<th>${esc(r)}</th>`).join("")}</tr>`+
       kan.map(k=>{ const ls=co.filter(l=>(l.kanaal||"Onbekend")===k); return `<tr><td><b>${esc(k)}</b> <small>${ls.length}</small></td>`+rsn.map(r=>{ const n=ls.filter(l=>l.lost&&(l.lost_reason||"(geen reden)")===r).length; return `<td>${n?`${n} <small>${fpct(n,ls.length)}</small>`:"—"}</td>`; }).join("")+"</tr>"; }).join("")+`</table></div></div>`; }
   h+=`<p class="note">Cohort op <b>aanmaakdatum</b> van de lead: zo zie je per bron/campagne/advertentie wat een lead uiteindelijk oplevert. Recente leads staan nog "open" — kies een periode van minstens een paar weken oud voor een eerlijk beeld. Kanaal = utm_source samengevoegd (facebook/fb/meta → Facebook / Meta, ig → Instagram) met terugval op de GHL-contactbron. Plan rate = intake gepland ÷ (gepland + verloren in Leads-fase); <b>lead → intake gepland</b> = gepland ÷ alle leads (de eerlijkste maat om ads te vergelijken); lead → sale = ingeschreven ÷ alle leads. Best/slechtst alleen bij ≥ 10 leads. Klik op een bron voor de funnel en de namen. Bron = UTM-velden op de <b>opportunity</b> (custom fields), niet het standaard GHL-veld.</p>`;
-  bw.innerHTML=h;
+  keepScroll(bw,()=>{ bw.innerHTML=h; });
 }
 
 // ---- 🚫 verloren: per rep × fase, redenen, trend ----
@@ -336,7 +336,7 @@ function drawLost(){
   if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen verloren leads in deze selectie.</td></tr>`;
   h+=`</table>${sorted.length>300?`<div class="more">eerste 300 van ${sorted.length} getoond — kies een kortere periode</div>`:""}</div>
   <p class="note">Geteld op de datum waarop de deal op <i>lost</i> is gezet, bij de eigenaar van de deal op dat moment (wie op verloren sleept). <b>Leads-fase</b> = verloren vóór er een intake gepland stond (drukt de plan rate); <b>zonder show</b> = na inplannen verloren zonder show (drukt de show rate); <b>na show</b> = dossier verloren na een gevoerde intake (drukt de close rate). "Reopen later" is strikt genomen geen verlies maar een parkeerplek.</p>`;
-  lw.innerHTML=h;
+  keepScroll(lw,()=>{ lw.innerHTML=h; });
 }
 
 // ---- 💬 vraag: opvallende zaken op basis van de gekozen periode (regelmotor) + datapakket voor Claude ----
@@ -551,7 +551,7 @@ function drawInt(){
       xs.map(x=>`<tr>`+IC.map(cD=>`<td>${cD.k(x)}</td>`).join("")+`</tr>`).join("")+`</table></div>`; }
   if(days.length>60) h+=`<div class="more">eerste 60 dagen getoond — kies een kortere periode</div>`;
   h+=`<p class="note">Rechtstreeks uit de GHL-intakekalenders (🏢 Intakegesprek op locatie en 💻 Google Meet). <b>Bevestigd</b> = de afspraak staat in GHL op <i>confirmed</i> (de klant heeft bevestigd of iemand heeft hem op bevestigd gezet); <b>nog niet bevestigd</b> = status <i>new</i>. Setter = wie boekte (filter en aantallen bovenaan gaan over de setter), intaker = in wiens agenda hij staat. Klik op een kolomkop om te sorteren. Klik op een naam om de contactkaart in GHL te openen.</p>`;
-  w.innerHTML=h;
+  keepScroll(w,()=>{ w.innerHTML=h; });
 }
 
 // ---- datumkiezer (ongewijzigd t.o.v. v1) ----
