@@ -325,7 +325,7 @@ function drawKpis(){
   ];
   k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}${x[5]?" kclk":""}" ${x[5]?`onclick="kpiPick('${x[5]}')"`:""} ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
 }
-function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"camp"; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
+function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dNames=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"src"; render(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"start"}); },80); }
 
 // ---- tabs ----
 function drawTabs(){
@@ -505,13 +505,15 @@ function drawBestInner(){
 
 // ---- detail (namen) — met samenvatting gewonnen/verloren, uitsplitsing per dimensie en filters ----
 const SETLAB={nieuw:"Leads binnengekomen",gepland:"Intake gepland",shows:"Shows",sign:"Ingeschreven"};
-let dSort={c:1,d:-1}, dFilt={}, dfCol=null, dfAll={}, dDim="camp", dOut=null, dShowAll=false, dDimAuto=true, dDimPrev="camp";
+const SETMV={nieuw:"leads",gepland:"geplande intakes",shows:"shows",sign:"inschrijvingen"};
+let dSort={c:1,d:-1}, dFilt={}, dfCol=null, dfAll={}, dDim="src", dOut=null, dShowAll=false, dDimAuto=true, dDimPrev="src", dNames=false;
 const outc=l=> l.is_signed?"won" : l.lost?"lost" : "open";
 const OUTL={won:["Gewonnen","var(--sign-tx)"],lost:["Verloren","var(--close-tx)"],open:["Nog open","var(--mut)"]};
 const isPmax=l=>!!(l.camp&&/pmax|performance/i.test((l.camp.type||"")+" "+(l.camp.name||"")));
 const kwLab=l=> l.platform!=="google"?"(geen zoekwoord · niet Google)" : l.kw ? l.kw : isPmax(l)?"(PMax: geen zoekwoorden)":"(zoekwoord onbekend)";
 const campLab=l=> l.camp?l.camp.name : l.platform==="niet_betaald"?"(niet betaald)" : "(campagne onbekend) · "+PN(l.platform);
 const DIMS={
+  src:{t:"Advertentie / zoekwoord",fv:l=> l.platform==="google" ? "🔎 "+kwLab(l) : l.platform==="niet_betaald" ? "Niet betaald (organisch/direct)" : l.platform==="onbekend" ? "(bron onbekend)" : l.adObj ? (l.adObj.adName||l.adObj.adId) : (l.utm_content||"(geen advertentie bekend)")},
   plat:{t:"Platform",fv:l=>PN(l.platform)+(l.platform==="meta"&&l.placement?" · "+l.placement:"")+(l.bioLink?" · bio-link":"")},
   camp:{t:"Campagne",fv:campLab},
   adset:{t:"Adset",fv:l=>l.adObj&&l.adObj.adsetName?l.adObj.adsetName:"(geen adset bekend)"},
@@ -521,11 +523,12 @@ const DIMS={
   reden:{t:"Verliesreden",fv:l=>l.lost?(l.lost_reason||"(geen reden ingevuld)"):"(niet verloren)"},
   owner:{t:"Eigenaar",fv:l=>l.owner||"(geen eigenaar)"},
 };
-function dfToggle(dim,v){ if(!dFilt[dim]) dFilt[dim]=new Set(); const st=dFilt[dim]; st.has(v)?st.delete(v):st.add(v); if(!st.size) delete dFilt[dim]; drawDetail(); }
+function dfToggle(dim,v){ if(!dFilt[dim]) dFilt[dim]=new Set(); const st=dFilt[dim]; if(st.has(v)) st.delete(v); else { st.add(v); dNames=true; } if(!st.size) delete dFilt[dim]; drawDetail(); }
+function dSetPick(k){ if(!detail) return; detail.set=k; dOut=null; drawDetail(); }
 function dfClear(dim){ if(dim) delete dFilt[dim]; else { dFilt={}; dOut=null; } drawDetail(); }
-function dOutPick(o){ dOut = dOut===o? null : o; if(o==="lost"&&dOut==="lost") dDim="reden"; drawDetail(); }
+function dOutPick(o){ dOut = dOut===o? null : o; if(dOut) dNames=true; drawDetail(); }
 function dDimPick(k){ dDim=k; dDimAuto=false; drawDetail(); }
-function showDetail(key,set){ detail={key,set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"camp"; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
+function showDetail(key,set){ detail={key,set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dNames=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"src"; drawDetail(); setTimeout(()=>{ const e=document.getElementById("detail"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
 function drawDetail(){ const _el=document.getElementById("detail"); if(!detail||tab!=="tree"){ _el.style.display="none"; return; } keepScroll(_el,drawDetailInner); }
 function drawDetailInner(){
   const el=document.getElementById("detail"); if(!detail||tab!=="tree"){ el.style.display="none"; return; }
@@ -535,36 +538,67 @@ function drawDetailInner(){
     n={label:"Alle kanalen samen",m:metrics(all,spendIn(A,B,r=>!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B)};
   } else { n=findNode(detail.key,TREE); }
   if(!n){ el.style.display="none"; return; }
-  const rowsAll=n.m.S[detail.set]||[];
+  // v2.17: herkomst in één oogopslag. Alle leads van dit knooppunt (cohort) zijn de basis; de aangeklikte set (leads/gepland/shows/ingeschreven) is de teller.
+  const S=n.m.S, SG=new Set(S.gepland), SI=new Set(S.intakes), SSH=new Set(S.shows), SSG=new Set(S.sign);
+  const set=detail.set; const inSet=l=> set==="nieuw"?true : set==="gepland"?SG.has(l) : set==="shows"?SSH.has(l) : SSG.has(l);
+  const allRows=S.nieuw||[];
+  const rowsAll=allRows.filter(inSet);
   const FE=Object.entries(dFilt);
   const pass=(l,skip)=>FE.every(([k,st])=>k===skip||st.has(DIMS[k].fv(l)));
-  const rowsDim=rowsAll.filter(l=>pass(l));                       // alle dimensie-filters, nog zonder uitkomst-filter
-  const rows=dOut? rowsDim.filter(l=>outc(l)===dOut) : rowsDim;      // + uitkomst
-  // Google → zoekwoorden: staat de selectie volledig op Google, dan splitst hij vanzelf uit op zoekwoord (tot je zelf een dimensie kiest)
-  const hasG=rowsAll.some(l=>l.platform==="google");
-  if(dDimAuto){ const gOnly=rowsDim.length>0&&rowsDim.every(l=>l.platform==="google"); if(gOnly&&dDim!=="kw"){ dDimPrev=dDim; dDim="kw"; } else if(!gOnly&&dDim==="kw"){ dDim=dDimPrev||"camp"; } }
-  if(dDim==="kw"&&!hasG) dDim="camp";
-  const cnt=ls=>({n:ls.length,g:ls.filter(l=>l.pd>=0).length,sh:ls.filter(l=>l.is_show).length,won:ls.filter(l=>outc(l)==="won").length,lost:ls.filter(l=>outc(l)==="lost").length,open:ls.filter(l=>outc(l)==="open").length});
-  const T=cnt(rowsDim);
-  const bar=(c,h)=> c.n? `<span class="obar" style="height:${h||8}px"><i style="width:${c.won/c.n*100}%;background:var(--sign)"></i><i style="width:${c.open/c.n*100}%;background:#b8b4a6"></i><i style="width:${c.lost/c.n*100}%;background:var(--close)"></i></span>`:"";
-  // samenvatting
-  const sumChip=(k,val,lab,extra)=>`<div class="dsum${dOut===k?" on":""}${k?" clk":""}" ${k?`onclick="dOutPick('${k}')"`:""}><b>${val}</b><span>${lab}</span>${extra?`<small>${extra}</small>`:""}</div>`;
-  let sum=`<div class="dsums">${sumChip(null,T.n,"leads")}${sumChip(null,T.g,"intake gepland",T.n?fpct(T.g,T.n):"")}${sumChip(null,T.sh,"shows",T.g?fpct(T.sh,T.g)+" van gepland":"")}${sumChip("won",T.won,"gewonnen",T.n?fpct(T.won,T.n):"")}${sumChip("lost",T.lost,"verloren",T.n?fpct(T.lost,T.n):"")}${sumChip("open",T.open,"nog open",T.n?fpct(T.open,T.n):"")}<div class="dsum wide">${bar(T,12)}<span>gewonnen · open · verloren — klik op gewonnen/verloren/open om alleen die te zien</span></div></div>`;
+  const allDim=allRows.filter(l=>pass(l));                        // alle leads binnen de dimensie-filters
+  const rowsDim=rowsAll.filter(l=>pass(l));                       // de aangeklikte set binnen de filters
+  const rows=dOut? rowsDim.filter(l=>outc(l)===dOut) : rowsDim;   // + uitkomst (namenlijst)
+  const hasG=allRows.some(l=>l.platform==="google");
+  // Google → zoekwoorden: alleen als je zelf niet op "Advertentie / zoekwoord" staat (die splitst Google al op zoekwoord)
+  if(dDimAuto&&dDim!=="src"){ const gOnly=rowsDim.length>0&&rowsDim.every(l=>l.platform==="google"); if(gOnly&&dDim!=="kw"){ dDimPrev=dDim; dDim="kw"; } else if(!gOnly&&dDim==="kw"){ dDim=dDimPrev||"src"; } }
+  if(dDim==="kw"&&!hasG) dDim="src";
+  // telling per groep: n leads · g gepland · i intakes geweest · sh shows · sg klanten · k = in de aangeklikte set · won/lost/open binnen die set
+  const cnt=ls=>{ const c={n:ls.length,g:0,i:0,sh:0,sg:0,k:0,won:0,lost:0,open:0}; for(const l of ls){ if(SG.has(l)) c.g++; if(SI.has(l)) c.i++; if(SSH.has(l)) c.sh++; if(SSG.has(l)) c.sg++; if(inSet(l)){ c.k++; c[outc(l)]++; } } return c; };
+  const T=cnt(allDim);
+  const rate=(a,b)=>b?a/b:null;
+  const avg={plan:rate(T.g,T.n),show:rate(T.sh,T.i),klant:rate(T.sg,T.n)};
+  const RATES={plan:{t:"Plan %",num:c=>c.g,den:c=>c.n,tip:"intake gepland ÷ leads"},show:{t:"Show %",num:c=>c.sh,den:c=>c.i,tip:"shows ÷ intakes die al geweest zijn"},klant:{t:"Klant %",num:c=>c.sg,den:c=>c.n,tip:"ingeschreven ÷ leads"}};
+  const PRIM={nieuw:"plan",gepland:"plan",shows:"show",sign:"klant"}[set];   // de maat waarop het oordeel valt bij deze klik
+  const MIN=3;   // minimaal 3 in de noemer, anders geen oordeel
+  const judge=(c,k)=>{ const R=RATES[k], d=R.den(c), r=rate(R.num(c),d), a=avg[k]; if(d<MIN||a==null) return {cls:"nd",lab:"te weinig data",r,d,m:0}; if(r<a*0.7) return {cls:"bad",lab:"onder niveau",r,d,m:Math.round(d*a-R.num(c))}; if(r>a*1.3) return {cls:"ok",lab:"boven niveau",r,d,m:Math.round(R.num(c)-d*a)}; return {cls:"mid",lab:"op niveau",r,d,m:0}; };
+  const rateCell=(c,k)=>{ const j=judge(c,k), R=RATES[k]; return `<td class="num rt ${j.cls}" title="${R.tip}"><b>${j.r==null?"—":fpct(R.num(c),j.d)}</b><small>${R.num(c)} van ${j.d}</small></td>`; };
+  const bar=(c,h)=> c.k? `<span class="obar" style="height:${h||8}px"><i style="width:${c.won/c.k*100}%;background:var(--sign)"></i><i style="width:${c.open/c.k*100}%;background:#b8b4a6"></i><i style="width:${c.lost/c.k*100}%;background:var(--close)"></i></span>`:"";
+  // trechter over álle leads van dit knooppunt; de aangeklikte stap is uitgelicht en de stappen zijn klikbaar
+  const step=(k,val,lab,extra)=>`<div class="dsum clk${set===k?" on":""}" onclick="dSetPick('${k}')"><b>${val}</b><span>${lab}</span>${extra?`<small>${extra}</small>`:""}</div>`;
+  const sum=`<div class="dsums">${step("nieuw",T.n,"leads")}${step("gepland",T.g,"intake gepland",T.n?fpct(T.g,T.n)+" plan":"")}${step("shows",T.sh,"shows",T.i?fpct(T.sh,T.i)+" van de intakes":"")}${step("sign",T.sg,"ingeschreven",T.n?fpct(T.sg,T.n)+" van de leads":"")}<div class="dsum wide">${bar(T,12)}<span>${SETLAB[set]} · <b style="font-size:13px">${T.k}</b>: gewonnen ${T.won} · open ${T.open} · verloren ${T.lost}</span></div></div>`;
   // actieve filters
   const pills=[]; for(const [k,st] of FE) for(const v of st) pills.push(`<span class="fpill" onclick="dfToggle('${k}',${jq(v)})" title="filter weghalen">${esc(DIMS[k].t)}: <b>${esc(v)}</b> ✕</span>`);
   if(dOut) pills.push(`<span class="fpill" onclick="dOutPick('${dOut}')">Alleen <b>${OUTL[dOut][0].toLowerCase()}</b> ✕</span>`);
   const fpanel= pills.length? `<div class="fpills"><span class="lbl">Filters:</span>${pills.join("")}<span class="fpill clr" onclick="dfClear()">alles wissen</span></div>` : "";
-  // uitsplitsing op één dimensie: aantallen binnen de overige filters
-  const base=rowsAll.filter(l=>pass(l,dDim));
+  // herkomst per bron (binnen de overige filters), gerangschikt op aantal in de aangeklikte set
+  const base=allRows.filter(l=>pass(l,dDim));
   const groups=new Map(); base.forEach(l=>{ const v=DIMS[dDim].fv(l); if(!groups.has(v)) groups.set(v,[]); groups.get(v).push(l); });
   const sel=dFilt[dDim];
-  let ent=[...groups.entries()].map(([v,ls])=>[v,cnt(ls)]).sort((x,y)=>((sel&&sel.has(y[0]))?1:0)-((sel&&sel.has(x[0]))?1:0)||y[1].n-x[1].n);
+  const all=[...groups.entries()].map(([v,ls])=>({v,ls,c:cnt(ls)}));
+  let ent=all.filter(x=>x.c.k>0).sort((x,y)=>((sel&&sel.has(y.v))?1:0)-((sel&&sel.has(x.v))?1:0)||y.c.k-x.c.k||y.c.n-x.c.n);
   const CAP=14; let more=0; if(!dfAll[dDim]&&ent.length>CAP+2){ more=ent.length-CAP; ent=ent.slice(0,CAP); }
-  let brk=`<div class="dbrk"><div class="wonchips" style="margin:0 0 6px"><span class="lbl">Uitsplitsen op:</span>`+Object.entries(DIMS).filter(([k])=>k!=="kw"||hasG).map(([k,d])=>`<div class="wchip sm${dDim===k?" on":""}" onclick="dDimPick('${k}')">${d.t}${dFilt[k]?` <span class="n">${dFilt[k].size}</span>`:""}</div>`).join("")+`<span class="lbl" style="margin-left:auto">klik op een rij om te filteren · meerdere tegelijk kan</span></div>`;
-  brk+=`<table class="brktbl"><tr><th></th><th>${esc(DIMS[dDim].t)}</th><th class="num">Leads</th><th class="num">Gepland</th><th class="num">Shows</th><th class="num won">Gewonnen</th><th class="num lost">Verloren</th><th class="num">Open</th><th class="barc">verdeling</th><th class="num">verloren %</th></tr>`
-    + (ent.length? ent.map(([v,c])=>`<tr class="${sel&&sel.has(v)?"on":""}" onclick="dfToggle('${dDim}',${jq(v)})"><td class="ck">${sel&&sel.has(v)?"☑":"☐"}</td><td class="val" title="${esc(v)}">${esc(v)}</td><td class="num"><b>${c.n}</b></td><td class="num">${c.g||"—"}</td><td class="num">${c.sh||"—"}</td><td class="num won">${c.won||"—"}</td><td class="num lost">${c.lost||"—"}</td><td class="num">${c.open||"—"}</td><td class="barc">${bar(c)}</td><td class="num">${c.n?fpct(c.lost,c.n):"—"}</td></tr>`).join("") : `<tr><td colspan="10" class="empty">—</td></tr>`)
-    + (more?`<tr><td colspan="10" class="morec"><span class="sm" onclick="dfAll['${dDim}']=true;drawDetail()">nog ${more} meer ⏷</span></td></tr>`:"")+`</table></div>`;
-  // namenlijst
+  const PK={}; for(const l of allDim) if(inSet(l)) PK[l.platform]=(PK[l.platform]||0)+1;
+  const strip= T.k? `<div class="pstrip">`+Object.entries(PK).sort((a,b)=>b[1]-a[1]).map(([p,k])=>`<i style="width:${k/T.k*100}%;background:${PC(p)}" title="${esc(PN(p))}: ${k}">${k/T.k>0.12?esc(PN(p))+" · ":""}${k}${k/T.k>0.2?" ("+fpct(k,T.k)+")":""}</i>`).join("")+`</div>`:"";
+  const maxK=ent.length?Math.max(...ent.map(x=>x.c.k)):1;
+  const srcInner=x=>{ const l=x.ls[0]; const sub=[PN(l.platform)]; if(dDim!=="camp"&&dDim!=="plat"&&l.camp) sub.push(l.camp.name); if((dDim==="src"||dDim==="ad")&&l.adObj&&l.adObj.adsetName) sub.push(l.adObj.adsetName); return `<span class="dot" style="background:${PC(l.platform)}"></span><b title="${esc(x.v)}">${esc(x.v)}</b><small>${esc(sub.join(" · "))}</small>`; };
+  const ico=c=>c==="ok"?"✅":c==="bad"?"❌":c==="nd"?"○":"•";
+  let brk=`<div class="dbrk"><div class="dbrk-h"><b>Waar komen de ${T.k} ${SETMV[set]} vandaan?</b><span>gerangschikt op aantal · plan %, show % en klant % per bron tegen het gemiddelde hier (${fpct(T.g,T.n)} plan · ${fpct(T.sh,T.i)} show · ${fpct(T.sg,T.n)} klant) · oordeel op ${RATES[PRIM].t.toLowerCase()} · groen boven 130%, rood onder 70% van het gemiddelde · minimaal ${MIN} in de noemer</span></div>`;
+  brk+=`<div class="wonchips" style="margin:0 0 8px"><span class="lbl">Per:</span>`+Object.entries(DIMS).filter(([k])=>k!=="kw"||hasG).map(([k,d])=>`<div class="wchip sm${dDim===k?" on":""}" onclick="dDimPick('${k}')">${d.t}${dFilt[k]?` <span class="n">${dFilt[k].size}</span>`:""}</div>`).join("")+`<span class="lbl" style="margin-left:auto">klik op een rij om te filteren en de namen te zien · meerdere tegelijk kan</span></div>${strip}`;
+  brk+=`<div style="overflow:auto"><table class="brktbl hk"><tr><th></th><th class="num">${esc(SETLAB[set])}</th><th class="barc">aandeel</th><th>${esc(DIMS[dDim].t)}</th><th class="num">Leads</th><th class="num">Plan %</th><th class="num">Show %</th><th class="num">Klant %</th><th class="barc">uitkomst</th><th>Oordeel</th></tr>`
+    + (ent.length? ent.map(x=>{ const c=x.c, j=judge(c,PRIM); return `<tr class="${sel&&sel.has(x.v)?"on":""}" onclick="dfToggle('${dDim}',${jq(x.v)})"><td class="ck">${sel&&sel.has(x.v)?"☑":"☐"}</td><td class="num"><span class="big">${c.k}</span></td><td class="barc"><span class="hb"><i style="width:${c.k/maxK*100}%"></i></span><small>${fpct(c.k,T.k)}</small></td><td class="src">${srcInner(x)}</td><td class="num">${c.n}</td>${rateCell(c,"plan")}${rateCell(c,"show")}${rateCell(c,"klant")}<td class="barc">${bar(c)}<small><span class="won">${c.won}</span> · ${c.open} open · <span class="lost">${c.lost}</span></small></td><td><span class="badge ${j.cls}">${ico(j.cls)} ${j.lab}</span></td></tr>`; }).join("") : `<tr><td colspan="10" class="empty">—</td></tr>`)
+    + (more?`<tr><td colspan="10" class="morec"><span class="sm" onclick="dfAll['${dDim}']=true;drawDetail()">nog ${more} meer ⏷</span></td></tr>`:"")+`</table></div></div>`;
+  // onder / boven niveau: op de oordeelsmaat, en bij Intake gepland óók op show % (Abel, 30 sep: niet alleen wie inplant, ook wie komt opdagen)
+  const keys=set==="gepland"?["plan","show"]:[PRIM];
+  const bad=[], good=[];
+  for(const x of all) for(const k of keys){ const j=judge(x.c,k); if(j.cls==="bad") bad.push({x,k,j}); else if(j.cls==="ok") good.push({x,k,j}); }
+  bad.sort((a,b)=>b.j.m-a.j.m); good.sort((a,b)=>b.j.m-a.j.m);
+  const badV=new Set(bad.map(b=>b.x.v)); const zero=all.filter(x=>x.c.k===0&&x.c.n>=MIN&&!badV.has(x.v)).sort((a,b)=>b.c.n-a.c.n);   // bronnen mét leads maar zonder één in deze set
+  const mrow=(b,sign)=>{ const R=RATES[b.k]; return `<div class="row"><span class="big">${sign}${b.j.m}</span><span class="src">${srcInner(b.x)}</span><span class="why">${R.num(b.x.c)} van ${b.j.d} · ${fpct(R.num(b.x.c),b.j.d)} ${R.t.toLowerCase()} tegen ${fpct(Math.round(avg[b.k]*1000),1000)} gemiddeld</span></div>`; };
+  const wat={nieuw:"intakes",gepland:"intakes en shows",shows:"shows",sign:"klanten"}[set];
+  let miss="";
+  if(bad.length||zero.length) miss+=`<div class="miss"><h3>⚠️ Onder niveau · hier missen we ${wat}</h3>`+bad.slice(0,6).map(b=>mrow(b,"−")).join("")+zero.slice(0,4).map(x=>`<div class="row"><span class="big">0</span><span class="src">${srcInner(x)}</span><span class="why">${x.c.n} leads · ${x.c.g} gepland · ${x.c.sh} shows · geen ${SETMV[set]}</span></div>`).join("")+`<div class="row note">Het getal is hoeveel ${wat} deze bron minder oplevert dan het gemiddelde hier. Alleen bronnen met minimaal ${MIN} in de noemer. Ligt het aan sales? Kies dan "Eigenaar" hierboven.</div></div>`;
+  if(good.length) miss+=`<div class="miss good"><h3>✅ Boven niveau · deze bronnen doen het beter dan gemiddeld</h3>`+good.slice(0,5).map(b=>mrow(b,"+")).join("")+`</div>`;
+  // namen: ingeklapt, met uitkomst-filters
   const cols=[
     {t:"Naam",v:l=>l.nm.toLowerCase(),k:l=>ghl(l.contact_id,l.nm)},
     {t:"Fase",v:l=>l.stage_position,k:l=>`<span class="stg${l.is_signed?" win":l.lost?" lost":""}">${esc(l.stage_name)}${l.lost&&l.stage_position!==0?" · verloren":""}</span>${l.lost&&l.lost_reason?` <small>${esc(l.lost_reason)}</small>`:""}`},
@@ -578,9 +612,10 @@ function drawDetailInner(){
   if(hasG) cols.splice(7,0,{t:"Zoekwoord",v:l=>(l.kw||"").toLowerCase(),k:l=>l.platform==="google"?`<small><b>${esc(kwLab(l))}</b></small>`:"<small>—</small>"});
   const s=dSort; const sorted=[...rows].sort((x,y)=>{ const a=cols[s.c].v(x),b=cols[s.c].v(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a<b?-1:a>b?1:0)*s.d; });
   const LIM=dShowAll?sorted.length:150;
+  const nm=`<div class="dsums names-h"><div class="dsum clk${dNames?" on":""}" onclick="dNames=!dNames;drawDetail()"><b>${dNames?"⏶":"⏷"} ${rows.length}</b><span>${dNames?"namen verbergen":"namen bekijken"}</span></div>`+["won","lost","open"].map(k=>`<div class="dsum clk${dOut===k?" on":""}" onclick="dOutPick('${k}')"><b>${T[k]}</b><span>${OUTL[k][0].toLowerCase()}</span></div>`).join("")+`<div class="dsum wide"><span>klik op gewonnen/verloren/open om alleen die namen te zien</span></div></div>`;
   el.style.display="block";
-  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[detail.set]} · ${rows.length}${rows.length!==rowsAll.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${sum}${fpanel}${brk}
-    <div class="dbody"><div style="overflow:auto"><table class="dtl"><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.slice(0,LIM).map(l=>`<tr class="o-${outc(l)}">`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>LIM?`<div class="more"><span class="sm" onclick="dShowAll=true;drawDetail()">toon alle ${sorted.length} (nu de eerste ${LIM})</span></div>`:""}${sorted.length?"":`<div class="empty">Geen leads met deze filters.</div>`}</div></div>`;
+  el.innerHTML=`<div class="dhead"><b>${esc(n.label)} · ${SETLAB[set]} · ${T.k}${FE.length?` <small>van ${rowsAll.length} (gefilterd)</small>`:""}</b><span>${fmtY(A)} t/m ${fmtY(B)} <a href="#" onclick="detail=null;drawDetail();return false" style="margin-left:10px;color:var(--plan)">sluiten ✕</a></span></div>${sum}${fpanel}${brk}${miss}${nm}`
+    +(dNames?`<div class="dbody"><div style="overflow:auto"><table class="dtl"><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="dSort.c===${i}?dSort.d=-dSort.d:(dSort={c:${i},d:1});drawDetail()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`+sorted.slice(0,LIM).map(l=>`<tr class="o-${outc(l)}">`+cols.map(c=>`<td>${c.k(l)}</td>`).join("")+`</tr>`).join("")+`</table>${sorted.length>LIM?`<div class="more"><span class="sm" onclick="dShowAll=true;drawDetail()">toon alle ${sorted.length} (nu de eerste ${LIM})</span></div>`:""}${sorted.length?"":`<div class="empty">Geen leads met deze filters.</div>`}</div></div>`:"");
 }
 
 // ---- trend ----
