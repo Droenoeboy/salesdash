@@ -11,7 +11,7 @@ const LOC = "TdkRfY76R77enqlUSRHi";
 const EPOCH = new Date(2026,0,1);
 const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
 const MNDF=["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
-const PAL=["#1f6fd8","#1a9a3d","#dc2a1e","#c99a00","#8f845e","#5856d6","#0e0e0f","#2c8f9b"];
+const PAL=["#1f6fd8","#8b5cf6","#0e9aa7","#d95fa2","#6b7a99","#3f51b5","#a0785a","#5f9ea0"];   // v4.3: persoonskleuren zonder rood en groen (die zijn voor oordeel)
 
 let D=null, GCODE="", L=[], AP=[], EV=[], RD=[], FT=new Map(), DEFS={}, STAGES=[], P=[], REPS=[], REPS_ALL=[], REPS_UNK=[], RCOL={}, PAY_MIN=1000;
 let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false;
@@ -334,12 +334,14 @@ function drawKpis(){
 const dgn = d => ["ma","di","wo","do","vr","za","zo"][(d2s(d).getDay()+6)%7];   // korte dagnaam
 
 // ---- funnelkolommen ----
+const PH_ICO={plan:"📅",show:"🪑",signS:"✍️",sign:"✍️",close:"🤝",pay:"💶",l2s:"➡️"};   // v4.3: fase = icoon, geen eigen kleur
 function rowHtml(cls,lab,who,num,den,uitTxt,phase,repKey){
   const p=pct(num,den), selCls=(sel&&sel.phase===phase&&sel.repKey===repKey)?" sel":"";
   return `<div class="frow">
     <div class="blk ${cls}${selCls}" onclick="pick('${esc(repKey)}','${phase}')">
-      <div class="lab"><span>${lab} <i class="rol">${who}</i></span><span class="uit" title="${esc(uitTxt)}">${esc(uitTxt)}</span></div>
+      <div class="lab"><span>${PH_ICO[phase]||""} ${lab} <i class="rol">${who}</i></span></div>
       <div class="pct">${den?fpct(num,den):"—"}</div>
+      <div class="uit">${esc(uitTxt)}</div>
       <div class="bar" style="width:${Math.min(100,p)}%"></div>
     </div>
     <div class="outN ${cls}${selCls}" onclick="pick('${esc(repKey)}','${phase}')" title="doorgestroomd">${num}</div>
