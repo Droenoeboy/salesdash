@@ -11,7 +11,7 @@ const LOC = "TdkRfY76R77enqlUSRHi";
 const EPOCH = new Date(2026,0,1);
 const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
 const MNDF=["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
-const PAL=["#1f6fd8","#8b5cf6","#0e9aa7","#d95fa2","#6b7a99","#3f51b5","#a0785a","#5f9ea0"];   // v4.3: persoonskleuren zonder rood en groen (die zijn voor oordeel)
+const PAL=["#1f6fd8","#1a9a3d","#dc2a1e","#c99a00","#8f845e","#5856d6","#0e0e0f","#2c8f9b"];   // v4.4: persoonskleuren als in v4.2 (herkenning)
 
 let D=null, GCODE="", L=[], AP=[], EV=[], RD=[], FT=new Map(), DEFS={}, STAGES=[], P=[], REPS=[], REPS_ALL=[], REPS_UNK=[], RCOL={}, PAY_MIN=1000;
 let TODAY=0, NOW=0, A, B, tab="tot", sel=null, VBEZIG=false, LAATSTE=null;
@@ -293,10 +293,10 @@ function drawTabs(){
     if(color){const d=document.createElement("span");d.className="dot";d.style.background=color;t.appendChild(d);}
     t.appendChild(document.createTextNode(label));
     t.onclick=()=>{tab=id; sel=null; render();}; el.appendChild(t); };
+  // v4.4: Totaal is de kernview en staat altijd vooraan (besluit Abel 30-09). Team = Vergelijk + Trend + Persoon (subkeuze bovenin);
+  // Bronnen & Ads staat in het marketingdashboard (link rechts).
+  mk("tot","📊 Totaal");
   mk("vandaag","📞 Vandaag");
-  mk("tot","📊 Week");
-  // v4.3: 8 tabbladen, werk eerst en analyse daarna. Team = Vergelijk + Trend + Persoon (subkeuze bovenin);
-  // Bronnen & Ads is verhuisd naar het marketingdashboard (link rechts).
   const tt=document.createElement("div"); tt.className="tab"+(isTeamTab()?" on":""); tt.textContent="⚖️ Team";
   tt.onclick=()=>{ tab=teamLast; sel=null; render(); }; el.appendChild(tt);
   mk("int","🗓 Intakes");
@@ -356,13 +356,18 @@ function kpiPick(phase,side,flt){ const who=repOf(); if(!who&&!["tot","ov","cmp"
   pick(who==null?"tot":who, phase); if(side||flt){ if(side) dSide=side; if(flt) sel.flt=flt; drawDetail(); } }
 
 // ---- funnelkolommen ----
-const PH_ICO={plan:"📅",show:"🪑",signS:"✍️",sign:"✍️",close:"🤝",pay:"💶",l2s:"➡️"};   // v4.3: fase = icoon, geen eigen kleur
-function rowHtml(cls,lab,who,num,den,uitTxt,phase,repKey){
+const PH_ICO={plan:"📅",show:"🪑",signS:"✍️",sign:"✍️",close:"🤝",pay:"💶",l2s:"➡️"};
+// v4.4: oordeel per cel t.o.v. het team (besluit Abel 30-09): groen = minstens 2 pp beter dan het teamcijfer van die rate,
+// rood = minstens 2 pp slechter; alleen bij genoeg volume (zelfde minima als Vergelijk). Totaal zelf krijgt geen oordeel.
+const OORDEEL_PP=2;
+function oordeel(num,den,tnum,tden,minN){ if(!den||!tden||den<minN) return null; const d=pct(num,den)-pct(tnum,tden); return {d, cls:d>=OORDEEL_PP?"goed":d<=-OORDEEL_PP?"slecht":""}; }
+function rowHtml(cls,lab,who,num,den,uitTxt,phase,repKey,oo){
   const p=pct(num,den), selCls=(sel&&sel.phase===phase&&sel.repKey===repKey)?" sel":"";
+  const oCls=oo&&oo.cls?" "+oo.cls:"", oTxt=oo?`<i class="vsteam ${oo.cls}" title="verschil met het teamcijfer van deze rate">${oo.d>=0?"+":"−"}${(Math.round(Math.abs(oo.d)*10)/10+"").replace(".",",")} pp</i>`:"";
   return `<div class="frow">
-    <div class="blk ${cls}${selCls}" onclick="pick('${esc(repKey)}','${phase}')">
+    <div class="blk ${cls}${selCls}${oCls}" onclick="pick('${esc(repKey)}','${phase}')">
       <div class="lab"><span>${PH_ICO[phase]||""} ${lab} <i class="rol">${who}</i></span></div>
-      <div class="pct">${den?fpct(num,den):"—"}</div>
+      <div class="pct">${den?fpct(num,den):"—"}${oTxt}</div>
       <div class="uit">${esc(uitTxt)}</div>
       <div class="bar" style="width:${Math.min(100,p)}%"></div>
     </div>
@@ -373,6 +378,9 @@ function toggleCol(repKey){ const k=String(repKey); collapsed.has(k)? collapsed.
 function colHtml(who, name, color, tot){
   const f=funnel(who,A,B);
   const behandeld=f.gepland.length+f.verloren.length;
+  const T=who==null?null:funnel(null,A,B), tBeh=T?T.gepland.length+T.verloren.length:0;   // v4.4: teamcijfers voor het oordeel per cel
+  const MP=+(DEFS.min_volume_plan||15), MS=+(DEFS.min_volume_show||8), MG=+(DEFS.min_volume_sign||5);
+  const oo=(ph,num,den,tnum,tden,mn)=>T?oordeel(num,den,tnum,tden,mn):null;
   const ini=name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
   const repKey=who==null?"tot":who;
   if(collapsed.has(String(repKey)))
@@ -388,21 +396,21 @@ function colHtml(who, name, color, tot){
     <div class="fhead" title="klik om in te klappen" onclick="toggleCol('${esc(repKey)}')"><div class="ava" style="background:${color}">${ini}</div><b>${esc(name)}</b><div class="bigN" title="leads afgehandeld (gepland + verloren in de Leads-fase)">${behandeld}</div></div>
     <div class="fsub" title="${esc(sub)}">${sub}</div>
     <div class="grp first">Setter <i>· wat lever jij aan?</i></div>
-    ${rowHtml("p","Plan rate",ROL("plan"),f.gepland.length,behandeld,`${f.verloren.length} verloren`,"plan",repKey)}
+    ${rowHtml("p","Plan rate",ROL("plan"),f.gepland.length,behandeld,`${f.verloren.length} verloren`,"plan",repKey,oo("plan",f.gepland.length,behandeld,T&&T.gepland.length,tBeh,MP))}
     ${kindSplitHtml(f.gepland)}
     ${MODE==="rep"?`<div class="grp">Eigenaar <i>· v1: show, sign en pay op de deal-eigenaar</i></div>`:""}
-    ${rowHtml("h","Show rate",ROL("show"),f.show.length,f.agenda.length,`${f.geenShow.length} geen show${openGS?` · ${openGS} nog open`:""}`,"show",repKey)}
-    ${rowHtml("s","Sign rate",ROL("signS"),f.signS.length,f.show.length,(o=>o?`${f.nietSignS.length} (nog) niet · ${o} open`:`${f.nietSignS.length} niet`)(f.nietSignS.filter(l=>l.open).length),"signS",repKey)}
+    ${rowHtml("h","Show rate",ROL("show"),f.show.length,f.agenda.length,`${f.geenShow.length} geen show${openGS?` · ${openGS} nog open`:""}`,"show",repKey,oo("show",f.show.length,f.agenda.length,T&&T.show.length,T&&T.agenda.length,MS))}
+    ${rowHtml("s","Sign rate",ROL("signS"),f.signS.length,f.show.length,(o=>o?`${f.nietSignS.length} (nog) niet · ${o} open`:`${f.nietSignS.length} niet`)(f.nietSignS.filter(l=>l.open).length),"signS",repKey,oo("signS",f.signS.length,f.show.length,T&&T.signS.length,T&&T.show.length,MG))}
     ${MODE==="rep"?"":`<div class="grp">Eigenaar <i>· hoe beweeg jij dossiers?</i></div>`}
-    ${MODE==="rep"?"":rowHtml("c","Close rate",ROL("close"),f.closed.length,f.closed.length+f.closeLost.length,`${f.closeLost.length} verloren${f.closeOpen.length?` · ${f.closeOpen.length} open`:""}`,"close",repKey)}
-    ${rowHtml("b","Pay rate",ROL("pay"),f.paid.length,f.signO.length,`${f.nietPaid.length} nog niet`,"pay",repKey)}
+    ${MODE==="rep"?"":rowHtml("c","Close rate",ROL("close"),f.closed.length,f.closed.length+f.closeLost.length,`${f.closeLost.length} verloren${f.closeOpen.length?` · ${f.closeOpen.length} open`:""}`,"close",repKey,oo("close",f.closed.length,f.closed.length+f.closeLost.length,T&&T.closed.length,T&&(T.closed.length+T.closeLost.length),MG))}
+    ${rowHtml("b","Pay rate",ROL("pay"),f.paid.length,f.signO.length,`${f.nietPaid.length} nog niet`,"pay",repKey,oo("pay",f.paid.length,f.signO.length,T&&T.paid.length,T&&T.signO.length,MG))}
     ${who==null?(co=>{const cs=co.filter(l=>l.is_signed).length,op=co.filter(l=>!l.is_signed&&!l.lost).length;return `<div class="grp">Periode <i>· binnengekomen leads → getekend</i></div>`+rowHtml("i","Lead → sign","cohort",cs,co.length,`${co.length-cs} niet getekend${op?` · ${op} open`:""}`,"l2s",repKey);})(L.filter(l=>inR(l.cd,A,B))):""}
   </div>`;
 }
 function drawCols(){
   const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap"), iw=document.getElementById("intwrap"), vw=document.getElementById("vdwrap");
   for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw,vw]) if(x) x.style.display="none";
-  const wpw=document.getElementById("wpwrap"); if(wpw) wpw.innerHTML = tab==="tot" ? weekPulsHtml() : isTeamTab() ? teamSubHtml() : "";   // v4.3: weekpuls bovenaan Week, subkeuze bovenaan Team
+  const wpw=document.getElementById("wpwrap"); if(wpw) wpw.innerHTML = isTeamTab() ? teamSubHtml() : "";   // subkeuze bovenaan Team
   if(isTeamTab()) teamLast=tab;
   if(tab==="vandaag"){ vw.style.display="block"; drawVandaag(); return; }
   if(tab==="cmp"){ cw.style.display="block"; drawCmp(); return; }
