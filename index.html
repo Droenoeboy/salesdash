@@ -586,7 +586,6 @@ function pick(repKey,phase){
   sel={repKey: repKey==="tot" ? "tot" : +repKey, phase};
   resetDetailState();
   drawCols(); drawDetail();
-  document.getElementById("detail").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function sortDetail(tbl,c){ const s=sortSt[tbl]; if(s.c===c) s.d=-s.d; else {s.c=c; s.d=1;} fClose(); drawDetail(); }
 function selRows(f){
