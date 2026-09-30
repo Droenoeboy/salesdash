@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>DPAC · Administratie</title>
+<style>
+  :root{
+    --bg:#0e0e10;--card:#17171a;--line:#26262b;--line2:#1e1e23;--txt:#ececf1;--mut:#8b8b94;--mut2:#6b6b74;
+    --sel-bg:#ececf1;--sel-tx:#131316;--radius:16px;--shadow:0 1px 0 rgba(255,255,255,.03) inset;
+    --plan:#4f8df9;--plan-tx:#8db6ff;--ok:#2fbf71;--ok-bg:rgba(47,191,113,.14);--ok-tx:#5fd79a;
+    --warn:#c99a00;--warn-bg:rgba(201,154,0,.15);--warn-tx:#e6c14d;
+    --red:#e5484d;--red-bg:rgba(229,72,77,.14);--red-tx:#ff8a8e;
+    --pink:#C927B4;--ice:#8FD8FF;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-feature-settings:"tnum" 1}
+  header{padding:14px 22px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  header h1{margin:0;font-size:17px;letter-spacing:-.2px}
+  header .sub{color:var(--mut);font-size:12px;margin-top:3px}
+  header .sp{flex:1}
+  .rbtn{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:10px;padding:7px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .tabsrow{display:flex;gap:6px;padding:12px 22px 0;flex-wrap:wrap;align-items:center}
+  .tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 15px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;gap:7px;align-items:center}
+  .tab .n{background:var(--line2);border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700;color:var(--mut)}
+  .tab.on{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} .tab.on .n{background:rgba(0,0,0,.15);color:inherit}
+  .tab .n.bad{background:var(--red-bg);color:var(--red-tx)} .tab .n.warn{background:var(--warn-bg);color:var(--warn-tx)}
+  main{padding:16px 22px 60px;max-width:1400px;margin:0 auto}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);min-width:0;cursor:pointer;border-top:4px solid var(--line)}
+  .kpi.bad{border-top-color:var(--red)} .kpi.warn{border-top-color:var(--warn)} .kpi.good{border-top-color:var(--ok)}
+  .kpi b{font-size:22px;display:block;letter-spacing:-.4px;line-height:1.15}
+  .kpi span{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:600;display:block;margin-top:2px}
+  .kpi:hover{border-color:var(--plan)}
+  .wonchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+  .wonchips .lbl{font-size:12px;color:var(--mut);font-weight:600}
+  .wchip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
+  .wchip .n{background:var(--line2);border-radius:99px;padding:1px 8px;font-size:11.5px;font-weight:700;color:var(--mut)}
+  .wchip.on{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)} .wchip.on .n{background:rgba(0,0,0,.15);color:inherit}
+  .wchip.dim{opacity:.4}
+  .zoek{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:99px;padding:7px 14px;font-size:13px;min-width:200px;outline:none} .zoek:focus{border-color:var(--plan)}
+  .stg{border-radius:8px;padding:2px 8px;font-size:11.5px;font-weight:600;background:var(--line2);display:inline-block;white-space:nowrap}
+  .stg.win{background:var(--ok-bg);color:var(--ok-tx)} .stg.lost{background:var(--red-bg);color:var(--red-tx)} .stg.warn{background:var(--warn-bg);color:var(--warn-tx)} .stg.info{background:rgba(79,141,249,.16);color:var(--plan-tx)}
+  .cmp{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px}
+  .cmp h3{margin:0 0 10px;font-size:14px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap} .chsub{font-weight:500;color:var(--mut);font-size:12px}
+  .wl{display:flex;flex-direction:column;gap:8px}
+  .wlrow{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:11px 14px;cursor:pointer;border-left:5px solid var(--line)}
+  .wlrow.hi{border-left-color:var(--red)} .wlrow.mid{border-left-color:#e08a00} .wlrow.lo{border-left-color:var(--warn)} .wlrow.chk{border-left-color:var(--plan)} .wlrow.ok{border-left-color:var(--ok)}
+  .wlrow.done{opacity:.45}
+  .wlhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .rank{width:26px;height:26px;border-radius:50%;background:var(--line2);display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:12.5px;flex:none}
+  .wlnm{font-weight:700;min-width:190px;font-size:15.5px} .wlnm small{display:block;color:var(--mut);font-weight:500;font-size:12px}
+  .wlamt{font-weight:800;font-size:17px;min-width:96px;text-align:right} .wlamt small{display:block;font-weight:500;color:var(--mut);font-size:11px}
+  .wlmeta{color:var(--mut);font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;flex:1;align-items:center}
+  .act{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .actlbl{border-radius:9px;padding:4px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+  .actlbl.bel{background:var(--red-bg);color:var(--red-tx)} .actlbl.herin{background:var(--warn-bg);color:var(--warn-tx)} .actlbl.aanm{background:#3a1113;color:#ff8a8e;border:1px solid var(--red)}
+  .actlbl.chk{background:rgba(79,141,249,.16);color:var(--plan-tx)} .actlbl.rep{background:var(--line2);color:var(--txt)} .actlbl.wacht{background:var(--line2);color:var(--mut)} .actlbl.ok{background:var(--ok-bg);color:var(--ok-tx)}
+  .donebtn{border:1px solid var(--line);background:transparent;color:var(--mut);border-radius:9px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer}
+  .donebtn.on{background:var(--ok-bg);color:var(--ok-tx);border-color:transparent}
+  .wlx{margin-top:11px;border-top:1px solid var(--line2);padding-top:11px;display:grid;grid-template-columns:1.2fr 1fr;gap:14px}
+  .wlx h4{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:13px} .kv span:nth-child(odd){color:var(--mut)}
+  .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .lnk{border:1px solid var(--line);border-radius:9px;padding:5px 11px;font-size:12.5px;font-weight:700;color:var(--txt);text-decoration:none;background:var(--card)} .lnk:hover{border-color:var(--plan)} .lnk.pri{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
+  .notitie{font-size:12.5px;color:var(--mut);white-space:pre-wrap;line-height:1.45;max-height:140px;overflow:auto}
+  .why{font-size:13px;color:var(--mut);margin-top:4px}
+  table{border-collapse:collapse;width:100%;font-size:13px} th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+  td{padding:7px 8px;border-bottom:1px solid var(--line2);white-space:nowrap} td.r,th.r{text-align:right} td.nm{font-weight:700;cursor:pointer} td.nm:hover{color:var(--plan-tx)}
+  .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .bar{height:8px;background:var(--line2);border-radius:4px;overflow:hidden;min-width:80px} .bar b{display:block;height:100%;background:var(--ok);border-radius:4px}
+  .empty{color:var(--mut);padding:14px;text-align:center}
+  .note{color:var(--mut2);font-size:11.5px;line-height:1.5}
+  a{color:var(--txt);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px} a:hover{text-decoration-color:var(--plan)}
+  .gate{position:fixed;inset:0;background:var(--bg);z-index:99;display:flex;align-items:center;justify-content:center}
+  .gatebox{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:32px 30px;text-align:center;width:100%;max-width:340px}
+  .gatebox h2{margin:0 0 6px;font-size:18px} .gatebox p{color:var(--mut);margin:0 0 16px;font-size:13px}
+  .gatebox input{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--txt);border-radius:12px;padding:11px 13px;font-size:16px;text-align:center;letter-spacing:3px;outline:none;margin-bottom:10px}
+  .gatebox button{width:100%;border:none;background:var(--sel-bg);color:var(--sel-tx);border-radius:12px;padding:11px;font-weight:800;font-size:14px;cursor:pointer}
+  .gatefout{color:var(--red-tx);font-size:12.5px;min-height:18px;margin-top:8px}
+  .demo{background:#5b3df5;color:#fff;text-align:center;font-weight:700;font-size:12.5px;padding:7px 12px;letter-spacing:.3px;display:none}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media(max-width:900px){.grid2{grid-template-columns:1fr}.wlx{grid-template-columns:1fr}}
+  @media(max-width:640px){main{padding:12px 14px 60px}.kpis{grid-template-columns:repeat(3,1fr);gap:7px}.kpi{padding:9px 10px}.kpi b{font-size:17px}.kpi span{font-size:9px}.wlnm{min-width:0;flex:1 1 100%}.wlamt{text-align:left}.act{margin-left:0;flex:1 1 100%;justify-content:space-between}.tabsrow{padding:10px 14px 0}.tab{padding:7px 12px;font-size:12.5px}header{padding:12px 14px 0}}
+</style>
+</head>
+<body>
+<div class="demo" id="demo">TESTDATA · fictieve namen · geen echte leerlingen</div>
+<header>
+  <div><h1>DPAC · Administratie</h1><div class="sub">werklijst betalingen voor Michèle · Notion Leerlingen is de invoerplek · <span id="gen"></span></div></div>
+  <div class="sp"></div>
+  <button class="rbtn" onclick="ververs()" title="Haalt de nieuwste stand op (paar seconden)">⟳ Ververs</button>
+</header>
+<div id="gate" class="gate"><div class="gatebox"><h2>DPAC · Administratie</h2><p>Voer de toegangscode in</p><input id="gcode" type="password" autocomplete="off" placeholder="••••••" onkeydown="if(event.key==='Enter')gCheck()"><button onclick="gCheck()">Openen</button><div class="gatefout" id="gfout"></div></div></div>
+<div class="tabsrow" id="tabs"></div>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div id="view"></div>
+  <p class="note">Bron: Notion Leerlingen (Betaalstatus, Betaald, Betaalafspraak tot) en Odoo via de datalaag. Odoo is leidend voor wie in Odoo staat; leerlingen uit de Moneybird-tijd (2025) checkt Michèle met de hand. Dit dashboard schrijft nergens naar: invullen gebeurt in Notion (knop per leerling). Werklijst = Notion-formule "Op betaallijst"; een leerling met een betaalafspraak komt de dag na die datum vanzelf terug.</p>
+</main>
+<script src="app.js?v=1"></script>
+</body>
+</html>
