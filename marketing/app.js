@@ -981,10 +981,18 @@ const dayOfTs=ts=>{ const t=new Date(ts); return s2d(new Date(t.getFullYear(),t.
 const whenTxt=ms=>{ if(!ms) return "—"; const d=dayOfTs(ms); return (d===TODAY?"vandaag":d===TODAY-1?"gisteren":fmtY(d))+" "+hhmm(ms); };
 const zin2=s=>{ const z=String(s||"").replace(/\s+/g," ").trim().match(/[^.!?]+[.!?]+(\s|$)/g); return z&&z.length>2? z.slice(0,2).join("").trim() : String(s||"").trim(); };
 const w8=s=>{ const w=String(s||"").replace(/\s+/g," ").trim().split(" ").filter(Boolean); return w.length>8? w.slice(0,8).join(" ")+"…" : w.join(" "); };
+// eigen punten van Abel/Ger: key "eigen|tekst" in dpac.mkt_followups (label = note = tekst), afvinkbaar, mee naar Ger en naar de AI (eerdere_opmerkingen)
+let advEigenOpen=false;
+function eigenList(){ const out=[]; for(const k in FOLST){ if(k.indexOf("eigen|")!==0) continue; const text=k.slice(6); if(!text) continue;
+  const ad={ai:false,eigen:true,type:"eigen",label:text,cname:text,sname:null,platform:null,cid:null,sid:null,manual:true,absRef:null,absTgt:null,txt:"",titel:text,kant:"advertentie",zekerheid:"",w:0,prio:900,ref:null,reactie:"",opmTeam:"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}};
+  ADVBYKEY.set(k,ad); out.push(ad); } return out; }
+function advEigenTog(){ advEigenOpen=!advEigenOpen; drawAdvice(); if(advEigenOpen){ const i=document.getElementById("eigennew"); if(i) i.focus(); } }
+function folEigenAdd(val){ const text=String(val||"").replace(/\s+/g," ").trim(); if(!text) return; const key="eigen|"+text; FOLST[key]={...(FOLST[key]||{}),done:false,ts:0,rounded:0,note:text,upd:Date.now()}; folSave(); folSync(key); drawAdvice(); const i=document.getElementById("eigennew"); if(i){ i.value=""; folSendPreview(); } }
 // stand van één advies: open · wacht (afgevinkt, nog niet gecontroleerd of niet kloppend) · gedaan
 // afgevinkt telt alleen als het ná de laatste AI-run gebeurde; een advies dat de AI laat staan (🔁) staat daardoor weer open
 function advState(ad){
   const F=folGet(ad); const run=AI_RUNAT();
+  if(ad.eigen){ if(!F.done) return {grp:"open",chk:false,note:"",F}; return {grp:STAT_AT>(F.ts||0)?"gedaan":"wacht",chk:true,note:"",F,m:null}; }   // eigen punt: weg na de eerstvolgende doorvoer
   const note=(F.note&&((F.upd||0)>=run||!run))?F.note:"";
   const tChk=F.done?(F.ts||0):(F.rounded||0);   // "afgerond" uit v2.x telt ook als afgevinkt
   const chk=tChk>=run&&tChk>0;
@@ -1011,11 +1019,12 @@ function budHtml(ad){
   return `<span class="abud ${up?"up":"dn"}">${van} → ${eur0(ad.absTgt)}</span>`;
 }
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
-function advRow(ad){
+function advRow(ad,cls){
   const key=folKey(ad); const S=advState(ad); const opn=advOpen.has(key);
+  if(ad.eigen) return `<div class="arow eig ${S.grp}"><label class="achk" title="Gedaan"><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label><span class="amk"></span><div class="amain"><b>${esc(ad.titel)}</b></div></div>`;
   const sn=stNowOf(ad);
   const panel=opn?`<div class="apanel"><p class="amut">${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p>${ad.manual&&ad.titel?`<p><b>${esc(ad.titel)}</b></p>`:""}${ad.txt?`<p>${esc(zin2(ad.txt))}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="amut">📝 ${esc(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="amut">🔁 ${esc(ad.reactie)}</p>`:""}</div>`:"";
-  return `<div class="arow ${S.grp}${opn?" open":""}">`
+  return `<div class="arow ${cls||""} ${S.grp}${opn?" open":""}">`
     +`<label class="achk" title="Gedaan. Zonder opmerking = advies gevolgd. Met opmerking = anders gedaan."><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
     +`<span class="amk">${S.m?M_ICO[S.m][0]:""}</span>`
     +`<div class="amain" onclick="advTog(${jq(key)})"><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} · ${esc(ad.sname||ad.cname)}${ad.ref?` <span class="rep" title="blijft staan uit de vorige run">🔁</span>`:""}</b></div>`
@@ -1026,24 +1035,23 @@ function drawAdvice(){ const w=document.getElementById("advwrap"); if(w) keepScr
 function drawAdviceInner(){
   const w=document.getElementById("advwrap");
   const ai=aiAdvList();
-  const rows=ai.map(ad=>({ad,S:advState(ad)}));
+  const rows=ai.concat(eigenList()).map(ad=>({ad,S:advState(ad)})).filter(r=>!(r.ad.eigen&&r.S.grp==="gedaan"));
   const todo=rows.filter(r=>r.S.grp!=="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);   // afgevinkt blijft op zijn plek staan tot de controle (rij verspringt niet onder de muis)
+  let ri=0; todo.forEach(r=>{ r.cls=r.ad.eigen?"eig":(ri<3?"hi":ri<6?"mid":"lo"); if(!r.ad.eigen) ri++; });   // belangrijk → minder belangrijk: rood, oranje, geel
   const gedaan=rows.filter(r=>r.S.grp==="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);
   const run=AI_RUNAT(); const runTxt=run?whenTxt(run)+(AIADV.trigger==="donderdag"?" (donderdag)":""):"nog nooit";
   const sam=AIADV&&AIADV.advice&&AIADV.advice.samenvatting?String(AIADV.advice.samenvatting).replace(/\s+/g," ").trim():"";
   const samK=sam?(sam.split(" ").length>25?sam.split(" ").slice(0,25).join(" ")+"…":sam):"";
-  const tCtl=`Controleer nu: meet het ingestelde budget en aan/uit in Google, Meta en TikTok en vergelijkt dat met wat jullie hebben afgevinkt. ✓ klopt, ! niets veranderd gezien, ⏱ nog niet meetbaar. Dezelfde meting draait elke nacht om 06:25. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}.`;
-  const tAi=`Opnieuw laten kijken: ${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}, duurt 2 tot 4 minuten. De AI kijkt met frisse blik naar de cijfers en krijgt per bestaand advies mee of het gedaan of anders gedaan is, jullie opmerking en de meting. Hij laat een advies vervallen of laat het staan (🔁) met een reactie. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
-  const tGer=`Naar Ger: rapport met de open adviezen, wat anders is gedaan met jullie opmerking en de reactie van de AI. Gaat via de Slack-bot naar Ger en Abel; je ziet eerst een voorbeeld.`;
+  const tAi=`Adviezen doorvoeren: meet eerst budget en aan/uit in Google, Meta en TikTok, dan kijkt de AI (${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}) opnieuw met jullie vinkjes en opmerkingen. Gedaan vervalt, blijvend krijgt 🔁 met een reactie, nieuw komt erbij. Duurt 2 tot 4 minuten. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
+  const tGer=`Naar Ger: rapport met wat nog te doen is, wat anders is gedaan met jullie opmerking en de reactie van de AI, en jullie eigen punten. Gaat via de Slack-bot naar Ger en Abel; je ziet eerst een voorbeeld.`;
   let h=`<div class="abar" style="justify-content:flex-end"><div class="abtns">`
-    +`<button class="rbtn sm2" onclick="advControl()" title="${esc(tCtl)}" ${advBusy?"disabled":""}>${advBusy==="ctl"?"⏳ Meten…":"Controleer nu"}</button>`
-    +`<button class="rbtn sm2" onclick="aiRunAdvice()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy==="ai"?"⏳ AI kijkt…":"Opnieuw laten kijken"}</button>`
-    +`<button class="rbtn sm2 pri" onclick="folSendOpen()" title="${esc(tGer)}">Naar Ger</button></div></div>`;
+    +`<button class="rbtn big pri" onclick="advDoorvoeren()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy?"⏳ Bezig…":"🤖 Adviezen doorvoeren"}</button>`
+    +`<button class="rbtn big" onclick="folSendOpen()" title="${esc(tGer)}">🍆 Naar Ger</button></div></div>`;
   if(advBusy){ if(!document.getElementById("abusycss")){ const st=document.createElement("style"); st.id="abusycss"; st.textContent=".abusy{margin:-4px 0 12px;font-size:13px;color:var(--mut)}.abusy i{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-bottom:6px;position:relative}.abusy i:before{content:'';position:absolute;left:-40%;width:40%;height:100%;background:var(--plan,#7a6ee0);animation:abusy 1.2s linear infinite}@keyframes abusy{to{left:100%}}"; document.head.appendChild(st); }
-    h+=`<div class="abusy"><i></i>${advBusy==="ctl"?"Budget en aan/uit worden nu gemeten in Google, Meta en TikTok. Duurt 10 tot 20 seconden.":"De AI kijkt opnieuw naar de cijfers en jullie vinkjes en opmerkingen. Duurt 2 tot 4 minuten."}</div>`; }
+    h+=`<div class="abusy"><i></i>${advBusy==="ctl"?"Stap 1 van 2: budget en aan/uit meten in Google, Meta en TikTok. 10 tot 20 seconden.":"Stap 2 van 2: de AI verwerkt jullie vinkjes en opmerkingen en maakt nieuw advies. 2 tot 4 minuten."}</div>`; }
   if(AIRUN.err) h+=`<div class="aierr">${esc(AIRUN.err)}</div>`;
-  h+=`<div class="arows">`+(todo.length?todo.map(r=>advRow(r.ad)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
-  if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad)).join("")}</div>`:"");
+  h+=`<div class="arows">`+(todo.length?todo.map(r=>advRow(r.ad,r.cls)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
+  if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad,"ok")).join("")}</div>`:"");
   w.innerHTML=h;
 }
 function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now(),rounded:on?(FOLST[key]||{}).rounded||0:0,upd:Date.now()}; folSave(); folSync(key); drawAdvice(); }
@@ -1062,11 +1070,21 @@ async function advControl(){
   advBusy=null; drawAdvice();
 }
 // knop 2: Opnieuw laten kijken → ai_advice (Fable). Een run duurt 2 tot 4 minuten; breekt de browser de verbinding af, dan wacht hij tot de nieuwe run in de data staat.
-async function aiRunAdvice(){
-  if(advBusy) return; advBusy="ai"; AIRUN.err=null; drawAdvice();
-  const before=AI_RUNAT(); const t0=Date.now();
+async function advDoorvoeren(){
+  if(advBusy) return; advBusy="ctl"; AIRUN.err=null; drawAdvice();
   try{
-    if(LOCAL()){ await new Promise(r=>setTimeout(r,600)); }
+    if(LOCAL()){ D.status_at=new Date().toISOString(); await new Promise(r=>setTimeout(r,800)); }
+    else { const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"status_check"})});
+      const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok) throw new Error("meting mislukt ("+(j&&j.error||resp.status)+")"); }
+    advBusy="ai"; drawAdvice();
+    await aiRunInner();
+  }catch(e){ AIRUN.err=e&&e.message?e.message:"doorvoeren mislukt"; }
+  advBusy=null; drawAdvice();
+}
+async function aiRunInner(){
+  const before=AI_RUNAT(); const t0=Date.now();
+  {
+    if(LOCAL()){ await new Promise(r=>setTimeout(r,600)); herlaad(D); }
     else {
       let got=false;
       try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"ai_advice",model:"fable"})});
@@ -1075,19 +1093,18 @@ async function aiRunAdvice(){
       for(let i=0;i<30;i++){ const data=await laad(GCODE); const ra=data.ai_advice&&data.ai_advice.run_at?Date.parse(data.ai_advice.run_at):0; if(ra>before){ herlaad(data); got=true; break; } if(got) break; await new Promise(r=>setTimeout(r,20000)); }
       if(!got) throw new Error("nog geen nieuw advies na "+Math.round((Date.now()-t0)/60000)+" minuten; probeer later Ververs");
     }
-  }catch(e){ AIRUN.err="AI-advies mislukt: "+(e&&e.message?e.message:"onbekend"); }
-  advBusy=null; drawAdvice();
+  }
 }
 // ---- knop 3: rapport naar Ger (visueel HTML via de Slack-bot). Nooit id's, alleen namen voluit. ----
-function mbRows(){ return aiAdvList().filter(ad=>ad.kant!=="sales").map(ad=>({ad,S:advState(ad)})); }
+function mbRows(){ return aiAdvList().concat(eigenList()).filter(ad=>ad.kant!=="sales").map(ad=>({ad,S:advState(ad)})).filter(r=>!(r.ad.eigen&&r.S.grp==="gedaan")); }
 function folReportHtml(rows,extra){
   const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const e=esc;
   const isOpen=r=>!r.S.chk||r.S.m==="warn";   // afgevinkt maar in het platform niets veranderd gezien = nog te doen
   const open=rows.filter(isOpen), anders=rows.filter(r=>!isOpen(r)&&r.S.note), gedaan=rows.filter(r=>!isOpen(r)&&!r.S.note);
-  const big=ad=>{ if(ad.manual) return `<div class="big act">uitzoeken</div>`; const van=ad.absRef!=null?eur0(ad.absRef):"—"; if(ad.type==="stoppen"||ad.absTgt===0) return `<div class="big dn"><span>${van}</span><i>→</i><b>UIT</b></div>`; const up=ad.absRef==null||ad.absTgt>ad.absRef; return `<div class="big ${up?"up":"dn"}"><span>${van}</span><i>→</i><b>${eur0(ad.absTgt)}</b><small>per dag</small></div>`; };
-  const wie=ad=>`<div class="unit"><span class="pl" style="background:${PC(ad.platform)}">${e(PN(ad.platform))}</span>${e(ad.cname)}${ad.sname?` <em>›</em> ${e(ad.sname)}`:""}</div>`;
+  const big=ad=>{ if(ad.eigen) return ""; if(ad.manual) return `<div class="big act">uitzoeken</div>`; const van=ad.absRef!=null?eur0(ad.absRef):"—"; if(ad.type==="stoppen"||ad.absTgt===0) return `<div class="big dn"><span>${van}</span><i>→</i><b>UIT</b></div>`; const up=ad.absRef==null||ad.absTgt>ad.absRef; return `<div class="big ${up?"up":"dn"}"><span>${van}</span><i>→</i><b>${eur0(ad.absTgt)}</b><small>per dag</small></div>`; };
+  const wie=ad=>ad.eigen?"":`<div class="unit"><span class="pl" style="background:${PC(ad.platform)}">${e(PN(ad.platform))}</span>${e(ad.cname)}${ad.sname?` <em>›</em> ${e(ad.sname)}`:""}</div>`;
   const card=r=>{ const ad=r.ad; return `<div class="card"><div class="top"><div class="ty">${e(ad.titel)}</div>${big(ad)}</div>${wie(ad)}${ad.txt?`<p>${e(ad.txt.replace(/\s+/g," ").slice(0,280))}${ad.txt.length>280?"…":""}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="note">📝 ${e(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="ai">🔁 ${e(ad.reactie)}</p>`:""}${r.S.note?`<p class="note">📝 ${e(r.S.note)}</p>`:""}</div>`; };
-  const byP=ls=>["google","meta","tiktok"].map(p=>{ const x=ls.filter(r=>r.ad.platform===p); return x.length?`<h3><span class="dot" style="background:${PC(p)}"></span>${e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
+  const byP=ls=>["google","meta","tiktok","eigen"].map(p=>{ const x=ls.filter(r=>p==="eigen"?r.ad.eigen:r.ad.platform===p); return x.length?`<h3><span class="dot" style="background:${p==="eigen"?"#8e8e93":PC(p)}"></span>${p==="eigen"?"Eigen punten":e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
   const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.ad.platform)}"></span> ${e(r.ad.titel)} · ${e(r.ad.cname)}${r.ad.sname?` › ${e(r.ad.sname)}`:""}</li>`).join("")}</ul>`;
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open punten media buyer · ${dat}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet"><style>
 :root{--bg:#0e0e0f;--card:#17171a;--line:#2a2a2e;--tx:#f2efe8;--mut:#9a968c;--roze:#c927b4;--rood:#e04b4b;--groen:#31a24c}
@@ -1121,15 +1138,14 @@ function folSendOpen(){
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
   const m=folModal();
   m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>Naar Ger</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
-    <div class="modalgrid"><div><label>Extra punten</label><textarea id="folextra" rows="6" oninput="folExtra(this.value);folSendPreview()">${esc(extra)}</textarea></div>
-    <div><label>Voorbeeld</label><iframe id="folprev" class="folprev" title="voorbeeld rapport"></iframe></div></div>
+    <div class="modalgrid" style="grid-template-columns:1fr"><div><input id="eigennew" class="anote" style="width:100%;max-width:none;margin-bottom:10px" type="text" placeholder="Eigen punt voor Ger, Enter om toe te voegen" onkeydown="if(event.key==='Enter'){folEigenAdd(this.value)}"><iframe id="folprev" class="folprev" title="voorbeeld rapport"></iframe></div></div>
     <div class="modalft"><span class="lbl" id="folsent"></span><button class="rbtn sm2 pri" id="folsendbtn" onclick="folSend()" title="DM via de Slack-bot naar Ger en Abel">Verstuur</button></div></div>`;
   m.style.display="flex"; m.onclick=folReportClose; folSendPreview();
 }
-function folSendPreview(){ const f=document.getElementById("folprev"); if(!f) return; let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){} f.srcdoc=folReportHtml(mbRows(),extra); }
+function folSendPreview(){ const f=document.getElementById("folprev"); if(!f) return; f.srcdoc=folReportHtml(mbRows(),""); }
 async function folSend(test){
   const b=document.getElementById("folsendbtn"), lb=document.getElementById("folsent"); if(!b||b.disabled) return; b.disabled=true; lb.textContent="versturen…";
-  const rows=mbRows(); const open=rows.filter(r=>!r.S.chk||r.S.m==="warn"); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const rows=mbRows(); const open=rows.filter(r=>!r.S.chk||r.S.m==="warn"); const extra="";
   const pp={}; open.forEach(r=>pp[r.ad.platform]=(pp[r.ad.platform]||0)+1); const t=d2s(NOW);
   const summary={datum:`${t.getDate()} ${MNDF[t.getMonth()]}`,todo:open.length,fout:0,done:rows.length-open.length,perPlatform:["google","meta","tiktok"].filter(p=>pp[p]).map(p=>({name:PN(p),n:pp[p]})),test:!!test};
   try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"mb_report",summary,html:folReportHtml(rows,extra)})});
