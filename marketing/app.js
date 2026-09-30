@@ -979,6 +979,7 @@ let advDoneOpen=false, advBusy=null;
 const hhmm=ms=>{ const t=new Date(ms); return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"); };
 const dayOfTs=ts=>{ const t=new Date(ts); return s2d(new Date(t.getFullYear(),t.getMonth(),t.getDate())); };
 const whenTxt=ms=>{ if(!ms) return "—"; const d=dayOfTs(ms); return (d===TODAY?"vandaag":d===TODAY-1?"gisteren":fmtY(d))+" "+hhmm(ms); };
+const zin2=s=>{ const z=String(s||"").replace(/\s+/g," ").trim().match(/[^.!?]+[.!?]+(\s|$)/g); return z&&z.length>2? z.slice(0,2).join("").trim() : String(s||"").trim(); };
 const w8=s=>{ const w=String(s||"").replace(/\s+/g," ").trim().split(" ").filter(Boolean); return w.length>8? w.slice(0,8).join(" ")+"…" : w.join(" "); };
 // stand van één advies: open · wacht (afgevinkt, nog niet gecontroleerd of niet kloppend) · gedaan
 // afgevinkt telt alleen als het ná de laatste AI-run gebeurde; een advies dat de AI laat staan (🔁) staat daardoor weer open
@@ -990,16 +991,16 @@ function advState(ad){
   if(!chk) return {grp:"open",chk:false,note,F};
   const measured=STAT_AT>tChk;
   if(ad.manual) return measured? {grp:"gedaan",chk:true,note,F,m:"ok"} : {grp:"wacht",chk:true,note,F,m:null};   // uitzoeken-punt: blijft staan tot de volgende controle
-  if(!measured) return {grp:"wacht",chk:true,note,F,m:null};
   const sn=stNowOf(ad);
-  if(!sn||ad.absRef==null) return {grp:"wacht",chk:true,note,F,m:"klok"};
-  const bNow=stUit(ad)?0:(sn.budget==null?null:+sn.budget);
-  if(bNow==null) return {grp:"wacht",chk:true,note,F,m:"klok"};
-  const TOL=Math.max(2,Math.min(5,ad.absRef*0.10));
-  let ok;
-  if(note) ok=Math.abs(bNow-ad.absRef)>TOL||(ad.type==="stoppen"&&bNow<1);    // anders gedaan: klopt zodra het platform veranderd is
-  else { const V=advVerdict(ad); ok=V.st==="ok"; if(V.st==="ey") return {grp:"wacht",chk:true,note,F,m:"klok",bNow}; }
-  return ok? {grp:"gedaan",chk:true,note,F,m:"ok",bNow} : {grp:"wacht",chk:true,note,F,m:"warn",bNow};
+  const bNow=sn?(stUit(ad)?0:(sn.budget==null?null:+sn.budget)):null;
+  let ok=false;
+  if(bNow!=null&&ad.absRef!=null){ const TOL=Math.max(2,Math.min(5,ad.absRef*0.10));
+    if(note) ok=Math.abs(bNow-ad.absRef)>TOL||(ad.type==="stoppen"&&bNow<1);    // anders gedaan: klopt zodra het platform veranderd is
+    else ok=advVerdict(ad).st==="ok"; }
+  if(ok) return {grp:"gedaan",chk:true,note,F,m:"ok",bNow};   // het platform staat al goed (ook als de meting vóór het vinkje was)
+  if(!measured) return {grp:"wacht",chk:true,note,F,m:null};
+  if(bNow==null||ad.absRef==null||advVerdict(ad).st==="ey") return {grp:"wacht",chk:true,note,F,m:"klok",bNow};
+  return {grp:"wacht",chk:true,note,F,m:"warn",bNow};
 }
 const M_ICO={ok:['<span class="mk ok" title="klopt met het platform">✓</span>'],warn:['<span class="mk warn" title="afgevinkt, maar in het platform is niets veranderd gezien">!</span>'],klok:['<span class="mk klok" title="nog niet meetbaar">⏱</span>']};
 function budHtml(ad){
@@ -1013,14 +1014,13 @@ function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(
 function advRow(ad){
   const key=folKey(ad); const S=advState(ad); const opn=advOpen.has(key);
   const sn=stNowOf(ad);
-  const panel=opn?`<div class="apanel">${ad.txt?`<p>${esc(ad.txt)}</p>`:""}<p class="amut">Zekerheid ${esc(ad.zekerheid||"—")}${ad.w?` · ≈ ${eur0(ad.w)} per maand`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p></div>`:"";
-  const hist=(ad.ref&&(ad.opmTeam||ad.reactie))?`<div class="ahist">${ad.opmTeam?`<span>📝 ${esc(ad.opmTeam)}</span>`:""}${ad.reactie?`<span>🔁 ${esc(ad.reactie)}</span>`:""}</div>`:"";
+  const panel=opn?`<div class="apanel"><p class="amut">${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p>${ad.manual&&ad.titel?`<p><b>${esc(ad.titel)}</b></p>`:""}${ad.txt?`<p>${esc(zin2(ad.txt))}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="amut">📝 ${esc(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="amut">🔁 ${esc(ad.reactie)}</p>`:""}</div>`:"";
   return `<div class="arow ${S.grp}${opn?" open":""}">`
     +`<label class="achk" title="Gedaan. Zonder opmerking = advies gevolgd. Met opmerking = anders gedaan."><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
     +`<span class="amk">${S.m?M_ICO[S.m][0]:""}</span>`
-    +`<div class="amain" onclick="advTog(${jq(key)})"><b>${esc(w8(ad.titel))}${ad.ref?` <span class="rep" title="blijft staan uit de vorige run">🔁</span>`:""}</b><small><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} › ${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}</small></div>`
+    +`<div class="amain" onclick="advTog(${jq(key)})"><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} · ${esc(ad.sname||ad.cname)}${ad.ref?` <span class="rep" title="blijft staan uit de vorige run">🔁</span>`:""}</b></div>`
     +`<input class="anote" type="text" value="${esc(S.note)}" placeholder="opmerking" title="Anders gedaan? Schrijf hier wat jullie wél deden. Gaat naar Ger en naar de AI." onchange="folNote(${jq(key)},this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
-    +budHtml(ad)+hist+panel+`</div>`;
+    +budHtml(ad)+panel+`</div>`;
 }
 function drawAdvice(){ const w=document.getElementById("advwrap"); if(w) keepScroll(w,drawAdviceInner); }
 function drawAdviceInner(){
@@ -1035,10 +1035,12 @@ function drawAdviceInner(){
   const tCtl=`Controleer nu: meet het ingestelde budget en aan/uit in Google, Meta en TikTok en vergelijkt dat met wat jullie hebben afgevinkt. ✓ klopt, ! niets veranderd gezien, ⏱ nog niet meetbaar. Dezelfde meting draait elke nacht om 06:25. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}.`;
   const tAi=`Opnieuw laten kijken: ${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}, duurt 2 tot 4 minuten. De AI kijkt met frisse blik naar de cijfers en krijgt per bestaand advies mee of het gedaan of anders gedaan is, jullie opmerking en de meting. Hij laat een advies vervallen of laat het staan (🔁) met een reactie. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
   const tGer=`Naar Ger: rapport met de open adviezen, wat anders is gedaan met jullie opmerking en de reactie van de AI. Gaat via de Slack-bot naar Ger en Abel; je ziet eerst een voorbeeld.`;
-  let h=`<div class="abar"><div class="asum">${samK?esc(samK):""}</div><div class="abtns">`
+  let h=`<div class="abar" style="justify-content:flex-end"><div class="abtns">`
     +`<button class="rbtn sm2" onclick="advControl()" title="${esc(tCtl)}" ${advBusy?"disabled":""}>${advBusy==="ctl"?"⏳ Meten…":"Controleer nu"}</button>`
     +`<button class="rbtn sm2" onclick="aiRunAdvice()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy==="ai"?"⏳ AI kijkt…":"Opnieuw laten kijken"}</button>`
     +`<button class="rbtn sm2 pri" onclick="folSendOpen()" title="${esc(tGer)}">Naar Ger</button></div></div>`;
+  if(advBusy){ if(!document.getElementById("abusycss")){ const st=document.createElement("style"); st.id="abusycss"; st.textContent=".abusy{margin:-4px 0 12px;font-size:13px;color:var(--mut)}.abusy i{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-bottom:6px;position:relative}.abusy i:before{content:'';position:absolute;left:-40%;width:40%;height:100%;background:var(--plan,#7a6ee0);animation:abusy 1.2s linear infinite}@keyframes abusy{to{left:100%}}"; document.head.appendChild(st); }
+    h+=`<div class="abusy"><i></i>${advBusy==="ctl"?"Budget en aan/uit worden nu gemeten in Google, Meta en TikTok. Duurt 10 tot 20 seconden.":"De AI kijkt opnieuw naar de cijfers en jullie vinkjes en opmerkingen. Duurt 2 tot 4 minuten."}</div>`; }
   if(AIRUN.err) h+=`<div class="aierr">${esc(AIRUN.err)}</div>`;
   h+=`<div class="arows">`+(todo.length?todo.map(r=>advRow(r.ad)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
   if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad)).join("")}</div>`:"");
