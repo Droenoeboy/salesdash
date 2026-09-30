@@ -102,6 +102,7 @@ let trendWho=null, trendBy="auto", trendMetric="pr", trendReps=null, trendTeam=t
 function trendToggle(n){ trendReps=trendReps||new Set(window._trendAuto||[]); trendReps.has(n)?trendReps.delete(n):trendReps.add(n); drawTrend(); }
 function weekKey(d){ const t=d2s(d); const dow=(t.getDay()+6)%7; return d-dow; }   // maandag van de week
 function monthKey(d){ const t=d2s(d); return s2d(new Date(t.getFullYear(),t.getMonth(),1)); }
+function bkPartial(by,a,b){ return by==="week" ? b-weekKey(a)<6 : by==="maand" ? b<monthKey(monthKey(a)+32)-1 : false; }   // v4.3: lopende/afgekapte week of maand = onvolledig
 function isoWeek(d){ const t=d2s(d); const x=new Date(Date.UTC(t.getFullYear(),t.getMonth(),t.getDate())); const dn=x.getUTCDay()||7; x.setUTCDate(x.getUTCDate()+4-dn); const y0=new Date(Date.UTC(x.getUTCFullYear(),0,1)); return Math.ceil((((x-y0)/864e5)+1)/7); }
 const TREND_METRICS=[
   {k:"pr", t:"Plan rate", pct:true, num:r=>r.gepland, den:r=>r.beh, min:()=>+(DEFS.min_volume_plan||15), rol:"plan"},
@@ -134,7 +135,8 @@ function trendRow(who,a,b){
 function drawTrend(){
   const tw=document.getElementById("trendwrap");
   const {by,buckets}=trendBuckets();
-  const lab = ([a])=> by==="week"? `wk ${isoWeek(a)}` : MND[d2s(a).getMonth()]+" "+String(d2s(a).getFullYear()).slice(2);
+  const part=buckets.map(([a,b])=>bkPartial(by,a,b));   // v4.3: onvolledige periode (lopende week/maand) krijgt * en geen vergelijking
+  const lab = ([a],i)=> (by==="week"? `wk ${isoWeek(a)}` : MND[d2s(a).getMonth()]+" "+String(d2s(a).getFullYear()).slice(2))+(part[i]?"*":"");
   const labels=buckets.map(lab);
   const M=TREND_METRICS.find(m=>m.k===trendMetric)||TREND_METRICS[0];
   const cw=Math.max(320,(tw.clientWidth||900)-34);
@@ -144,7 +146,7 @@ function drawTrend(){
     const weak=rows.map(r=> M.pct && M.min ? (M.den(r)||0) < M.min() : false);
     const values=rows.map((r,i)=>{ if(M.pct){ const d=M.den(r); return d && !(weak[i]&&!isTeam) ? pct(M.num(r),d) : null; } return M.num(r); });
     const tips=rows.map(r=> M.pct? `${M.num(r)}/${M.den(r)}` : "");
-    return {name,color,values,weak,tips,rows,width:isTeam?3:2,opacity:isTeam?1:.9,showVals:true}; };
+    return {name,color,values,weak:weak.map((w,i)=>w||part[i]),tips,rows,width:isTeam?3:2,opacity:isTeam?1:.9,showVals:true}; };
   const teamS=seriesFor(null,"Team","var(--txt)",true); const repS=(M.hideRep&&MODE!=="rep"?[]:repsShown.map(n=>seriesFor(n,n,repCol(n),false)));
   // afwijking t.o.v. team (pp) per persoon per periode
   for(const r of repS){ r.dev=r.values.map((v,i)=>(v==null||teamS.values[i]==null)?null:Math.round((v-teamS.values[i])*10)/10); r.tips=r.tips.map((t,i)=>t+(r.dev[i]==null?"":" · "+(r.dev[i]>0?"+":"")+(r.dev[i]+"").replace(".",",")+" pp vs team")); }
@@ -155,19 +157,20 @@ function drawTrend(){
   h+=`<div class="wonchips"><span class="lbl">Personen:</span><div class="wchip${trendTeam?" on":""}" onclick="trendTeam=!trendTeam;drawTrend()"><span class="dot" style="background:var(--txt)"></span>Totaal (team)</div>`+REPS.map(p=>`<div class="wchip${repsShown.includes(p.n)?" on":""}" onclick="trendToggle(${jq(p.n)})"><span class="dot" style="background:${repCol(p.n)}"></span>${esc(p.n)}</div>`).join("")+`<div class="wchip" onclick="trendReps=new Set(REPS.map(p=>p.n));drawTrend()">allemaal</div><div class="wchip" onclick="trendReps=new Set();drawTrend()">niemand</div>`+
     `<span style="flex:1"></span>`+[["auto","Auto"],["week","Per week"],["maand","Per maand"]].map(x=>`<div class="wchip${trendBy===x[0]?" on":""}" onclick="trendBy='${x[0]}';drawTrend()">${x[1]}</div>`).join("")+`</div>`;
   // grafiek
-  const team=S[0]; const last=team.values.length-1; const cur=team.values[last], prev=team.values[last-1];
-  h+=`<div class="cmp"><div class="chhead"><div><h3 style="margin:0">${M.t}${M.rol?` <i class="rolTag">${ROL(M.rol)}</i>`:""} · per ${by==="week"?"ISO-week":"maand"}</h3><div class="chsub">${labels[0]} t/m ${labels[last]} · lopende periode = laatste punt${M.pct?" · open bolletje = te weinig volume":""}</div></div>
-    <div class="chnow"><b>${cur==null?"—":(M.pct?(cur+"").replace(".",",")+"%":cur)}</b><span>${esc(S[0].name)}, ${labels[last]}</span>${M.pct?ppDelta(cur,prev):(cur!=null&&prev!=null?`<i class="dlt ${cur>prev?"up":cur<prev?"dn":"eq"}">${cur>prev?"▲ +":cur<prev?"▼ ":"= "}${Math.abs(cur-prev)}</i>`:"")}</div></div>
+  const team=S[0]; const last=team.values.length-1, li=part[last]&&last>0?last-1:last; const cur=team.values[li], prev=team.values[li-1];
+  const lopTxt=part[last]?`${labels[last]} = ${B>=TODAY?"lopend":"afgekapt"} t/m ${dgn(buckets[last][1])} ${fmt(buckets[last][1])}, onvolledig (open bolletje, geen vergelijking)`:"";
+  h+=`<div class="cmp"><div class="chhead"><div><h3 style="margin:0">${M.t}${M.rol?` <i class="rolTag">${ROL(M.rol)}</i>`:""} · per ${by==="week"?"ISO-week":"maand"}</h3><div class="chsub">${labels[0]} t/m ${labels[last]}${lopTxt?" · "+lopTxt:""}${M.pct?" · open bolletje = te weinig volume":""}</div></div>
+    <div class="chnow"><b>${cur==null?"—":(M.pct?(cur+"").replace(".",",")+"%":cur)}</b><span>${esc(S[0].name)}, ${labels[li]}${li<last?" · laatste volle "+(by==="week"?"week":"maand"):""}</span>${M.pct?ppDelta(cur,prev):(cur!=null&&prev!=null?`<i class="dlt ${cur>prev?"up":cur<prev?"dn":"eq"}">${cur>prev?"▲ +":cur<prev?"▼ ":"= "}${Math.abs(cur-prev)}</i>`:"")}</div></div>
     ${svgLine(S,{pct:M.pct,labels,markLast:true,h:230,w:cw})}${legend(S)}</div>`;
   // alle rates naast elkaar (kleine multiples, team)
   const rateM=TREND_METRICS.filter(m=>m.pct); const smCols=Math.max(1,Math.min(rateM.length,Math.floor((cw)/210))); const smw=Math.floor((cw-(smCols-1)*10)/smCols)-22;
-  h+=`<div class="cmp"><h3>Alle rates in één oogopslag · team</h3><div class="smallmult">`+rateM.map(m=>{ const rows=team.rows; const vals=rows.map(r=>{ const d=m.den(r); return d?pct(m.num(r),d):null; }); const weak=rows.map(r=>(m.den(r)||0)<m.min()); const c=vals[vals.length-1], p=vals[vals.length-2];
-    return `<div class="sm" onclick="trendMetric='${m.k}';drawTrend()"><div class="smh"><span>${m.t}</span><b>${c==null?"—":(c+"").replace(".",",")+"%"}</b>${ppDelta(c,p)}</div>${svgLine([{name:m.t,color:"var(--plan)",values:vals,weak,width:2}],{pct:true,labels,h:96,pl:30,pb:18,pt:8,ticks:3,w:smw})}</div>`; }).join("")+`</div><p class="note" style="margin-top:8px">Verandering = laatste punt t.o.v. de periode ervoor, in procentpunten (pp). Klik op een kaartje om het groot te zien.</p></div>`;
+  h+=`<div class="cmp"><h3>Alle rates in één oogopslag · team</h3><div class="smallmult">`+rateM.map(m=>{ const rows=team.rows; const vals=rows.map(r=>{ const d=m.den(r); return d?pct(m.num(r),d):null; }); const weak=rows.map((r,i)=>(m.den(r)||0)<m.min()||part[i]); const c=vals[li], p=vals[li-1];
+    return `<div class="sm" onclick="trendMetric='${m.k}';drawTrend()"><div class="smh"><span>${m.t}</span><b>${c==null?"—":(c+"").replace(".",",")+"%"}</b>${ppDelta(c,p)}</div>${svgLine([{name:m.t,color:"var(--plan)",values:vals,weak,width:2}],{pct:true,labels,h:96,pl:30,pb:18,pt:8,ticks:3,w:smw})}</div>`; }).join("")+`</div><p class="note" style="margin-top:8px">Kopcijfer = ${labels[li]}${li<last?" (laatste volle "+(by==="week"?"week":"maand")+")":""}; verandering t.o.v. de periode ervoor, in procentpunten (pp). Klik op een kaartje om het groot te zien.</p></div>`;
   // tabel: per periode de rate + verandering
   const T=S;
   h+=`<div class="cmp"><h3>${M.t} per ${by==="week"?"week":"maand"} · met verandering t.o.v. de periode ervoor</h3><table class="trend"><tr><th>Periode</th>`+T.map(s=>`<th><span class="dot" style="background:${s.color}"></span>${esc(s.name)}</th>`).join("")+`</tr>`;
   for(let i=labels.length-1;i>=0;i--){ const isCur=i===last;
-    h+=`<tr class="${isCur?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(buckets[i][0])}${isCur?" · lopend":""}</small></td>`+T.map(s=>{ const v=s.values[i], p=i>0?s.values[i-1]:null; const weak=s.weak&&s.weak[i];
+    h+=`<tr class="${isCur?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(buckets[i][0])}${part[i]?" · onvolledig t/m "+dgn(buckets[i][1]):""}</small></td>`+T.map(s=>{ const v=s.values[i], p=i>0&&!part[i]?s.values[i-1]:null; const weak=s.weak&&s.weak[i];
       const dv=s.dev?s.dev[i]:null;
       return `<td class="${weak?"weak":""}"><b>${v==null?"—":(M.pct?(v+"").replace(".",",")+"%":v)}</b>${M.pct?`<small>${(s.tips[i]||"").split(" · ")[0]}</small>`:""} ${M.pct?ppDelta(v,p):(v!=null&&p!=null?`<i class="dlt ${v>p?"up":v<p?"dn":"eq"}">${v>p?"▲ +":v<p?"▼ ":"= "}${Math.abs(v-p)}</i>`:"")}${dv!=null?`<br><small class="${dv>0?"up":dv<0?"dn":""}" title="afwijking t.o.v. team">${dv>0?"+":""}${(dv+"").replace(".",",")} pp vs team</small>`:""}</td>`; }).join("")+`</tr>`; }
   h+=`</table><p class="note" style="margin-top:6px">Per persoon staat onder elke waarde de <b>afwijking t.o.v. het team</b> in procentpunten: + = beter dan het teamgemiddelde in die periode, − = slechter. Zo zie je in welk stadium iemand afwijkt van de trend.</p></div>`;
@@ -176,7 +179,7 @@ function drawTrend(){
   h+=`<div class="cmp"><h3>Alle cijfers per ${by==="week"?"week":"maand"} · ${who?esc(who):"team"} <span class="chsub">(kies: `+[["Team",null]].concat(REPS.map(p=>[p.n,p.n])).map(c=>`<a href="#" onclick="trendWho=${c[1]===null?"null":JSON.stringify(c[1]).replace(/"/g,"&quot;")};drawTrend();return false" style="color:${(trendWho===c[1])?"var(--plan-tx)":"inherit"};font-weight:${trendWho===c[1]?800:500};margin-right:8px">${esc(c[0])}</a>`).join("")+`)</span></h3>
     <table class="trend"><tr><th>Periode</th><th>Nieuwe leads</th><th>Afgehandeld</th><th>Gepland</th><th>Plan rate</th><th>Intakes</th><th>Shows</th><th>Show rate</th><th>Ingeschr.</th><th>Sign rate</th><th>Close rate</th><th>Lead → sale</th><th>Verloren</th><th>Slot-show</th></tr>`;
   const rc=(v,n,d)=>d? `<td><b>${(v+"").replace(".",",")}%</b><small>${n}/${d}</small></td>` : "<td>—</td>";
-  for(let i=rows.length-1;i>=0;i--){ const r=rows[i]; h+=`<tr class="${i===last?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(r.a)}</small></td><td>${r.nieuw}</td><td>${r.beh}</td><td>${r.gepland}</td>${rc(r.pr,r.gepland,r.beh)}<td>${r.agenda}</td><td>${r.show}</td>${rc(r.sr,r.show,r.agenda)}<td>${r.signS}</td>${rc(r.gs,r.signS,r.show)}${rc(r.cr,r.closed,r.closed+r.closeLost)}${rc(r.l2s,r.sign,r.beh)}<td>${r.verloren}</td>${rc(r.slot,r.slotShow,r.held)}</tr>`; }
+  for(let i=rows.length-1;i>=0;i--){ const r=rows[i]; h+=`<tr class="${i===last?"cur":""}"><td><b>${labels[i]}</b> <small>${fmt(r.a)}${part[i]?" · onvolledig":""}</small></td><td>${r.nieuw}</td><td>${r.beh}</td><td>${r.gepland}</td>${rc(r.pr,r.gepland,r.beh)}<td>${r.agenda}</td><td>${r.show}</td>${rc(r.sr,r.show,r.agenda)}<td>${r.signS}</td>${rc(r.gs,r.signS,r.show)}${rc(r.cr,r.closed,r.closed+r.closeLost)}${rc(r.l2s,r.sign,r.beh)}<td>${r.verloren}</td>${rc(r.slot,r.slotShow,r.held)}</tr>`; }
   h+=`</table></div>
   <p class="note">Rates per ISO-week (ma t/m zo) met dezelfde definities als de funnelkolommen: nieuwe leads op aanmaakdatum, gepland op inplandatum, intakes/shows/inschrijvingen op intakedatum, verloren op datum van afboeken. Absolute aantallen bewegen mee met het aantal leads; de <b>percentages</b> laten zien of het team beter of slechter wordt. Een open bolletje/grijze cel = te weinig volume in die week (plan ≥ ${DEFS.min_volume_plan||15}, show ≥ ${DEFS.min_volume_show||8}, sign/close ≥ ${DEFS.min_volume_sign||5}) — dan zegt het percentage weinig.</p>`;
   tw.innerHTML=h;
@@ -482,7 +485,8 @@ function chartWidget(who, phase){
   if(chCmp==="all"){ if(who!=null) S.push(ser(null,"Totaal","var(--mut2)",false)); for(const p of REPS) if(p.n!==who) S.push(ser(p.n,p.n,repCol(p.n),false)); }
   else if(chCmp==="totaal"&&who!=null) S.push({...ser(null,"Totaal","var(--mut2)",false),width:2.2,opacity:.9,showVals:true});
   else if(chCmp&&chCmp!==who){ const o=ser(chCmp,chCmp,repCol(chCmp),false); o.width=2.4; o.opacity=.95; o.showVals=true; o.values=o.rows.map(r=>{ const d=M.den(r); return d?pct(M.num(r),d):null; }); S.push(o); }
-  const main=S[0], last=main.values.length-1, cur=main.values[last], prev=main.values[last-1];
+  const part=bk.map(x=>by==="week"||by==="maand"?bkPartial(by,x[0],x[1]):false); labels.forEach((x,i)=>{ if(part[i]) labels[i]=x+"*"; }); S.forEach(se=>{ se.weak=se.weak.map((w,i)=>w||part[i]); });
+  const main=S[0], last=main.values.length-1, li=part[last]&&last>0?last-1:last, cur=main.values[li], prev=main.values[li-1];   // v4.3: kopcijfer = laatste volle week/maand
   const sumN=main.rows.reduce((s,r)=>s+M.num(r),0), sumD=main.rows.reduce((s,r)=>s+M.den(r),0);
   const bars=bk.map((x,i)=>{ const r=main.rows[i]; const n=M.num(r), d=M.den(r); return {label:labels[i], parts:[{v:n,color:col,name:M.ok},{v:Math.max(0,d-n),color:"var(--line)",name:M.bad}]}; });
   const chips=[["auto","Auto"],["dag","Per dag"],["week","Per week"],["maand","Per maand"]].map(x=>`<div class="wchip sm${chBy===x[0]?" on":""}" onclick="chBy='${x[0]}';chFocus=null;chStack=[];drawDetail()">${x[1]}</div>`).join("")+(by==="uur"?`<div class="wchip sm on">Per uur</div>`:"");
@@ -491,7 +495,7 @@ function chartWidget(who, phase){
   const cmpRow = chCmp!==null ? `<div class="wonchips chcmp"><span class="lbl">Vergelijk met:</span>`+cmpNames.map(([k,lab])=>`<div class="wchip sm${chCmp===k?" on":""}" onclick="chCmp=${JSON.stringify(k).replace(/"/g,"&quot;")};drawDetail()">${k!=="all"&&k!=="totaal"?`<span class="dot" style="background:${repCol(k)}"></span>`:""}${esc(lab)}</div>`).join("")+`<div class="wchip sm" onclick="chCmp=null;drawDetail()">✕ uit</div></div>` : "";
   const strip=`<div class="chstrip">`+bk.map((x,i)=>{ const v=main.values[i], r=main.rows[i], n=M.num(r), d=M.den(r); return `<div class="chc${i===last?" cur":""}${main.weak[i]?" weak":""}${by!=="uur"?" clk":""}" ${by!=="uur"?`onclick="chDrill(${i})"`:""} title="${esc(labels[i])}: ${n} ${M.ok} van ${d}${by!=="uur"?" · klik om in te zoomen":""}"><span>${labels[i]}</span><b>${v==null?"—":(v+"").replace(".",",")+"%"}</b><small>${n}/${d}</small></div>`; }).join("")+`</div>`;
   return `<div class="chw"><div class="chhead"><div><h3 style="margin:0">${esc(name)} · ${M.t} <i class="rolTag">${ROL(phase)}</i> · per ${by==="uur"?"uur":by==="dag"?"dag":by==="week"?"ISO-week":"maand"}</h3><div class="chsub">${focusTxt}${labels[0]} t/m ${labels[last]} · over deze ${bk.length} ${by==="uur"?"uren":by==="dag"?"dagen":by==="week"?"weken":"maanden"}: <b>${fpct(sumN,sumD)}</b> (${sumN}/${sumD}) · open bolletje = te weinig volume${by!=="uur"?" · <b>klik op een bolletje</b> om in te zoomen ("+(by==="maand"?"maand → weken":by==="week"?"week → dagen":"dag → uren")+")":" · uur = "+(phase==="plan"?"uur van binnenkomst lead":"uur van de intake")}</div></div>
-    <div class="chnow">${chFocus?`<b>${fpct(sumN,sumD)}</b><span>${by==="uur"?fmt(chFocus[0]):fmt(chFocus[0])+" – "+fmt(chFocus[1])}</span><i class="dlt eq">${sumN}/${sumD}</i>`:`<b>${cur==null?"—":(cur+"").replace(".",",")+"%"}</b><span>${labels[last]}</span>${ppDelta(cur,prev)}`}</div></div>
+    <div class="chnow">${chFocus?`<b>${fpct(sumN,sumD)}</b><span>${by==="uur"?fmt(chFocus[0]):fmt(chFocus[0])+" – "+fmt(chFocus[1])}</span><i class="dlt eq">${sumN}/${sumD}</i>`:`<b>${cur==null?"—":(cur+"").replace(".",",")+"%"}</b><span>${labels[li]}${li<last?" · laatste volle "+by:""}</span>${ppDelta(cur,prev)}`}</div></div>
     <div class="wonchips" style="margin:6px 0 8px">${chips}<div class="wchip sm${chCmp!==null?" on":""}" onclick="chCmp=chCmp===null?'all':null;drawDetail()">⚖️ Vergelijk met…</div><span style="flex:1"></span><div class="wchip sm" onclick="tab='trend';trendMetric='${M.tk}';trendBy='${by==="dag"||by==="uur"?"week":by}';${who?`trendReps=new Set([${jq(who)}]);`:""}sel=null;render()">📈 Open in Trend</div></div>
     ${cmpRow}${svgLine(S,{pct:true,labels,markLast:chFocus==null,h:210,w:cw})}${S.length>1?legend(S):""}
     <div class="chsub" style="margin-top:8px">Aantallen per ${by}: gekleurd = ${M.ok}, grijs = ${M.bad}</div>${svgBars(bars,{h:110,w:cw})}${strip}</div>`;
@@ -603,7 +607,7 @@ function drawNote(){
     <div><h4>Per rep (v1, zoals het oude dashboard)</h4><p>Plan rate op de setter; <b>show, sign en pay op de eigenaar van de deal</b>, zonder close-rij. Simpeler, maar wie een deal overneemt krijgt ook de show en de sign op zijn naam.</p>
       <h4>Voorbeeld</h4><p>Vandaag 8 intakes: 6 ingepland door Django (alle 6 verschenen), 2 door Marcel (1 verschenen). <b>Show rate</b>: Django 100%, Marcel 50% — in beide weergaven, want show hangt aan de setter… <i>behalve</i> in Per rep als de deal een andere eigenaar heeft: dan telt de show bij die eigenaar. Stel Linda zette de intake, de deal belandt bij Marcel en Marcel tekent: in <b>Rollen</b> telt hij één keer in Linda's sign rate (setter) en één keer in Marcels close rate (eigenaar) — niets bij een derde; in <b>Per rep</b> telt alles bij Marcel.</p></div>
   </div>
-  <p class="ufoot">Show = fase Show of verder, het Show-veld of een afspraak op "showed"; Ingeschreven = Agreement Signed; Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")} of het ✅-vinkje. KPI-pijltjes vergelijken met de even lange periode direct ervoor. Klik op een blok voor de namen; sorteren = kolomkop, filteren = ⏷. Alle regels staan in <code>dpac.definitions</code> (rule_*) en het regeldocument.</p></details>`;
+  <p class="ufoot">Show = fase Show of verder, het Show-veld of een afspraak op "showed"; Ingeschreven = Agreement Signed; Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")} of het ✅-vinkje. KPI-pijltjes: een periode binnen één week vergelijkt met dezelfde weekdagen van vorige week, een langere periode met de even lange periode direct ervoor. Een lopende week of maand is onvolledig (* en open bolletje). Klik op een blok voor de namen; sorteren = kolomkop, filteren = ⏷. Alle regels staan in <code>dpac.definitions</code> (rule_*) en het regeldocument.</p></details>`;
 }
 function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
