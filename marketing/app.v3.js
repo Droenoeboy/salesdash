@@ -1080,68 +1080,57 @@ async function aiRunAdvice(){
 // ---- knop 3: rapport naar Ger (visueel HTML via de Slack-bot). Nooit id's, alleen namen voluit. ----
 function mbRows(){ return aiAdvList().filter(ad=>ad.kant!=="sales").map(ad=>({ad,S:advState(ad)})); }
 function folReportHtml(rows,extra){
-  const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const G=folGroups(rows); const open=G.todo; const e=esc;
-  const big=r=>{ const V=r.V; if(V.src==="manual"||V.bRef==null) return `<div class="big act">${r.type==="actie"?"instelling":"actie"}</div>`;
-    const nu=V.uit?"uit":eur0(V.bNow), naar=r.type==="stoppen"?"uit":folTarget(r); return `<div class="big"><span>${nu}</span><i>→</i><b>${naar}</b>${r.type==="stoppen"?"":"<small>per dag</small>"}</div>`; };
-  const wie=r=>`<div class="unit"><span class="pl" style="background:${PC(r.platform)}">${e(PN(r.platform))}</span>${e(r.cname||r.label)}${r.sname?` <em>›</em> ${e(r.sname)}`:""}</div>`;
-  const card=r=>`<div class="card${r.fout?" stale":""}"><div class="top"><div class="ty">${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])}</div>${big(r)}</div>${wie(r)}<p>${e(r.txt.replace(/\s+/g," ").slice(0,280))}${r.txt.length>280?"…":""}</p>${r.type==="actie"&&r.doen?`<p class="waar"><b>Waar:</b> ${e(r.doen)}</p>`:""}${r.fout?`<p class="warn">⚠️ Was afgerond als doorgevoerd, maar de meting van ${whenTxt(STAT_AT)} ziet geen wijziging in het platform. Graag checken of het is opgeslagen.</p>`:""}${r.F.note?`<p class="note">📝 ${e(r.F.note)}</p>`:""}</div>`;
-  const byP=ls=>["google","meta","tiktok"].map(p=>{ const x=ls.filter(r=>r.platform===p); return x.length?`<h3><span class="dot" style="background:${PC(p)}"></span>${e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
-  const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.platform)}"></span> ${ADV_ICON[r.type]} ${e(ADV_LAB[r.type])} · ${e(r.label)}${r.ch?` <small>(${fmtY(r.ch.d)})</small>`:""}${r.F.note?` <small>📝 ${e(r.F.note)}</small>`:""}</li>`).join("")}</ul>`;
+  const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const e=esc;
+  const isOpen=r=>!r.S.chk||r.S.m==="warn";   // afgevinkt maar in het platform niets veranderd gezien = nog te doen
+  const open=rows.filter(isOpen), anders=rows.filter(r=>!isOpen(r)&&r.S.note), gedaan=rows.filter(r=>!isOpen(r)&&!r.S.note);
+  const big=ad=>{ if(ad.manual) return `<div class="big act">uitzoeken</div>`; const van=ad.absRef!=null?eur0(ad.absRef):"—"; if(ad.type==="stoppen"||ad.absTgt===0) return `<div class="big dn"><span>${van}</span><i>→</i><b>UIT</b></div>`; const up=ad.absRef==null||ad.absTgt>ad.absRef; return `<div class="big ${up?"up":"dn"}"><span>${van}</span><i>→</i><b>${eur0(ad.absTgt)}</b><small>per dag</small></div>`; };
+  const wie=ad=>`<div class="unit"><span class="pl" style="background:${PC(ad.platform)}">${e(PN(ad.platform))}</span>${e(ad.cname)}${ad.sname?` <em>›</em> ${e(ad.sname)}`:""}</div>`;
+  const card=r=>{ const ad=r.ad; return `<div class="card"><div class="top"><div class="ty">${e(ad.titel)}</div>${big(ad)}</div>${wie(ad)}${ad.txt?`<p>${e(ad.txt.replace(/\s+/g," ").slice(0,280))}${ad.txt.length>280?"…":""}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="note">📝 ${e(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="ai">🔁 ${e(ad.reactie)}</p>`:""}${r.S.note?`<p class="note">📝 ${e(r.S.note)}</p>`:""}</div>`; };
+  const byP=ls=>["google","meta","tiktok"].map(p=>{ const x=ls.filter(r=>r.ad.platform===p); return x.length?`<h3><span class="dot" style="background:${PC(p)}"></span>${e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
+  const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.ad.platform)}"></span> ${e(r.ad.titel)} · ${e(r.ad.cname)}${r.ad.sname?` › ${e(r.ad.sname)}`:""}</li>`).join("")}</ul>`;
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Open punten media buyer · ${dat}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap" rel="stylesheet"><style>
-:root{--bg:#0e0e0f;--card:#17171a;--line:#2a2a2e;--tx:#f2efe8;--mut:#9a968c;--roze:#c927b4;--rood:#e04b4b}
+:root{--bg:#0e0e0f;--card:#17171a;--line:#2a2a2e;--tx:#f2efe8;--mut:#9a968c;--roze:#c927b4;--rood:#e04b4b;--groen:#31a24c}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 Barlow,system-ui,sans-serif;padding:28px 16px}
 .w{max-width:980px;margin:0 auto}h1,h2,h3{font-family:"IBM Plex Sans Condensed",Barlow,sans-serif;font-weight:700;margin:0}
 h1{font-size:34px;line-height:1.1}h1 b{color:var(--roze)}.sub{color:var(--mut);margin:6px 0 22px;font-size:14px}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}.kpi{background:var(--card);border:1px solid var(--line);padding:14px 16px}.kpi b{display:block;font:700 34px "IBM Plex Sans Condensed",Barlow,sans-serif}.kpi span{color:var(--mut);font-size:13px}.kpi.todo b{color:var(--roze)}
 h2{font-size:22px;margin:28px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}h3{font-size:17px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}h3 span{color:var(--mut);font-weight:600}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%}
-.cards{display:grid;gap:10px}.card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--roze);padding:14px 16px}.card.stale{border-left-color:var(--rood)}
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.ty{font-weight:600;color:var(--mut);font-size:12.5px;text-transform:uppercase;letter-spacing:.5px}
-.big{font:700 28px "IBM Plex Sans Condensed",Barlow,sans-serif;display:flex;align-items:baseline;gap:8px}.big span{color:var(--mut)}.big i{font-style:normal;color:var(--mut)}.big small{font:500 13px Barlow,sans-serif;color:var(--mut)}.big.act{font:600 13px Barlow,sans-serif;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+.cards{display:grid;gap:10px}.card{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--roze);padding:14px 16px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.ty{font-weight:600;font-size:15px}
+.big{font:700 28px "IBM Plex Sans Condensed",Barlow,sans-serif;display:flex;align-items:baseline;gap:8px}.big span{color:var(--mut)}.big i{font-style:normal;color:var(--mut)}.big small{font:500 13px Barlow,sans-serif;color:var(--mut)}.big.up b{color:var(--groen)}.big.dn b{color:var(--rood)}.big.act{font:600 13px Barlow,sans-serif;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
 .unit{font-weight:600;margin:6px 0 4px}.unit em{color:var(--mut);font-style:normal}.pl{display:inline-block;color:#fff;font-size:11px;padding:1px 7px;margin-right:6px;vertical-align:2px}
-p{margin:4px 0;color:#d6d2c8;font-size:14px}p.note{color:var(--tx);background:#1d1a24;padding:6px 10px;border-left:3px solid var(--roze)}p.warn{color:var(--rood)}p.waar{font-size:13px}
-.mini{list-style:none;padding:0;margin:0}.mini li{padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}.mini small{color:var(--mut)}
+p{margin:4px 0;color:#d6d2c8;font-size:14px}p.note{color:var(--tx);background:#1d1a24;padding:6px 10px;border-left:3px solid var(--roze)}p.ai{color:var(--tx);background:#15222a;padding:6px 10px;border-left:3px solid #4aa3d8}
+.mini{list-style:none;padding:0;margin:0}.mini li{padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .extra{background:var(--card);border:1px solid var(--line);padding:12px 16px;white-space:pre-wrap}.foot{color:var(--mut);font-size:12.5px;margin-top:30px}
 @media(max-width:600px){.kpis{grid-template-columns:1fr}h1{font-size:28px}.big{font-size:24px}}
 </style></head><body><div class="w">
-<h1>Marketing · <b>open punten</b></h1><div class="sub">${dat} · uit het DPAC-marketingdashboard (tabblad Opgevolgd) · budgetten per adset bij Meta en TikTok, per campagne bij Google</div>
-<div class="kpis"><div class="kpi todo"><b>${open.length}</b><span>nog te doen</span></div><div class="kpi"><b>${G.wacht.length}</b><span>afgerond, controle vannacht</span></div><div class="kpi"><b>${G.ok.length}</b><span>al doorgevoerd</span></div></div>
-<h2>Nog te doen</h2>${open.length?byP(open):`<p>Niets open, alles is doorgevoerd. 👌</p>`}
+<h1>Marketing · <b>open punten</b></h1><div class="sub">${dat} · uit het DPAC-marketingdashboard · budgetten per adset bij Meta en TikTok, per campagne bij Google</div>
+<div class="kpis"><div class="kpi todo"><b>${open.length}</b><span>nog te doen</span></div><div class="kpi"><b>${anders.length}</b><span>anders gedaan</span></div><div class="kpi"><b>${gedaan.length}</b><span>gedaan</span></div></div>
+<h2>Nog te doen</h2>${open.length?byP(open):`<p>Niets open. 👌</p>`}
+${anders.length?`<h2>Anders gedaan</h2>${byP(anders)}`:""}
 ${extra&&extra.trim()?`<h2>Extra punten</h2><div class="extra">${e(extra.trim())}</div>`:""}
-${G.wacht.length?`<h2>Afgerond in het overleg 🌙</h2><p style="color:var(--mut)">Vannacht om 06:25 controleert het dashboard of het zo in het platform staat.</p>${mini(G.wacht)}`:""}
-${G.ok.length?`<h2>Al doorgevoerd ✅</h2>${mini(G.ok)}`:""}
-<div class="foot">📝 = opmerkingen van Abel en Ger; die gaan ook terug naar Claude als terugkoppeling op de adviezen. Er wordt niets automatisch gewijzigd in de advertentieplatforms.</div>
+${gedaan.length?`<h2>Gedaan ✓</h2>${mini(gedaan)}`:""}
+<div class="foot">📝 = opmerking van Abel en Ger · 🔁 = reactie van de AI op die opmerking. Er wordt niets automatisch gewijzigd in de advertentieplatforms.</div>
 </div></body></html>`;
 }
 function folModal(){ let m=document.getElementById("folmodal"); if(!m){ m=document.createElement("div"); m.id="folmodal"; m.className="modal"; document.body.appendChild(m); } return m; }
-function folReport(){
-  const rows=folMB(folRows()); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const m=folModal();
-  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📋 Open punten als tekst</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
-    <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="4" placeholder="bv. nieuwe video's klaar donderdag · TikTok-formulier aan GHL koppelen · …" oninput="folExtra(this.value);folReportRefresh()">${esc(extra)}</textarea></div>
-    <div><label>Bericht (bewerkbaar, Slack-opmaak)</label><textarea id="foltxt" rows="18" oninput="this.dataset.edited=1">${esc(folReportText(rows))}</textarea></div></div>
-    <div class="modalft"><span class="lbl" id="folcopied"></span><button class="rbtn sm2" onclick="folReportRefresh(true)">↺ Opnieuw genereren</button><button class="rbtn sm2 pri" onclick="folCopy()">Kopieer</button></div></div>`;
-  m.style.display="flex"; m.onclick=folReportClose;
-}
-function folReportRefresh(force){ const ta=document.getElementById("foltxt"); if(!ta) return; if(force||!ta.dataset.edited) ta.value=folReportText(folMB(folRows())); }
 function folReportClose(){ const m=document.getElementById("folmodal"); if(m) m.style.display="none"; }
-async function folCopy(){ const ta=document.getElementById("foltxt"); const lb=document.getElementById("folcopied"); try{ await navigator.clipboard.writeText(ta.value); lb.textContent="gekopieerd"; }catch(e){ ta.select(); document.execCommand("copy"); lb.textContent="gekopieerd (fallback)"; } setTimeout(()=>{ if(lb) lb.textContent=""; },3000); }
 function folSendOpen(){
   let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const G=folGroups(folMB(folRows())); const m=folModal(); const nChk=G.todo.filter(r=>r.F.done).length;
-  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>📨 Open punten naar Ger (media buyer)</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
-    <div class="modalgrid"><div><label>Extra punten (vrij veld, wordt onthouden)</label><textarea id="folextra" rows="6" placeholder="bv. nieuwe video's klaar donderdag · TikTok-formulier aan GHL koppelen · …" oninput="folExtra(this.value);folSendPreview()">${esc(extra)}</textarea>
-      <div class="folsendinfo"><b>${G.todo.length}</b> nog te doen${G.todo.filter(r=>r.fout).length?` (waarvan <b>${G.todo.filter(r=>r.fout).length}</b> ⚠️ klopt niet)`:""} · <b>${G.wacht.length}</b> afgerond · <b>${G.ok.length}</b> doorgevoerd<br>Gaat als <b>DM via de Slack-bot</b> naar <b>Ger</b> én naar <b>Abel</b>, met een link naar dit rapport. Opmerkingen (📝) gaan mee. Sales-opvolging (👤) blijft eruit: dat is niet voor de media buyer.${nChk?`<br><span class="folwarn">Let op: ${nChk} ${nChk===1?"punt is":"punten zijn"} afgevinkt maar nog niet afgerond; ${nChk===1?"dat gaat":"die gaan"} nu nog als "te doen" mee. Klik eerst op ✅ Afronden als ze klaar zijn.</span>`:""}<br><span class="lnk" onclick="folReport()">liever als tekst kopiëren?</span></div></div>
-    <div><label>Voorbeeld (zo ziet Ger het)</label><iframe id="folprev" class="folprev" title="voorbeeld rapport"></iframe></div></div>
-    <div class="modalft"><span class="lbl" id="folsent"></span><button class="rbtn sm2 pri" id="folsendbtn" onclick="folSend()">📨 Verstuur naar Ger en Abel</button></div></div>`;
+  const m=folModal();
+  m.innerHTML=`<div class="modalbox" onclick="event.stopPropagation()"><div class="modalhd"><b>Naar Ger</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+    <div class="modalgrid"><div><label>Extra punten</label><textarea id="folextra" rows="6" oninput="folExtra(this.value);folSendPreview()">${esc(extra)}</textarea></div>
+    <div><label>Voorbeeld</label><iframe id="folprev" class="folprev" title="voorbeeld rapport"></iframe></div></div>
+    <div class="modalft"><span class="lbl" id="folsent"></span><button class="rbtn sm2 pri" id="folsendbtn" onclick="folSend()" title="DM via de Slack-bot naar Ger en Abel">Verstuur</button></div></div>`;
   m.style.display="flex"; m.onclick=folReportClose; folSendPreview();
 }
-function folSendPreview(){ const f=document.getElementById("folprev"); if(!f) return; let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){} f.srcdoc=folReportHtml(folMB(folRows()),extra); }
+function folSendPreview(){ const f=document.getElementById("folprev"); if(!f) return; let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){} f.srcdoc=folReportHtml(mbRows(),extra); }
 async function folSend(test){
   const b=document.getElementById("folsendbtn"), lb=document.getElementById("folsent"); if(!b||b.disabled) return; b.disabled=true; lb.textContent="versturen…";
-  const rows=folMB(folRows()); const G=folGroups(rows); const open=G.todo; let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const pp={}; open.forEach(r=>pp[r.platform]=(pp[r.platform]||0)+1); const t=d2s(NOW);
-  const summary={datum:`${t.getDate()} ${MNDF[t.getMonth()]}`,todo:open.length,fout:open.filter(r=>r.fout).length,done:G.ok.length+G.wacht.length,perPlatform:["google","meta","tiktok"].filter(p=>pp[p]).map(p=>({name:PN(p),n:pp[p]})),test:!!test};
+  const rows=mbRows(); const open=rows.filter(r=>!r.S.chk||r.S.m==="warn"); let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
+  const pp={}; open.forEach(r=>pp[r.ad.platform]=(pp[r.ad.platform]||0)+1); const t=d2s(NOW);
+  const summary={datum:`${t.getDate()} ${MNDF[t.getMonth()]}`,todo:open.length,fout:0,done:rows.length-open.length,perPlatform:["google","meta","tiktok"].filter(p=>pp[p]).map(p=>({name:PN(p),n:pp[p]})),test:!!test};
   try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"mb_report",summary,html:folReportHtml(rows,extra)})});
     const j=await resp.json().catch(()=>null);
     if(!resp.ok||!j||!j.ok) throw new Error(j&&j.error==="unauthorized"?"toegangscode geweigerd":(j&&j.error)||("server gaf "+resp.status));
@@ -1279,9 +1268,9 @@ function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
   drawTabs(); drawKpis();
   document.getElementById("kpis").style.display = tab==="tree"?"":"none";
-  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",fol:"folwrap",sales:"saleswrap",sign:"signwrap",data:"datawrap"};
+  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",sales:"saleswrap",sign:"signwrap",data:"datawrap"};
   for(const k in ids) document.getElementById(ids[k]).style.display = tab===k?"block":"none";
-  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="fol") drawFollow(); if(tab==="sales") drawSales(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
+  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="sales") drawSales(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
   drawDetail();
   if(window.parent!==window){ try{ window.parent.postMessage({dpacMkt:"h",h:document.body.scrollHeight},"*"); }catch(e){} }
 }
