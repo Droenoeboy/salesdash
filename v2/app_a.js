@@ -312,9 +312,12 @@ function drawKpis(){
   const k=document.getElementById("kpis");
   const first = who==null ? [L.filter(l=>inR(l.cd,A,B)).length,"Nieuwe leads"] : [f.gepland.length+f.verloren.length,"Leads afgehandeld"];
   const held = s.show.length+s.noshow.length+s.late.length;
-  const len=B-A+1, pA=A-len, pB=A-1, pf=funnel(who,pA,pB);   // zelfde lengte, direct ervoor
+  // v4.3: periode binnen één week (bv. "Deze week" op woensdag) → dezelfde weekdagen van vorige week; anders de even lange periode direct ervoor
+  const len=B-A+1, inWk=weekKey(A)===weekKey(B), pA=inWk?A-7:A-len, pB=inWk?B-7:A-1, pf=funnel(who,pA,pB);
   const prevFirst = who==null ? L.filter(l=>inR(l.cd,pA,pB)).length : pf.gepland.length+pf.verloren.length;
-  const dlt=(n,p)=>{ if(p==null) return ""; const d=n-p; const cls=d>0?"up":d<0?"dn":"eq"; return `<i class="dlt ${cls}" title="vorige periode van ${len} dagen (${fmtY(pA)} t/m ${fmtY(pB)}): ${p}">${d>0?"▲ +"+d:d<0?"▼ "+d:"= "+p}</i>`; };
+  const vglTxt = inWk ? `dezelfde dagen vorige week (${dgn(pA)} ${fmt(pA)}${pB>pA?" t/m "+dgn(pB)+" "+fmt(pB):""})` : `de ${len} dagen ervoor (${fmt(pA)} t/m ${fmt(pB)})`;
+  const dlt=(n,p)=>{ if(p==null) return ""; const d=n-p; const cls=d>0?"up":d<0?"dn":"eq"; return `<i class="dlt ${cls}" title="t.o.v. ${esc(vglTxt)}: ${p}">${d>0?"▲ +"+d:d<0?"▼ "+d:"= "+p}</i>`; };
+  const lopend = B>=TODAY && B-weekKey(B)<6 && inWk;
   const s2lWho=l=>who==null||(((l.s2lBy||l.setter)===who)&&!(l.s2lHow||"").startsWith("gok"));   // per persoon alleen zekere/zeer waarschijnlijke toewijzing; gok telt alleen in Team
   const s2l=median(L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)).map(l=>l.s2l)), n2l=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2l!=null).length, nOut=L.filter(l=>inR(l.cd,A,B)&&s2lWho(l)&&l.s2lOut).length;
   const insN=(x,y)=>L.filter(l=>l.is_signed&&inR(l.insE,x,y)&&(who==null||l.owner===who)).length; const ins=insN(A,B), pins=insN(pA,pB);
@@ -322,8 +325,10 @@ function drawKpis(){
   const items=[[first[0],first[1],null,dlt(first[0],prevFirst)],[f.gepland.length,"Intakes gepland",null,dlt(f.gepland.length,pf.gepland.length)],[f.agenda.length,"Intakes in periode",null,dlt(f.agenda.length,pf.agenda.length)],[f.show.length,"Shows",null,dlt(f.show.length,pf.show.length)],[f.geenShow.filter(l=>l.is_noshow).length,"No-shows",null,dlt(f.geenShow.filter(l=>l.is_noshow).length,pf.geenShow.filter(l=>l.is_noshow).length)],[ins,who?"Ingeschreven · eigenaar":"Ingeschreven","geteld op inschrijfdatum (formulier) — zelfde telling als de Gewonnen-tab en het CRM",dlt(ins,pins)],[f.paid.length,"Betaald",null,dlt(f.paid.length,pf.paid.length)],
     [held?fpct(s.show.length,held):"—","Show rate per slot",`${s.show.length} show · ${s.noshow.length} no-show · ${s.late.length} late cancel${s.unres.length?` · ${s.unres.length} zonder uitkomst`:""}`,""],
     [fmin(s2l),"Reactietijd (mediaan)",`Tijd van binnenkomst lead tot de eerste menselijke actie (taak/belpoging/afspraak/fasewissel; de binnenkomst zelf telt niet), toegerekend aan wie die actie deed (taak-eigenaar, anders wie het dossier daarna afhandelde, anders de enige actieve rep in dat uur) — bekend voor ${n2l} leads uit deze periode (alleen sinds het live-eventlog draait). ${nOut} lead${nOut===1?"":"s"} buiten het werkvenster (’s nachts/weekend, vóór de eerste of na de laatste actie van de dag) niet meegeteld. Tijd tot eerste intake-boeking: mediaan ${s2b==null?"—":(s2b+"").replace(".",",")+" uur"} (${n2b} leads).`,s2b!=null?`<i class="dlt eq">${(s2b+"").replace(".",",")} u tot boeking</i>`:""]];
-  k.innerHTML=items.map(x=>`<div class="kpi" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[3]||""}</div>`).join("");
+  k.innerHTML=items.map(x=>`<div class="kpi" ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[3]||""}</div>`).join("")+
+    `<div class="kpinote">▲▼ t.o.v. ${esc(vglTxt)}${lopend?` · <b>week ${isoWeek(B)} is lopend t/m ${dgn(B)}, nog onvolledig</b>`:""}</div>`;
 }
+const dgn = d => ["ma","di","wo","do","vr","za","zo"][(d2s(d).getDay()+6)%7];   // korte dagnaam
 
 // ---- funnelkolommen ----
 function rowHtml(cls,lab,who,num,den,uitTxt,phase,repKey){
@@ -392,11 +397,12 @@ function repPage(n){
   const col=`<div class="cols" style="margin:0">${colHtml(n,nm,n==null?"#1a2233":(RCOL[n]||"#1a2233"),true)}</div>`;
   // trend: 8 weken van deze persoon (kleine multiples)
   const bs=[]; for(let d=weekKey(NOW)-7*7; d<=NOW; d+=7) bs.push([d,Math.min(d+6,NOW)]);
-  const rows=bs.map(([a,b])=>trendRow(n,a,b)), labels=bs.map(([a])=>"wk "+isoWeek(a));
+  const rows=bs.map(([a,b])=>trendRow(n,a,b)), part=bs.map(([a,b])=>bkPartial("week",a,b)), labels=bs.map(([a],i)=>"wk "+isoWeek(a)+(part[i]?"*":""));
+  const li=part[part.length-1]?bs.length-2:bs.length-1;   // v4.3: kopcijfer = laatste volle week, lopende week is onvolledig
   const cw=Math.max(240,Math.floor(((document.getElementById("cols").clientWidth||900)*0.55-40)/2)-22);
   const mets=[["plan","Plan rate",r=>[r.gepland,r.beh],+(DEFS.min_volume_plan||15)],["show","Show rate",r=>[r.show,r.agenda],+(DEFS.min_volume_show||8)],["signS","Sign rate",r=>[r.signS,r.show],+(DEFS.min_volume_sign||5)],["close","Close rate",r=>[r.closed,r.closed+r.closeLost],+(DEFS.min_volume_sign||5)]];
-  const sm=mets.map(([k,t,nd,mn])=>{ const vals=rows.map(r=>{ const [a,b]=nd(r); return b?pct(a,b):null; }); const weak=rows.map(r=>(nd(r)[1]||0)<mn); const c=vals[vals.length-1], p=vals[vals.length-2];
-    return `<div class="sm${sel&&sel.phase===k?" on":""}" onclick="pick(${jq(key)},'${k}')" title="klik: grafiek per dag/week/maand + de namen"><div class="smh"><span>${t} <i class="rolTag">${ROL(k)}</i></span><b>${c==null?"—":(c+"").replace(".",",")+"%"}</b>${ppDelta(c,p)}</div>${svgLine([{name:t,color:n==null?"var(--txt)":(RCOL[n]||"var(--plan)"),values:vals,weak,width:2}],{pct:true,labels,h:86,pl:30,pb:18,pt:8,ticks:3,w:cw})}</div>`; }).join("");
+  const sm=mets.map(([k,t,nd,mn])=>{ const vals=rows.map(r=>{ const [a,b]=nd(r); return b?pct(a,b):null; }); const weak=rows.map((r,i)=>(nd(r)[1]||0)<mn||part[i]); const c=vals[li], p=vals[li-1];
+    return `<div class="sm${sel&&sel.phase===k?" on":""}" onclick="pick(${jq(key)},'${k}')" title="klik: grafiek per dag/week/maand + de namen · kopcijfer = ${labels[li]}${li<bs.length-1?" (laatste volle week; * = lopend, onvolledig)":""}"><div class="smh"><span>${t} <i class="rolTag">${ROL(k)}</i></span><b>${c==null?"—":(c+"").replace(".",",")+"%"}</b>${ppDelta(c,p)}</div>${svgLine([{name:t,color:n==null?"var(--txt)":(RCOL[n]||"var(--plan)"),values:vals,weak,width:2}],{pct:true,labels,h:86,pl:30,pb:18,pt:8,ticks:3,w:cw})}</div>`; }).join("");
   // verliesredenen van deze persoon (als eigenaar)
   const lost=L.filter(l=>l.lost&&inR(l.scd,A,B)&&(n==null||l.owner===n)); const rc=new Map(); for(const l of lost) rc.set(l.lost_reason||"(geen reden)",(rc.get(l.lost_reason||"(geen reden)")||0)+1);
   const top=[...rc.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6); const mx=Math.max(1,...top.map(x=>x[1]));
@@ -410,7 +416,7 @@ function repPage(n){
   const todo=`<div class="todo">${unconf?`<div class="td"><b>${unconf}</b><span>komende intakes nog niet bevestigd</span><a href="#" onclick="tab='int';intScope='komend';intFilt='unconf';intWho=${n==null?"null":jq(n)};render();return false">bekijk</a></div>`:""}${openNS?`<div class="td"><b>${openNS}</b><span>no-shows van ${jou}intakes nog open — herplannen</span><a href="#" onclick="pick(${jq(key)},'show');return false">bekijk</a></div>`:""}${openDoss?`<div class="td"><b>${openDoss}</b><span>dossiers na show nog open (eigenaar)</span><a href="#" onclick="pick(${jq(key)},'close');return false">bekijk</a></div>`:""}${unres?`<div class="td"><b>${unres}</b><span>intakes ${n==null?"":"in jouw agenda "}zonder show/no-show</span><a href="#" onclick="tab='apt';aptFilt='unres';render();return false">bekijk</a></div>`:""}${(!openNS&&!openDoss&&!unres&&!unconf)?`<div class="empty">Niets dat op actie wacht. 👌</div>`:""}</div>`;
   const s2l=median(L.filter(l=>inR(l.cd,A,B)&&(n==null||(((l.s2lBy||l.setter)===n)&&!(l.s2lHow||"").startsWith("gok")))).map(l=>l.s2l));
   return `<div class="repgrid">${col}<div class="repside">
-    <div class="cmp"><h3>Verloop laatste 8 weken · ${esc(nm)} <span class="chsub">klik op een kaartje → grafiek per dag/week/maand + namen (onderaan)</span></h3><div class="smallmult two-col">${sm}</div></div>
+    <div class="cmp"><h3>Verloop laatste 8 weken · ${esc(nm)} <span class="chsub">kopcijfer = ${labels[li]}${li<bs.length-1?`, laatste volle week · ${labels[bs.length-1]} = lopend t/m ${dgn(NOW)}, onvolledig`:""} · klik op een kaartje → grafiek + namen (onderaan)</span></h3><div class="smallmult two-col">${sm}</div></div>
     <div class="two"><div class="cmp"><h3>Actie nodig</h3>${todo}</div><div class="cmp"><h3>Verliesredenen (als eigenaar) · ${lost.length}</h3>${lostH}</div></div>
     <div class="two"><div class="cmp"><h3>Komende intakes</h3>${upH}</div><div class="cmp"><h3>Agenda-slots in de periode <span class="chsub">afspraken uit de GHL-agenda, als setter (jij boekte) vs als intaker (jouw agenda)</span></h3><table><tr><th></th><th>Als setter</th><th>Als intaker</th></tr><tr><td>Op de agenda</td><td>${s.all.length}</td><td>${si.all.length}</td></tr><tr><td>Show</td><td>${s.show.length}</td><td>${si.show.length}</td></tr><tr><td>No-show</td><td>${s.noshow.length}</td><td>${si.noshow.length}</td></tr><tr><td>Late cancel</td><td>${s.late.length}</td><td>${si.late.length}</td></tr><tr><td>Show rate per slot</td><td><b>${fpct(s.show.length,s.show.length+s.noshow.length+s.late.length)}</b></td><td><b>${fpct(si.show.length,si.show.length+si.noshow.length+si.late.length)}</b></td></tr><tr><td>Reactietijd (mediaan)</td><td colspan="2">${fmin(s2l)}</td></tr></table></div></div>
   </div></div>`;
