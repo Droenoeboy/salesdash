@@ -256,7 +256,7 @@ function drawBron(){
 
 // ---- 🚫 verloren: per rep × fase, redenen, trend ----
 let lostSeg="all", lostOwner=null, lostSort={c:0,d:-1}, lostPick=null, lostReason=null, lostReasonWho=null, lostRSort={c:1,d:-1}, lostTrendOpen=false, lostGran="periode";
-function lostPickCell(o,seg){ lostPick=(lostPick&&lostPick.o===o&&lostPick.seg===seg)?null:{o,seg}; drawLost(); setTimeout(()=>{ const e=document.getElementById("lostpick"); if(e) e.scrollIntoView({behavior:"smooth",block:"nearest"}); },50); }
+function lostPickCell(o,seg){ lostPick=(lostPick&&lostPick.o===o&&lostPick.seg===seg)?null:{o,seg}; drawLost(); }
 function lostQuick(k){ const t=d2s(NOW); const dow=(t.getDay()+6)%7, week=NOW-dow, som=s2d(new Date(t.getFullYear(),t.getMonth(),1));
   if(k==="dag") setRange(NOW,NOW); else if(k==="week") setRange(week,NOW); else if(k==="maand") setRange(som,NOW); else if(k==="30") setRange(NOW-29,NOW); tab="lost"; render(); }
 const SEG=["Leads-fase","Intake gepland, geen show","Na show"];
