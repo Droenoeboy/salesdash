@@ -594,7 +594,7 @@ function dpPresetList(){
 
 // ---- render ----
 function drawNote(){
-  const nt=document.getElementById("note"); nt.style.display = ["trend","bron","lost","won","apt","dag","adv","int"].includes(tab) ? "none" : "block";
+  const nt=document.getElementById("note"); nt.style.display = ["trend","bron","lost","won","apt","dag","adv","int","vandaag"].includes(tab) ? "none" : "block";
   const rol = MODE!=="rep";
   nt.innerHTML=`<details class="uitleg"${tab==="cmp"?"":""}><summary>ℹ️ Hoe tel ik? · weergave <b>${rol?"Rollen":"Per rep (v1)"}</b> — klik voor uitleg met voorbeeld</summary>
   <div class="ucols">
