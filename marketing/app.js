@@ -235,7 +235,7 @@ function sets(leads,a,b){
     return {nieuw,gepland,intakes,shows,sign};
   }
   const co=leads.filter(l=>inP(l.cd));
-  const gepland=co.filter(l=>l.pd>=0), intakes=co.filter(l=>l.id_>=0&&l.id_<=TODAY), shows=co.filter(l=>l.is_show);
+  const gepland=co.filter(l=>l.pd>=0), intakes=co.filter(l=>(l.id_>=0&&l.id_<=TODAY)||l.is_show||l.is_noshow), shows=co.filter(l=>l.is_show);   // v4.0.1: een show of no-show zonder intakedatum telt ook als intake, anders kan show % boven 100% komen
   const sign = MODE==="cohort" ? co.filter(l=>l.is_signed) : leads.filter(l=>l.is_signed&&inP(l.sd));
   return {nieuw:co,gepland,intakes,shows,sign};
 }
