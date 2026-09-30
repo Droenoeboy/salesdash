@@ -31,13 +31,17 @@
   .tabs .tab,.rbtn.big,#dpbtn{font-variant-emoji:text}
   /* 8. mobiel: kolomkop niet breken */
   .hkt th{white-space:nowrap}
+  /* ronde 2: kalender-emoji weg, grijze balk 'lopende week' in de grafiek weg, lege Advies-staat toont alleen de regel */
+  .chart .cur{display:none}
+  #advwrap.v5leeg .abar,#advwrap.v5leeg .arow.al{display:none}
+  .hkt td.nm .v5kw{color:var(--mut);font-size:12px}
   `;
   document.head.appendChild(st);
 })();
 // emoji's uit tabs en knoppen (tekst blijft)
 const _v5strip=s=>s.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]\uFE0F?\s*/gu,"").trim();
 const _drawTabs5=drawTabs;
-drawTabs=function(){ _drawTabs5(); document.querySelectorAll("#tabs .tab").forEach(t=>{ t.textContent=_v5strip(t.textContent); }); };
+drawTabs=function(){ _drawTabs5(); document.querySelectorAll("#tabs .tab").forEach(t=>{ t.textContent=_v5strip(t.textContent); }); const f=document.getElementById("dpField"); if(f){ for(const n of f.childNodes) if(n.nodeType===3) n.textContent=""; } };
 // 9. één klik, twee antwoorden: de open tegel sorteert ook de boomtabel op die maat
 const _kpiTog5=kpiTog;
 kpiTog=function(k){ _kpiTog5(k); if(kpiTrend){ const map={spend:"spend",plan:"plan",show:"show",sg:"sg",cpk:"cpk",roas:"cpk"}; sortKey=map[kpiTrend]||"sg"; sortDir=(kpiTrend==="cpk"||kpiTrend==="roas"||kpiTrend==="spend")?(kpiTrend==="spend"?-1:1):-1; drawTree(); } };
@@ -57,6 +61,7 @@ hkHtml=function(key){
   const rows=[...tmp.querySelectorAll("table.hkt tr")];
   const onb=rows.filter(r=>/bron onbekend|organisch of direct/.test(r.textContent)&&!r.classList.contains("nmrow"));
   const tbl=tmp.querySelector("table.hkt");
+  for(const r of rows){ const nm=r.querySelector("td.nm"); if(!nm) continue; const sm=nm.querySelector("small"); if(sm&&/zoekwoord onbekend|PMax/.test(nm.textContent)){ const kw=nm.childNodes; let lab=""; for(const n of kw){ if(n.nodeType===3) lab+=n.textContent; } const dot=nm.querySelector(".dot"); const camp=sm.textContent; sm.remove(); nm.innerHTML=(dot?dot.outerHTML:"")+esc(camp.trim())+`<br><span class="v5kw">${esc(lab.trim())}</span>`; } }
   for(const r of onb){ r.classList.add("v5onb"); r.style.opacity=".55"; const nm=r.querySelector("td.nm"); if(nm){ nm.innerHTML=nm.innerHTML.replace(/<small[^>]*>.*?<\/small>/,"")+` <small style="color:var(--mut)">· zonder advertentie</small>`; } const more=tbl.querySelector("tr.more"); tbl.insertBefore(r, more||null); }
   return tmp.innerHTML;
 };
@@ -67,6 +72,7 @@ drawAdviceInner=function(){
   const w=document.getElementById("advwrap"); const rows=w.querySelector(".arows"); if(!rows) return;
   const al=[...rows.querySelectorAll(".arow.al")]; al.forEach(r=>rows.appendChild(r));
   const real=[...rows.querySelectorAll(".arow:not(.al)")];
+  w.classList.toggle("v5leeg",!real.length);
   if(!real.length){ const e=document.createElement("div"); e.className="aempty"; e.textContent="Niets te doen. Volgend advies donderdag."; rows.insertBefore(e,rows.firstChild); const old=[...rows.querySelectorAll(".aempty")].slice(1); old.forEach(x=>x.remove()); }
   // knoppen: emoji weg
   w.querySelectorAll(".rbtn.big").forEach(b=>{ b.textContent=_v5strip(b.textContent); });
