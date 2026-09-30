@@ -5,7 +5,7 @@
 //  Alle definities staan in dpac.definitions + de views; dit bestand telt alleen op per periode.
 // ============================================================
 const DATA_URL = "https://dpac.app.n8n.cloud/webhook/dpac-marketing-data";
-const DASH_VERSIE = "mkt-v1.0-2026-08-19";
+const DASH_VERSIE = "mkt-v4.0-2026-10-01";
 const LOC = "TdkRfY76R77enqlUSRHi";
 const EPOCH = new Date(2026,0,1);
 const MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
@@ -154,7 +154,7 @@ function dpPresetList(){
   const t=d2s(NOW);
   const som=s2d(new Date(t.getFullYear(),t.getMonth(),1)), somV=s2d(new Date(t.getFullYear(),t.getMonth()-1,1)), eomV=som-1, jaar=s2d(new Date(t.getFullYear(),0,1)), drie=s2d(new Date(t.getFullYear(),t.getMonth()-3,1));
   const dow=(t.getDay()+6)%7, week=NOW-dow;
-  return [["Vandaag",NOW,NOW],["Deze week",week,NOW],["Vorige week",week-7,week-1],["Deze maand",som,NOW],["Vorige maand",somV,eomV],["Laatste 30 dagen",NOW-29,NOW],["Laatste 3 maanden",drie,NOW],["Dit jaar",jaar,NOW]];
+  return [["Rijp (2 tot 8 weken)",NOW-56,NOW-14],["Deze week",week,NOW],["Vorige week",week-7,week-1],["Deze maand",som,NOW],["Vorige maand",somV,eomV],["Laatste 30 dagen",NOW-29,NOW],["Laatste 3 maanden",drie,NOW],["Dit jaar",jaar,NOW]];
 }
 
 
@@ -202,6 +202,7 @@ function initApp(){
   const _n=new Date(); TODAY=s2d(new Date(_n.getFullYear(),_n.getMonth(),_n.getDate())); NOW=TODAY;
   const g=new Date(D.gen);
   document.getElementById("gen").textContent=isNaN(g)?"—":(g.getDate()+" "+MND[g.getMonth()]+" "+String(g.getHours()).padStart(2,"0")+":"+String(g.getMinutes()).padStart(2,"0"));
+  { const rb=document.getElementById("rbtn"); if(rb) rb.title="Haalt de nieuwste stand op uit de datalaag (paar seconden) · stand van de data: "+document.getElementById("gen").textContent; }
   const tx=document.getElementById("rtxt"); if(tx&&!tx.textContent) tx.textContent=L.length+" leads · "+CAMPS.size+" campagnes · spend t/m "+(D.counts&&D.counts.spend_last?fmt(dOf(D.counts.spend_last)):"—");
   STDATA=(D.entity_status||[]).map(r=>({d:dOf(r[0]),key:r[1]+"|"+r[2]+"|"+(r[3]||""),platform:r[1],cid:r[2],sid:r[3]||"",level:r[4],status:r[5],budget:r[6]==null?null:+r[6],name:r[7]}));
   STNOW=new Map(); STPREV=new Map();
@@ -210,7 +211,7 @@ function initApp(){
   AIADV=(D.ai_advice&&D.ai_advice.advice)?D.ai_advice:null;
   folMergeServer(D.followups||[]);
   for(const k in FOLST){ const F=FOLST[k]; if(F&&!F.sy&&(F.done||F.rounded||F.note||F.confirmed)) folSync(k); }   // lokale vinkjes van vóór v2.15 één keer naar Supabase
-  A=NOW-29; B=NOW; memoReset();
+  A=NOW-56; B=NOW-14; memoReset();   // v4: standaard rijp (leads 2 tot 8 weken oud), de eerlijke stand
   render();
 }
 // huidige/vorige ingestelde stand + wanneer die voor het laatst wijzigde
@@ -300,53 +301,62 @@ const SORTS={spend:n=>n.m.spend,n:n=>n.m.n,cpl:n=>n.m.cpl,g:n=>n.m.g,plan:n=>n.m
 function sortNodes(ns,top){ const f=SORTS[sortKey]||SORTS.spend; if(!(top&&GROUP==="tree")) ns.sort((x,y)=>{ const a=f(x),b=f(y); if(a==null&&b==null) return 0; if(a==null) return 1; if(b==null) return -1; return (a-b)*sortDir; }); ns.sort((x,y)=>(y.pin?1:0)-(x.pin?1:0)); ns.forEach(n=>sortNodes(n.children,false)); }
 
 // ---- KPI's ----
+// ---- v4 tegels: getal, label, verschil; hover = de getallen erachter. Klik = weeklijn eronder met herkomstlijst (Alles · Meta · Google · TikTok). Klanten staat standaard open. ----
+let kpiTrend="sg", TOTM=null;
+const PAIDP=p=>p==="meta"||p==="google"||p==="tiktok";
+const partyF=r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party;
+const ROAS_OK=()=>OMZET()/(MAXCPK()*0.85), ROAS_BAD=()=>OMZET()/(MAXCPK()*1.25);   // spiegel van kosten per klant
+function kpiTog(k){ kpiTrend=kpiTrend===k?null:k; hkPlat=null; hkSort="n"; hkAll=false; [...NMOPEN].forEach(x=>{ if(x.startsWith("hk:")) NMOPEN.delete(x); }); render(); }
+function kpiM(a,b){ const all=L.filter(l=>PARTY||!l.party); const m=metrics(all,spendIn(a,b,partyF),a,b); m.ps=m.S.sign.filter(l=>PAIDP(l.platform)).length; m.cpkPaid=m.ps&&m.spend?m.spend/m.ps:null; return m; }
 function drawKpis(){
   const k=document.getElementById("kpis");
-  const all=L.filter(l=>PARTY||!l.party); const sp=spendIn(A,B,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party);
-  const m=metrics(all,sp,A,B);
-  const len=B-A+1, pA=A-len, pB=A-1; const pm=metrics(all,spendIn(pA,pB,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party),pA,pB);
-  const party=spendIn(A,B,r=>(CAMPS.get(ck(r.platform,r.cid))||{}).party);
-  const asm=L.filter(l=>l.asm&&l.asd>=A&&l.asd<=B).length;
-  const dlt=(v,p,fmtF,lowGood)=>{ if(v==null||p==null) return ""; const d=v-p; const cls= d===0?"eq":((d>0)!==!!lowGood?"up":"dn"); return `<i class="dlt ${cls}" title="vorige periode (${fmtY(pA)} t/m ${fmtY(pB)}): ${fmtF(p)}">${d>0?"▲ ":d<0?"▼ ":"= "}${fmtF(Math.abs(d))}</i>`; };
-  const PAID=p=>p==="meta"||p==="google"||p==="tiktok";
-  const paidSg=m.S.sign.filter(l=>PAID(l.platform)).length, paidSgP=pm.S.sign.filter(l=>PAID(l.platform)).length;
-  const cpkPaid=paidSg&&m.spend?m.spend/paidSg:null, cpkPaidP=paidSgP&&pm.spend?pm.spend/paidSgP:null;
-  const cpkCls=cpkPaid==null?"":(cpkPaid<=MAXCPK()*0.85?"good":cpkPaid>MAXCPK()*1.25?"bad":"warn");
+  const m=kpiM(A,B); const len=B-A+1, pA=A-len, pB=A-1; const pm=kpiM(pA,pB);
+  const dlt=(v,p,f,lowGood)=>{ if(v==null||p==null) return ""; const d=v-p; const cls=d===0?"eq":((d>0)!==!!lowGood?"up":"dn"); return `<i class="dlt ${cls}" title="vorige periode (${fmtY(pA)} t/m ${fmtY(pB)}): ${f(p)}">${d>0?"▲ ":d<0?"▼ ":"= "}${f(Math.abs(d))}</i>`; };
+  const pt=v=>r1(v)+" pt", rx=v=>r1(v)+"×";
+  const cpkCls=m.cpkPaid==null?"":(m.cpkPaid<=MAXCPK()*0.85?"good":m.cpkPaid>MAXCPK()*1.25?"bad":"warn");
+  const roasCls=m.roas==null?"":(m.roas>=ROAS_OK()?"good":m.roas<ROAS_BAD()?"bad":"warn");
   const items=[
-    [eur0(m.spend),"Advertentiekosten",`excl. party/vacature (${eur0(party.spend)})`,dlt(m.spend,pm.spend,eur0,true)],
-    [m.n,"Leads binnengekomen","klik voor de namen, herkomst en gewonnen/verloren",dlt(m.n,pm.n,v=>v),"","nieuw"],
-    [m.cpl==null?"—":eur0(m.cpl),"Kosten per lead",null,dlt(m.cpl,pm.cpl,eur0,true)],
-    [m.g,"Intake gepland",m.plan!=null?`${r1(m.plan)}% van de leads · klik voor de namen`:null,dlt(m.g,pm.g,v=>v),"","gepland"],
-    [m.sh,"Shows",m.show!=null?`${r1(m.show)}% van de intakes · klik voor de namen`:null,dlt(m.sh,pm.sh,v=>v),"","shows"],
-    [m.sg,"Inschrijvingen",(MODE==="cohort"?"uit dit cohort":"op tekendatum in periode")+" · klik voor de namen",dlt(m.sg,pm.sg,v=>v),"","sign"],
-    [cpkPaid==null?"—":eur0(cpkPaid),"Kosten per klant (betaald)",`${paidSg} betaalde klant${paidSg===1?"":"en"} · blended ${m.cpk==null?"—":eur0(m.cpk)} (alle ${m.sg}) · plafond ${eur0(MAXCPK())}`,dlt(cpkPaid,cpkPaidP,eur0,true),cpkCls],
-    [m.pctOmzet==null?"—":r1(m.pctOmzet)+"%","% van omzet per student",m.roas!=null?`ROAS ${r1(m.roas)}×`:null,""],
-    [eur0(m.omzet),"Omzet uit inschrijvingen",asm?`+ ${asm} All Star-upsell${asm===1?"":"s"}`:null,dlt(m.omzet,pm.omzet,eur0)],
-  ];
-  k.innerHTML=items.map(x=>`<div class="kpi ${x[4]||""}${x[5]?" kclk":""}" ${x[5]?`onclick="kpiPick('${x[5]}')"`:""} ${x[2]?`title="${esc(x[2])}"`:""}><b>${x[0]}</b><span>${x[1]}</span>${x[2]?`<small>${esc(x[2])}</small>`:""}${x[3]||""}</div>`).join("");
+    ["spend",eur0(m.spend),"Uitgegeven",dlt(m.spend,pm.spend,eur0,true),"",`${eur0(m.spend)} aan advertenties · ${m.n} leads · ${m.cpl==null?"—":eur0(m.cpl)} per lead`],
+    ["plan",m.plan==null?"—":r1(m.plan)+"%","Plan %",dlt(m.plan,pm.plan,pt),"",`${m.g} van ${m.n} leads plannen een intake`],
+    ["show",m.show==null?"—":r1(m.show)+"%","Show %",dlt(m.show,pm.show,pt),"",`${m.sh} van ${m.i} intakes kwamen opdagen`],
+    ["sg",m.sg,"Klanten",dlt(m.sg,pm.sg,v=>v),"",`${m.sg} van ${m.n} leads tekenden${m.l2k!=null?` (${r1(m.l2k)}%)`:""} · ${m.ps} uit betaalde kanalen`],
+    ["cpk",m.cpkPaid==null?"—":eur0(m.cpkPaid),"Kosten per klant",dlt(m.cpkPaid,pm.cpkPaid,eur0,true),cpkCls,`${eur0(m.spend)} ÷ ${m.ps} betaalde klanten · plafond ${eur0(MAXCPK())}`],
+    ["roas",m.roas==null?"—":rx(m.roas),"ROAS",dlt(m.roas,pm.roas,rx),roasCls,`${eur0(m.omzet)} omzet ÷ ${eur0(m.spend)} kosten · groen vanaf ${r1(ROAS_OK())}×, rood onder ${r1(ROAS_BAD())}×`]];
+  k.innerHTML=items.map(x=>`<div class="kpi kclk ${x[4]}${kpiTrend===x[0]?" on":""}" onclick="kpiTog('${x[0]}')" data-tip="${esc(x[5])}"><b>${x[1]}</b><span>${x[2]}</span>${x[3]}</div>`).join("");
+  const tr=document.getElementById("kpitrend"); const show=tab==="tree"&&!!kpiTrend; tr.style.display=show?"":"none"; tr.innerHTML=show?kpiTrendHtml(kpiTrend):"";
 }
-function kpiPick(set){ tab="tree"; detail={key:"__ALL__",set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dNames=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"src"; render(); }   // geen automatisch scrollen naar wat opent (Abel, 30 sep)
+function kpiTrendHtml(key){
+  const bk=[]; for(let d=weekKey(NOW-12*7+1); d<=NOW; d+=7) bk.push([d,Math.min(d+6,NOW)]);
+  const rows=bk.map(([a,b])=>kpiM(a,b));
+  const LAB={spend:["Uitgegeven","€"],plan:["Plan %","%"],show:["Show %","%"],sg:["Klanten","#"],cpk:["Kosten per klant","€"],roas:["ROAS","×"]}[key];
+  const val=m=>({spend:m.spend,plan:m.plan,show:m.show,sg:m.sg,cpk:m.cpkPaid,roas:m.roas})[key];
+  const vals=rows.map(m=>{ const v=val(m); return v==null?null:(LAB[1]==="€"?Math.round(v):Math.round(v*10)/10); });
+  const tipOf=m=>({spend:`${m.n} leads · ${m.cpl==null?"—":eur0(m.cpl)} per lead`,plan:`${m.g} van ${m.n} leads`,show:`${m.sh} van ${m.i} intakes`,sg:`${m.sg} van ${m.n} leads${m.l2k!=null?` (${r1(m.l2k)}%)`:""}`,cpk:`${eur0(m.spend)} ÷ ${m.ps} betaalde klanten`,roas:`${eur0(m.omzet)} ÷ ${eur0(m.spend)}`})[key];
+  const labels=bk.map(([a])=>"wk "+isoWeek(a));
+  const S=[{name:LAB[0],color:"var(--plan)",rows,values:vals,tips:rows.map(tipOf),width:2.2}];
+  const cw=Math.max(320,(document.getElementById("kpis").clientWidth||900)-34);
+  return `<div class="cmp"><div class="chhead"><h3 style="margin:0" title="per week · laatste 12 weken · week van de lead">${LAB[0]}</h3></div>${svgLine(S,{pct:LAB[1]==="%",labels,markLast:true,h:180,w:cw})}<div id="hkwrap">${hkHtml(key)}</div></div>`;
+}
 
 // ---- tabs ----
 function drawTabs(){
   const el=document.getElementById("tabs"); el.innerHTML="";
-  [["tree","🌳 Kanalen & ads"],["best","🏆 Beste ads"],["trend","📈 Trend"],["adv","⚡ Advies"],["sales","🤝 Sales × bron"],["sign","🎯 Resultaten"],["data","🧪 Datakwaliteit"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
-  const mb=document.getElementById("modebar"); mb.innerHTML="";   // één telling: cohort — leads (en alles wat eruit voortkomt) tellen bij de periode waarin de lead binnenkwam
+  [["tree","📊 Cijfers"],["adv","⚡ Advies"]].forEach(([id,lab])=>{ const t=document.createElement("div"); t.className="tab"+(tab===id?" on":""); t.textContent=lab; t.onclick=()=>{tab=id;detail=null;render();}; el.appendChild(t); });
+  document.getElementById("modebar").innerHTML="";
 }
 
 // ---- boomtabel ----
+// ---- v4 boom: zes kolommen, Plan % en Show % gekleurd ten opzichte van het totaal; hover = de getallen erachter; klik op een getal = namen onder de rij ----
+const relCls=(v,t)=>v==null||t==null?"":(v>=t*1.1?"good":v<=t*0.9?"bad":"");
+const relSub=(v,t)=>v==null||t==null?"":((v-t>=0?"+":"")+r1(v-t));
+const paidN=m=>m.S.sign.filter(l=>PAIDP(l.platform)).length;
 const COLS=[
-  {k:"spend",t:"Kosten",f:m=>eur0(m.spend),w:"num"},
-  {k:"n",t:"Leads",f:m=>m.n,w:"num",click:"nieuw"},
-  {k:"cpl",t:"CPL",f:m=>m.cpl==null?"—":eur0(m.cpl),w:"num"},
-  {k:"g",t:"Intake gepland",f:m=>m.g,w:"num",click:"gepland"},
-  {k:"plan",t:"Plan %",f:m=>m.plan==null?"—":r1(m.plan)+"%",w:"pct"},
-  {k:"sh",t:"Shows",f:m=>m.sh,w:"num",click:"shows"},
-  {k:"show",t:"Show %",f:m=>m.show==null?"—":r1(m.show)+"%",w:"pct",sub:m=>m.i?`${m.sh}/${m.i}`:""},
-  {k:"sg",t:"Ingeschr.",f:m=>m.sg,w:"num",click:"sign"},
-  {k:"sign",t:"Sign %",f:m=>m.sign==null?"—":r1(m.sign)+"%",w:"pct"},
-  {k:"cpk",t:"Kosten / klant",f:m=>m.cpk!=null?eur0(m.cpk):(m.sg===0&&m.spend>=100?eur0(m.spend):"—"),w:"num",cls:m=>m.cpk!=null?(m.cpk<=MAXCPK()*0.85?"good":m.cpk>MAXCPK()*1.25?"bad":"warn"):(m.sg===0&&m.spend>=400?"bad":m.sg===0&&m.spend>=100?"warn":""),sub:m=>m.cpk==null&&m.sg===0&&m.spend>=100?"uitgegeven, 0 klanten":"",tip:"kosten ÷ inschrijvingen · een rood/oranje bedrag = al uitgegeven zonder één klant (rood vanaf € 400)"},
-  {k:"hard",t:"Hard bewijs",f:m=>m.hard==null?"—":r1(m.hard)+"%",w:"pct",tip:"aandeel leads met harde attributie (UTM / ad-id / campagne-id)"},
+  {k:"spend",t:"Kosten",f:m=>eur0(m.spend),w:"num",tipc:m=>m.spend?`${eur0(m.spend)} · ${m.clicks} kliks${m.cpl!=null?` · ${eur0(m.cpl)} per lead`:""}`:""},
+  {k:"n",t:"Leads",f:m=>m.n,w:"num",click:"nieuw",tipc:m=>m.n?`${m.n} leads · klik voor de namen`:""},
+  {k:"plan",t:"Plan %",f:m=>m.plan==null?"—":r1(m.plan)+"%",w:"pct",cls:m=>TOTM&&m!==TOTM?relCls(m.plan,TOTM.plan):"",sub:m=>TOTM&&m!==TOTM?relSub(m.plan,TOTM.plan):"",tip:"intake gepland ÷ leads · groen boven, rood onder het totaal",tipc:m=>m.n?`${m.g} van ${m.n} leads plannen een intake`:""},
+  {k:"show",t:"Show %",f:m=>m.show==null?"—":r1(m.show)+"%",w:"pct",cls:m=>TOTM&&m!==TOTM?relCls(m.show,TOTM.show):"",sub:m=>TOTM&&m!==TOTM?relSub(m.show,TOTM.show):"",tip:"shows ÷ intakes die al geweest zijn · groen boven, rood onder het totaal",tipc:m=>m.i?`${m.sh} van ${m.i} intakes kwamen opdagen`:""},
+  {k:"sg",t:"Klanten",f:m=>m.sg,w:"num",click:"sign",tipc:m=>m.sg?`${m.sg} van ${m.n} leads tekenden · klik voor de namen`:""},
+  {k:"cpk",t:"Kosten / klant",f:m=>m===TOTM?(paidN(m)&&m.spend?eur0(m.spend/paidN(m)):"—"):(m.cpk!=null?eur0(m.cpk):(m.sg===0&&m.spend>=100?eur0(m.spend):"—")),w:"num",cls:m=>m.cpk!=null?(m.cpk<=MAXCPK()*0.85?"good":m.cpk>MAXCPK()*1.25?"bad":"warn"):(m.sg===0&&m.spend>=400?"bad":m.sg===0&&m.spend>=100?"warn":""),sub:m=>m.cpk==null&&m.sg===0&&m.spend>=100?"0 klanten":"",tip:"kosten ÷ klanten · plafond € 1.700",tipc:m=>m===TOTM?`${eur0(m.spend)} ÷ ${paidN(m)} betaalde klanten`:(m.cpk!=null?`${eur0(m.spend)} ÷ ${m.sg} klanten`:(m.spend>=100?`${eur0(m.spend)} uitgegeven zonder klant`:""))},
 ];
 function toggleNode(k){ open.has(k)?open.delete(k):open.add(k); drawTree(); }
 // let op: functies, geen kale `open=` in onclick — dat raakt document.open i.p.v. onze variabele
@@ -354,16 +364,24 @@ function treeOpenAll(){ const keys=[]; const walk=n=>{ if(n.children&&n.children
 function treeCloseAll(){ open=new Set(); drawTree(); }
 function setSort(k){ if(sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir=-1; } drawTree(); }
 function rowHtml(n,depth){
-  const m=n.m; const has=n.children&&n.children.length; const isOpen=open.has(n.key);
-  const pad=10+depth*22;
-  let h=`<tr class="lv${n.level}${isOpen?" open":""}${n.camp&&n.camp.party?" party":""}${has?" has":""}"${has?` onclick="toggleNode(${jq(n.key)})" title="${isOpen?"klik om in te klappen":"klik om uit te klappen"}"`:""}><td class="nm" style="padding-left:${pad}px">${has?`<span class="tg"><i class="chev${isOpen?" open":""}"></i></span>`:`<span class="tg leaf"></span>`}${n.color?`<span class="dot" style="background:${n.color}"></span>`:""}<span class="lab" title="${esc(n.label)}">${esc(n.label)}</span>${n.sub?`<small>${esc(n.sub)}</small>`:""}${n.key.startsWith("c:")&&n.cid?`<small class="isr" title="zoekvertoningsaandeel (Google)">${(()=>{const v=isr(A,B,n.cid);return v==null?"":"ISR "+Math.round(v*100)+"%";})()}</small>`:""}</td>`;
+  const m=n.m; const has=n.children&&n.children.length; const isOpen=open.has(n.key); const pad=10+depth*22;
+  let h=`<tr class="lv${n.level}${isOpen?" open":""}${n.camp&&n.camp.party?" party":""}${has?" has":""}"${has?` onclick="toggleNode(${jq(n.key)})"`:""}><td class="nm" style="padding-left:${pad}px">${has?`<span class="tg"><i class="chev${isOpen?" open":""}"></i></span>`:`<span class="tg leaf"></span>`}${n.color?`<span class="dot" style="background:${n.color}"></span>`:""}<span class="lab">${esc(n.label)}</span></td>`;
   for(const c of COLS){
-    if(n.plc&&(c.k==="spend"||c.k==="cpl"||c.k==="cpk")){ h+=`<td class="${c.w}" title="Meta rapporteert kosten per campagne, niet per plaatsing — kosten staan bij de campagnes hieronder">—</td>`; continue; }
-    const v=c.f(m); const cl=c.cls?c.cls(m):""; const clk=c.click&&(+v>0)?` class="clk ${c.w} ${cl}" onclick="event.stopPropagation();showDetail(${jq(n.key)},'${c.click}')" title="klik voor de namen"`:` class="${c.w} ${cl}"`;
-    h+=`<td${clk}><b>${v}</b>${c.sub?`<small>${c.sub(m)}</small>`:""}</td>`; }
+    if(n.plc&&(c.k==="spend"||c.k==="cpk")){ h+=`<td class="${c.w}" title="kosten zijn hier niet per rij bekend">—</td>`; continue; }
+    const v=c.f(m); const cl=c.cls?c.cls(m):""; const tp=c.tipc?c.tipc(m):""; const clk=c.click&&(+v>0);
+    h+=`<td class="${clk?"clk ":""}${c.w} ${cl}"${clk?` onclick="event.stopPropagation();showDetail(${jq(n.key)},'${c.click}')"`:""}${tp?` title="${esc(tp)}"`:""}><b>${v}</b>${c.sub?`<small>${c.sub(m)}</small>`:""}</td>`; }
   h+=`</tr>`;
+  for(const s of ["nieuw","sign"]) if(NMOPEN.has("t:"+n.key+"|"+s)) h+=`<tr class="nmrow"><td colspan="${COLS.length+1}" style="padding-left:${10+(depth+1)*22+24}px!important">${namesHtml(n.m.S[s],"t:"+n.key+"|"+s)}</td></tr>`;
   if(has&&isOpen) for(const c of n.children) h+=rowHtml(c,depth+1);
   return h;
+}
+// zoekwoorden (Google) als extra niveau onder de campagne; kosten per zoekwoord zitten niet in de data
+function addKeywords(nodes){
+  for(const p of nodes){ if(p.platform!=="google") continue;
+    for(const c of p.children){ if(!c.cid) continue; const g=new Map(); for(const l of c.leads){ if(!l.kw) continue; if(!g.has(l.kw)) g.set(l.kw,[]); g.get(l.kw).push(l); } if(!g.size) continue;
+      const kids=[...g.entries()].map(([kw,ls])=>({key:"kw:"+c.key+"|"+kw,level:3,label:kw,platform:"google",cid:c.cid,leads:ls,sp:{spend:0,clicks:0,imps:0},children:[],leaf:true,plc:true}));
+      const all=kids.flatMap(x=>x.leads);
+      c.children.push({key:"kwg:"+c.key,level:2,label:"🔍 Zoekwoorden",platform:"google",cid:c.cid,leads:all,sp:{spend:0,clicks:0,imps:0},children:kids,plc:true,kwg:true}); } }
 }
 let TREE=[], treePlat=null, treeAutoOpen=false;
 function treePick(p){ treePlat=p; detail=null; treeAutoOpen=!!p; drawTree(); }
@@ -391,20 +409,13 @@ function keepScroll(w,fn){ const sy=window.scrollY; const els=[...w.querySelecto
 function drawTree(){ const _w=document.getElementById("treewrap"); keepScroll(_w,()=>drawTreeInner()); }
 function drawTreeInner(){
   const w=document.getElementById("treewrap");
-  TREE = GROUP==="tree"? buildTreeFiltered(A,B) : groupFlat(A,B);
-  TREE.forEach(n=>decorate(n,A,B)); sortNodes(TREE,true);
-  if(treePlat&&treeAutoOpen){ TREE.forEach(n=>open.add(n.key)); treeAutoOpen=false; }
-  const PB=[[null,"Alles",null],["meta","Meta (FB/IG)",PC("meta")],["meta_fb","📘 Facebook",null],["meta_ig","📸 Instagram",null],["google","Google",PC("google")],["tiktok","TikTok",PC("tiktok")],["niet_betaald","Niet betaald",PC("niet_betaald")],["nb_org","🌱 Organisch",null],["nb_dir","↩️ Direct",null],["onbekend","Onbekend",PC("onbekend")]];
-  let h=`<div class="wonchips pbig">`+PB.map(([k,lab,col])=>`<div class="wchip${treePlat===k?" on":""}" onclick="treePick(${k?jq(k):"null"})">${col?`<span class="dot" style="background:${col}"></span>`:""}${lab}</div>`).join("")+`</div>`;
-  h+=`<div class="wonchips"><div class="wchip sm" onclick="treeOpenAll()">alles open</div><div class="wchip sm" onclick="treeCloseAll()">alles dicht</div>${treePlat?`<span class="lbl">Facebook/Instagram en Organisch/Direct tonen alleen lead-aantallen — kosten kent Meta alleen per campagne.</span>`:""}</div>`;
-  h+=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">${GROUP==="tree"?"Platform › campagne › adset › advertentie":"Groep"} <small>klik op een rij om uit te klappen · klik op een getal voor de namen</small></th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
-  // totaalrij
-  const all=L.filter(l=>PARTY||!l.party); const tm=metrics(all,spendIn(A,B,r=>PARTY||!(CAMPS.get(ck(r.platform,r.cid))||{}).party),A,B);
-  h+=`<tr class="tot"><td class="nm" style="padding-left:10px"><b>Totaal</b></td>`+COLS.map(c=>`<td class="${c.w}">${c.f(tm)}</td>`).join("")+`</tr>`;
+  let t=buildTreeFiltered(A,B); addKeywords(t); t.forEach(n=>decorate(n,A,B));
+  TREE=t; sortNodes(TREE,true);
+  TOTM=metrics(L.filter(l=>PARTY||!l.party),spendIn(A,B,partyF),A,B);
+  let h=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">Platform › campagne › adset › advertentie</th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
+  h+=`<tr class="tot"><td class="nm" style="padding-left:10px"><b>Totaal</b></td>`+COLS.map(c=>`<td class="${c.w}"${c.tipc&&c.tipc(TOTM)?` title="${esc(c.tipc(TOTM))}"`:""}>${c.f(TOTM)}</td>`).join("")+`</tr>`;
   for(const n of TREE) h+=rowHtml(n,0);
-  h+=`</table></div>`;
-  h+=`<p class="note"><b>${MODE==="periode"?"Periode":MODE==="cohort"?"Cohort":"Gebeurd"}</b>: ${MODE==="periode"?"leads, intakes en shows tellen op <b>leaddatum</b> (binnengekomen in de periode); inschrijvingen op <b>tekendatum</b> (formulier) in de periode — zo zie je meteen wat een campagne oplevert zonder 3 maanden te wachten. Kosten per klant = kosten in de periode ÷ inschrijvingen in de periode.":MODE==="cohort"?"alles over de leads die in de periode binnenkwamen, ook als ze later tekenden. Eerlijkst voor oude periodes (≥ 30 dagen oud).":"alles op de eigen datum: leads op binnenkomst, gepland op inplandatum, intakes/shows op intakedatum, inschrijvingen op tekendatum."} Percentages: Plan % = intake gepland ÷ leads · Show % = shows ÷ intakes die al geweest zijn · Sign % = ingeschreven ÷ shows · Lead → klant = ingeschreven ÷ leads. Kosten = advertentieplatforms (Windsor), party/vacature apart (${PARTY?"nu meegeteld":"niet meegeteld"}). <b>Hard bewijs</b> = leads met UTM / ad-id / campagne-id; de rest is via GHL-klikattributie (zacht) of afgeleid. Bron = UTM custom fields op de opportunity + GHL first/last touch.</p>`;
-  w.innerHTML=h;
+  w.innerHTML=h+`</table></div>`;
 }
 function findNode(key,ns){ for(const n of ns){ if(n.key===key) return n; const f=findNode(key,n.children); if(f) return f; } return null; }
 
@@ -528,8 +539,8 @@ function dSetPick(k){ if(!detail) return; detail.set=k; dOut=null; drawDetail();
 function dfClear(dim){ if(dim) delete dFilt[dim]; else { dFilt={}; dOut=null; } drawDetail(); }
 function dOutPick(o){ dOut = dOut===o? null : o; if(dOut) dNames=true; drawDetail(); }
 function dDimPick(k){ dDim=k; dDimAuto=false; drawDetail(); }
-function showDetail(key,set){ detail={key,set}; dFilt={}; dOut=null; dfAll={}; dShowAll=false; dNames=false; dDimAuto=true; if(dDim==="kw") dDim=dDimPrev||"src"; drawDetail(); }
-function drawDetail(){ const _el=document.getElementById("detail"); if(!detail||tab!=="tree"){ _el.style.display="none"; return; } keepScroll(_el,drawDetailInner); }
+function showDetail(key,set){ nmTog("t:"+key+"|"+set); }   // v4: namen onder de rij, geen apart paneel
+function drawDetail(){}   // v4: geen detailpaneel meer
 function drawDetailInner(){
   const el=document.getElementById("detail"); if(!detail||tab!=="tree"){ el.style.display="none"; return; }
   let n;
@@ -773,52 +784,6 @@ function adviceFollowCalc(a,b){
   return out;
 }
 // ---- 🎯 Actiepunten (instellingen/targeting/formulier) voor de media buyer — v2.10 ----
-// Geen budgetknop maar wél een concrete actie in het advertentieplatform. Volledige namen: platform › campagne › adset. Afvinken op ✔️ Opgevolgd.
-// Bron van de cijfers staat in 'why'. Verwijderen zodra doorgevoerd én bevestigd (of 'until' zetten).
-const ACTIES=[
-  {id:"meta-utm-v1hook4",platform:"meta",cname:"Abel DPAC - landingpage GHL - Dijs Media",sname:"Interest ad set | Video 1 | Hook 1 · Interest ad set | Video 1 | Hook 2 · Interest ad set | Video 1 | Hook 3 (advertenties Video 1 | hook 1 / hook 2 / hook 3 | hobby je werk)",since:"2026-09-30",w:300,
-   txt:"Eén van de drie Video 1-advertenties stuurt als utm_content 'Video 1 | hook 4 | hobby je werk' mee, en die advertentie bestaat niet. Nakijken welke advertentie dat is en de utm_content gelijk maken aan de advertentienaam (of beter: {{ad.id}}, zie het tracking-sjabloon hieronder). Vermoedelijk is het Video 1 | hook 3 | hobby je werk.",
-   why:"Sinds 8 aug 24 leads met utm_content 'Video 1 | hook 4 | hobby je werk' (16 in aug, 8 in sep), terwijl zo'n advertentie niet bestaat. Video 1 | hook 3 heeft € 553 uitgegeven maar nul leads met een hook 3-utm; hook 1 en hook 2 wel (6 en 3 in sep). Sinds de attributiefix van 30 sep staan die 24 leads in de campagne als '(geen advertentie bekend)'; daardoor is per Video 1-adset niet te zien wat hij oplevert.",
-   doen:"Ads Manager › campagne Abel DPAC - landingpage GHL - Dijs Media › adsets Interest ad set | Video 1 | Hook 1, Hook 2 en Hook 3 › advertentie bewerken › Tracking › URL-parameters: utm_content controleren. Controle: nieuwe leads komen binnen met utm_content gelijk aan de advertentienaam (of het ad-id)."},
-  {id:"meta-utm-v2hook2",platform:"meta",cname:"Abel DPAC - landingpage GHL - Dijs Media",sname:"Interest ad set | Video 2 | Hook 2 (advertentie Video 2 | hook 2 | snapchat)",since:"2026-09-30",w:400,
-   txt:"utm_content van advertentie 'Video 2 | hook 2 | snapchat' nakijken: waarschijnlijk staat daar 'Video 2 | hook 1 | Snapchat' in. Gelijk maken aan de advertentienaam of {{ad.id}}.",
-   why:"Sinds 1 aug € 2.624 uitgegeven op Video 2 | hook 2 en nul leads met een hook 2-utm; alle 24 Video 2-leads (14 in aug, 10 in sep) komen binnen als hook 1. Het dashboard en het AI-advies zien hook 2 daardoor als 'veel geld, geen leads' en hook 1 als winnaar, terwijl dat niet te bewijzen is.",
-   doen:"Ads Manager › campagne Abel DPAC - landingpage GHL - Dijs Media › adset Interest ad set | Video 2 | Hook 2 › advertentie Video 2 | hook 2 | snapchat › Tracking › URL-parameters: utm_content. Controle: nieuwe leads met utm_content 'Video 2 | hook 2 | snapchat' verschijnen in het dashboard onder die adset."},
-  {id:"tt-taal",platform:"tiktok",cname:"17 augustus 2026 | Lead forms | NL | Dijs",sname:"alle 4 adgroups: Video Ad | Breed | EDM · Video Ad | Breed | HIP HOP · Video Ad | Breed | POP · Video Ad | Breed | Niet aangenomen",since:"2026-09-07",w:550,
-   txt:"Taal toevoegen aan de targeting: Nederlands én Engels (Engels erbij, anders vallen Nederlandse jongeren met hun telefoon in het Engels weg). Nu staat er alleen locatie Nederland zonder taal. Daardoor zien ook mensen met een buitenlands TikTok-account in Nederland de ad, en het formulier vult hun buitenlandse nummer vooraf in (Guinee, Ivoorkust).",
-   why:"TikTok 17 aug–7 sep: ±43% van de kosten naar Nederlandstalige gebruikers, ±35% Engels, ±22% overig (Frans, Russisch, Spaans, Turks, Arabisch, Tamil …) ≈ € 550 per maand aan mensen die we niet kunnen bellen. Tot en met 6 sep liep dat nog door.",
-   doen:"TikTok Ads Manager › campagne › adgroup › Targeting › Language: Dutch + English. Controle: de dag erna moet de besteding op andere talen naar nul."},
-  {id:"tt-taal-lp",platform:"tiktok",cname:"Copy 1 of V2  NL | Dijs | Nieuwe Landingpagina",sname:"Video 1 | Hook 2",since:"2026-09-07",w:150,
-   txt:"Zelfde taalfilter: Nederlands én Engels toevoegen aan de targeting.",
-   why:"4–6 sep: ±€ 17 van de € 40 per dag naar Engelstalige gebruikers, rest Nederlands — geen andere talen, maar zonder filter kan dat elke dag veranderen.",
-   doen:"TikTok Ads Manager › adgroup › Targeting › Language: Dutch + English."},
-  {id:"tt-form",platform:"tiktok",cname:"17 augustus 2026 | Lead forms | NL | Dijs",sname:"leadformulier \"2024 new form juiste UTM\"",since:"2026-09-07",w:300,
-   txt:"Formulier aanscherpen: telefoonnummer níet vooringevuld laten (zelf laten typen), Nederlands nummer verplicht, en de 18+-vraag houden. Zo vallen buitenlandse nummers en 'niets ingevuld'-leads weg vóór ze bij sales landen.",
-   why:"Sinds 17 aug: 3 van de laatste 10 leadformulier-leads met buitenlands of ontbrekend nummer; verliesredenen 'Incorrect contact details' en 'Zegt niets te hebben ingevuld' komen vooral uit leadformulieren.",
-   doen:"TikTok Ads Manager › Instant form › formulier bewerken › telefoonveld: prefill uit, validatie aan."},
-  {id:"meta-taal",platform:"meta",cname:"alle campagnes",sname:"alle adsets",since:"2026-09-07",w:200,
-   txt:"Controleer bij elke adset of Taal = Nederlands (+ Engels) in de doelgroep staat. Zo niet: toevoegen. Zelfde lek als bij TikTok is hier waarschijnlijk.",
-   why:"Verliesreden 'Spreekt geen Nederlands' en 'Incorrect contact details' komen ook bij Meta-leadformulieren voor; Meta splitst kosten per taal niet in onze data, dus dit is een handmatige check.",
-   doen:"Ads Manager › adset › Doelgroep › Talen."},
-  {id:"meta-url",platform:"meta",cname:"alle Meta-campagnes (Abel DPAC - landingpage GHL · Abel DPAC - landingpage GHL - Dijs Media · 2025 | LF | Nieuwe Videos)",sname:"alle advertenties — met voorrang de Dijs Media-adsets Interest ad set | Video 2 | Hook 2 en Interest ad set | Video 3 | Hook 4",since:"2026-09-06",w:400,
-   txt:"Eén tracking-sjabloon op álle Meta-advertenties met ids in plaats van namen: utm_campaign={{campaign.id}}, adset-id={{adset.id}}, utm_content={{ad.id}} (naam mag erbij, id is leidend). Daarnaast één van de twee adsets 'Interest ad set | Video 2 | Hook 1' hernoemen. Let op: URL wijzigen op een lopende advertentie kan herbeoordeling en een leerfase-reset geven — combineer dit met het samenvoegen van de adsets (advies hieronder), dan kost het niets extra. De parameternamen in de URL kloppen al (ze landen nu al in de GHL-custom fields cf_campaign_id / cf_adset_id / cf_utm_content); alleen de macro-waarde moet van naam naar id.",
-   why:"Leads 24 aug–6 sep: geen enkele Meta-advertentie stuurt een numeriek id mee; het veld campaign_id bevat de campagnenaam en adset_id is leeg of de adsetnaam. De Dijs Media-advertenties gebruiken bovendien een ander formaat (utm_campaign=paid_social, adsetnaam in hoofdletters in een ander veld). Daardoor is per Dijs Media-adset niet te zien wat hij oplevert — terwijl juist die adsets de intakes brengen (wk36: 5 van 9 leads gepland). Advertentie 'Video 1 | hook 4 | hobby je werk' komt zelfs binnen onder een adset die niet bestaat.",
-   doen:"Ads Manager › advertentie bewerken › Tracking › URL-parameters (zelfde sjabloon overal). Controle: nieuwe leads krijgen numerieke campaign_id/adset_id in GHL."},
-  {id:"meta-adsets10",platform:"meta",cname:"Abel DPAC - landingpage GHL - Dijs Media",sname:"9 nieuwe adsets van € 10 per dag (Breed | EDM hook 1 · Breed | Hip-Hop hook 1 · Breed | POP hook 1 · Interest ad set | Video 1 | Hook 1/2/3 · Interest ad set | Video 3 | Hook 1/2/3)",since:"2026-09-07",w:900,
-   txt:"Negen adsets van € 10 per dag komen geen van alle uit de leerfase (Meta wil ±50 leads per adset per week; bij € 10 per dag zijn dat er 1–2). Voorstel: terug naar maximaal 2–3 adsets van minstens € 40 per dag met de beste video's erin, óf de negen onder één campagnebudget (Advantage campaign budget) van minstens € 160 per dag zetten zodat Meta zelf schuift. Doelgroepen na elkaar testen, niet naast elkaar.",
-   why:"Budgetmeting 7 sep: campagne van € 115 → € 205 per dag door 9 × € 10. Beste adset in deze campagne (Interest ad set | Video 3 | Hook 4, € 45 per dag) haalt ±6 leads per week — al ver onder de 50 die Meta nodig heeft.",
-   doen:"Ads Manager › campagne › adsets samenvoegen of Advantage campaign budget aanzetten."},
-  {id:"g-search",platform:"google",cname:"2.0 | Search | Producer Opleiding & Cursus + 2.1 | Search | Producer Opleiding & Cursus",sname:null,since:"2026-09-03",w:250,
-   txt:"Twee vrijwel gelijke zoekcampagnes draaien naast elkaar (elk € 50 per dag) en bieden tegen elkaar op. Is 2.1 de vervanger? Dan 2.0 uitzetten. Anders 2.1 uit.",
-   why:"2.1 draait sinds 30 aug naast 2.0; 2.0 leverde in 30 dagen 11 leads, 3 intakes gepland, 1 klant.",
-   doen:"Google Ads › campagnes › één van beide pauzeren."}
-];
-function adviceActies(N){
-  const out=[]; const cm={}; for(const p of treeMemo(N-29,N)) for(const c of p.children) if(c.cid) cm[c.label]=c.m;
-  for(const a of ACTIES){ if(a.until&&dOf(a.until)<N) continue; const m=cm[a.cname]||{spend:0,n:0,g:0,sh:0,sg:0,cpk:null};
-    out.push({type:"actie",label:a.cname+(a.sname?" → "+a.sname:""),cname:a.cname,sname:a.sname,platform:a.platform,cid:"",sid:null,wa:null,wb:null,m,manual:true,w:a.w,txt:a.txt,why:a.why,doen:a.doen,since:a.since,actie:true}); }
-  return out;
-}
 function smCls(r,ref,n){ if(r==null||n<5) return "sm-na"; if(!ref) return "sm-3"; const q=r/ref; return q<0.5?"sm-1":q<0.8?"sm-2":q<=1.2?"sm-3":q<=1.5?"sm-4":"sm-5"; }
 function smPick(met){ smMetric=met; drawSales(); }
 function smTog(k){ smOpen.has(k)?smOpen.delete(k):smOpen.add(k); drawSales(); }
@@ -858,12 +823,13 @@ function drawSales(){
 const ADV_ICON={opschalen:"🚀",stoppen:"⛔️",halveren:"½",terugschroeven:"🔻",kwaliteit:"⚠️",vroeg:"⏱",opvolging:"👤",actie:"🎯"}, ADV_LAB={opschalen:"Opschalen",stoppen:"Stoppen",halveren:"Halveren",terugschroeven:"Terugschroeven",kwaliteit:"Leadkwaliteit",vroeg:"Vroeg signaal",opvolging:"Opvolging (sales)",actie:"Actiepunt (instellingen)"};
 let advAll=false, advOpen=new Set(), advType="all", advPlat=null;
 // ---- AI-analyse op aanvraag (kost alleen iets als je op de knop drukt; antwoord wordt in de browser bewaard) ----
-const AI_URL=DATA_URL;   // zelfde endpoint + toegangscode, body.action="ai" → AI-branch in n8n-workflow 13
 // ---- ⚡ Advies v3.0 (30 sep 2026): één lijst met alleen AI-adviezen (dpac.mkt_ai_advice, laatste run), drie knoppen. De rekenmotor hieronder toont niets meer; de AI-payload in n8n rekent zijn eigen signalen. ----
 let AIRUN={busy:false,err:null,model:"fable"};
 const AI_MODELS={fable:["Fable 5.1","≈ € 0,30 per keer","claude-fable-5-1"],sonnet:["Sonnet 4.5","≈ € 0,05 per keer","claude-sonnet-4-5"]};
 const aiModelLab=id=>{ for(const k in AI_MODELS){ if(AI_MODELS[k][2]===id) return AI_MODELS[k][0]; } return id||"—"; };
-const AI_TYPE={opschalen:"opschalen",aanzetten:"opschalen",halveren:"halveren",terugschroeven:"terugschroeven",stoppen:"stoppen",uitzoeken:"uitzoeken",instelling:"uitzoeken",sales:"uitzoeken"};
+const AI_URL="https://dpac.app.n8n.cloud/webhook/dpac-ai-adviseur";   // workflow 21: meet budget en aan/uit, laat de AI kijken, slaat op in dpac.mkt_ai_advice
+const AI_TYPE={opschalen:"opschalen",aanzetten:"opschalen",halveren:"halveren",terugschroeven:"terugschroeven",stoppen:"stoppen",uitzoeken:"uitzoeken",namaken:"uitzoeken",verversen:"uitzoeken",splitsen:"uitzoeken",instelling:"uitzoeken",sales:"uitzoeken"};
+const ACTW={uitzoeken:"uitzoeken",namaken:"namaken",verversen:"verversen",splitsen:"splitsen"};
 const AI_RUNAT=()=> AIADV&&AIADV.run_at? (Date.parse(AIADV.run_at)||0) : 0;
 // AI-adviezen als rij-objecten. key = type|label (zelfde als v2.15, zodat vinkjes en opmerkingen in dpac.mkt_followups blijven kloppen)
 function aiAdvList(){
@@ -871,10 +837,12 @@ function aiAdvList(){
   return AIADV.advice.adviezen.map((a,i)=>{ const type=AI_TYPE[a.actie]||"uitzoeken"; const cid=a.campaign_id||null; const sid=a.adset_id||null;
     const c=cid?CAMPS.get(ck(a.platform,cid)):null; const cname=c?c.name:(a.campagne||"(campagne onbekend)");
     let sname=a.adset||null; if(sid){ const x=ADS.find(y=>y.platform===a.platform&&y.cid===cid&&y.adsetId===sid); if(x&&x.adsetName) sname=x.adsetName; }
+    const adnaam=a.advertentie?String(a.advertentie):null;
     const manual=(type==="uitzoeken"||!cid||a.budget_naar==null);
-    const ad={ai:true,type,label:cname+(sname?" → "+sname:""),cname,sname,platform:a.platform,cid,sid,manual,absRef:manual?null:(a.budget_nu==null?null:+a.budget_nu),absTgt:manual?null:+a.budget_naar,
+    const ad={ai:true,type,actie:String(a.actie||"uitzoeken"),label:cname+(sname?" → "+sname:"")+(adnaam?" → "+adnaam:""),cname,sname,adnaam,adId:a.ad_id||null,platform:a.platform,cid,sid,manual,absRef:manual?null:(a.budget_nu==null?null:+a.budget_nu),absTgt:manual?null:+a.budget_naar,
       txt:String(a.waarom||""),titel:String(a.titel||""),kant:a.kant||"advertentie",zekerheid:a.zekerheid||"",w:+a.euro_per_maand||0,prio:+a.prioriteit||i+1,
-      ref:a.ref||null,reactie:a.reactie?String(a.reactie):"",opmTeam:a.opmerking_team?String(a.opmerking_team):"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}};
+      ref:a.ref||null,reactie:a.reactie?String(a.reactie):"",opmTeam:a.opmerking_team?String(a.opmerking_team):"",vast:!!a.vast_punt,
+      doen:a.doen?String(a.doen):"",meet:(a.meetpunt&&a.meetpunt.criterium)?a.meetpunt:null,verwacht:a.verwacht?String(a.verwacht):"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}};
     ADVBYKEY.set(folKey(ad),ad); return ad; });
 }
 // ---- rekenmotor (v2.6 t/m v2.14): toont sinds v3.0 niets meer; advProgress/advVerdict meten nog wel of een budgetadvies is doorgevoerd ----
@@ -886,7 +854,7 @@ function advCur(N){
   const qual=adviceQual(N-57,N-14,N);   // leadkwaliteit: goedkoop maar plant/tekent niet, of rommel-leads — over uitgerijpte leads
   const early=adviceEarly(N);           // vroeg signaal: geld zonder leads / leads zonder intakes in de eerste 2–3 weken
   const fol=adviceFollow(N-57,N-14);    // opvolging: één verkoper plant de leads uit een bron niet in, de rest wél — sales-punt (zelfde rijpe venster als leadkwaliteit)
-  const act=adviceActies(N);            // 🎯 actiepunten voor de media buyer (targeting/formulier/instellingen) — handmatig af te vinken
+  const act=[];                         // v4: vaste punten komen via de AI (dpac.mkt_ai_vaste_punten)
   return fresh.concat(ripe).concat(sure).concat(qual).concat(early).concat(fol).concat(act);
 }
 // consistentie: campagne knijpen (stoppen/halveren/terugschroeven) én adset opschalen binnen dezelfde campagne → één verschuif-advies op de adset
@@ -985,12 +953,20 @@ const w8=s=>{ const w=String(s||"").replace(/\s+/g," ").trim().split(" ").filter
 let advEigenOpen=false;
 function eigenList(){ const out=[]; for(const k in FOLST){ if(k.indexOf("eigen|")!==0) continue; const text=k.slice(6); if(!text) continue;
   const ad={ai:false,eigen:true,type:"eigen",label:text,cname:text,sname:null,platform:null,cid:null,sid:null,manual:true,absRef:null,absTgt:null,txt:"",titel:text,kant:"advertentie",zekerheid:"",w:0,prio:900,ref:null,reactie:"",opmTeam:"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}};
-  ADVBYKEY.set(k,ad); out.push(ad); } return out; }
+  ADVBYKEY.set(k,ad); out.push(ad); }
+  // data-alarmen: alleen zichtbaar als er iets mis is (grijze rij, niet afvinkbaar)
+  const t=d2s(NOW), mA=s2d(new Date(t.getFullYear(),t.getMonth(),1)); const cur=L.filter(l=>l.cd>=mA&&l.cd<=NOW); const hard=cur.length?cur.filter(l=>l.hard).length/cur.length*100:null;
+  const al=[]; if(hard!=null&&cur.length>=20&&hard<85) al.push(`Hard bewijs deze maand ${r1(hard)}%, onder 85%`);
+  const nf=L.filter(l=>l.is_signed&&l.signed_via!=="formulier").length; if(nf) al.push(`${nf} inschrijving${nf===1?"":"en"} zonder inschrijfformulier`);
+  const um=FORMS.filter(f=>!f.contact_id).length; if(um) al.push(`${um} formulier${um===1?"":"en"} zonder contact`);
+  al.forEach(x=>out.push({ai:false,alarm:true,type:"alarm",label:x,cname:x,sname:null,platform:null,cid:null,sid:null,manual:true,absRef:null,absTgt:null,txt:"",titel:x,kant:"data",zekerheid:"",w:0,prio:800,ref:null,reactie:"",opmTeam:"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}}));
+  return out; }
 function advEigenTog(){ advEigenOpen=!advEigenOpen; drawAdvice(); if(advEigenOpen){ const i=document.getElementById("eigennew"); if(i) i.focus(); } }
 function folEigenAdd(val){ const text=String(val||"").replace(/\s+/g," ").trim(); if(!text) return; const key="eigen|"+text; FOLST[key]={...(FOLST[key]||{}),done:false,ts:0,rounded:0,note:text,upd:Date.now()}; folSave(); folSync(key); drawAdvice(); const i=document.getElementById("eigennew"); if(i){ i.value=""; folSendPreview(); } }
 // stand van één advies: open · wacht (afgevinkt, nog niet gecontroleerd of niet kloppend) · gedaan
 // afgevinkt telt alleen als het ná de laatste AI-run gebeurde; een advies dat de AI laat staan (🔁) staat daardoor weer open
 function advState(ad){
+  if(ad.alarm) return {grp:"open",chk:false,note:"",F:{}};
   const F=folGet(ad); const run=AI_RUNAT();
   if(ad.eigen){ if(!F.done) return {grp:"open",chk:false,note:"",F}; return {grp:STAT_AT>(F.ts||0)?"gedaan":"wacht",chk:true,note:"",F,m:null}; }   // eigen punt: weg na de eerstvolgende doorvoer
   const note=(F.note&&((F.upd||0)>=run||!run))?F.note:"";
@@ -1012,23 +988,26 @@ function advState(ad){
 }
 const M_ICO={ok:['<span class="mk ok" title="klopt met het platform">✓</span>'],warn:['<span class="mk warn" title="afgevinkt, maar in het platform is niets veranderd gezien">!</span>'],klok:['<span class="mk klok" title="nog niet meetbaar">⏱</span>']};
 function budHtml(ad){
-  if(ad.manual) return `<span class="abud uitz">uitzoeken</span>`;
+  if(ad.manual) return `<span class="abud uitz">${esc(ACTW[ad.actie]||"uitzoeken")}</span>`;
   const van=ad.absRef!=null?eur0(ad.absRef):"—";
-  if(ad.type==="stoppen"||ad.absTgt===0) return `<span class="abud dn">${van} → ⛔ UIT</span>`;
+  if(ad.type==="stoppen"||ad.absTgt===0) return `<span class="abud dn" title="dagbudget van ${van} naar uit">${van} → ⛔ UIT</span>`;
   const up=ad.absRef==null||ad.absTgt>ad.absRef;
-  return `<span class="abud ${up?"up":"dn"}">${van} → ${eur0(ad.absTgt)}</span>`;
+  return `<span class="abud ${up?"up":"dn"}" title="dagbudget van ${van} naar ${eur0(ad.absTgt)} per dag">${van} → ${eur0(ad.absTgt)}</span>`;
 }
 function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
+const meetDatum=s=>{ const d=dOf(s); return d>=0?fmt(d):esc(s||""); };
 function advRow(ad,cls){
   const key=folKey(ad); const S=advState(ad); const opn=advOpen.has(key);
+  if(ad.alarm) return `<div class="arow al"><span class="amk">⚠️</span><div class="amain"><b>${esc(ad.titel)}</b></div><span class="abud uitz">data</span></div>`;
   if(ad.eigen) return `<div class="arow eig ${S.grp}"><label class="achk" title="Gedaan"><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label><span class="amk"></span><div class="amain"><b>${esc(ad.titel)}</b></div></div>`;
   const sn=stNowOf(ad);
-  const panel=opn?`<div class="apanel"><p class="amut">${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p>${ad.manual&&ad.titel?`<p><b>${esc(ad.titel)}</b></p>`:""}${ad.txt?`<p>${esc(zin2(ad.txt))}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="amut">📝 ${esc(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="amut">🔁 ${esc(ad.reactie)}</p>`:""}</div>`:"";
+  const panel=opn?`<div class="apanel"><p class="amut">${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${ad.adnaam?` › ${esc(ad.adnaam)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p>${ad.manual&&ad.titel?`<p><b>${esc(ad.titel)}</b></p>`:""}${ad.txt?`<p>${esc(zin2(ad.txt))}</p>`:""}${ad.doen?`<p class="amut">${esc(ad.doen)}</p>`:""}${ad.meet?`<p class="amut">Toets ${meetDatum(ad.meet.datum)}: ${esc(ad.meet.criterium)}</p>`:""}${ad.verwacht?`<p class="amut">${esc(ad.verwacht)}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="amut">📝 ${esc(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="amut">🔁 ${esc(ad.reactie)}</p>`:""}</div>`:"";
+  const naam=ad.adnaam||ad.sname||ad.cname;
   return `<div class="arow ${cls||""} ${S.grp}${opn?" open":""}">`
     +`<label class="achk" title="Gedaan. Zonder opmerking = advies gevolgd. Met opmerking = anders gedaan."><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
     +`<span class="amk">${S.m?M_ICO[S.m][0]:""}</span>`
-    +`<div class="amain" onclick="advTog(${jq(key)})"><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} · ${esc(ad.sname||ad.cname)}${ad.ref?` <span class="rep" title="blijft staan uit de vorige run">🔁</span>`:""}</b></div>`
-    +`<input class="anote" type="text" value="${esc(S.note)}" placeholder="opmerking" title="Anders gedaan? Schrijf hier wat jullie wél deden. Gaat naar Ger en naar de AI." onchange="folNote(${jq(key)},this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
+    +`<div class="amain" onclick="advTog(${jq(key)})"><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} · ${esc(naam)}${ad.ref&&!ad.vast?` <span class="rep" title="blijft staan uit de vorige run">🔁</span>`:""}</b></div>`
+    +((S.chk||opn||S.note)?`<input class="anote" type="text" value="${esc(S.note)}" placeholder="opmerking" title="Anders gedaan? Schrijf hier wat jullie wél deden. Gaat naar Ger en naar de AI." onchange="folNote(${jq(key)},this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`:"")
     +budHtml(ad)+panel+`</div>`;
 }
 function drawAdvice(){ const w=document.getElementById("advwrap"); if(w) keepScroll(w,drawAdviceInner); }
@@ -1036,19 +1015,17 @@ function drawAdviceInner(){
   const w=document.getElementById("advwrap");
   const ai=aiAdvList();
   const rows=ai.concat(eigenList()).map(ad=>({ad,S:advState(ad)})).filter(r=>!(r.ad.eigen&&r.S.grp==="gedaan"));
-  const todo=rows.filter(r=>r.S.grp!=="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);   // afgevinkt blijft op zijn plek staan tot de controle (rij verspringt niet onder de muis)
-  let ri=0; todo.forEach(r=>{ r.cls=r.ad.eigen?"eig":(ri<3?"hi":ri<6?"mid":"lo"); if(!r.ad.eigen) ri++; });   // belangrijk → minder belangrijk: rood, oranje, geel
+  const todo=rows.filter(r=>r.S.grp!=="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);   // afgevinkt blijft op zijn plek staan tot de controle
+  let ri=0; todo.forEach(r=>{ const grijs=r.ad.eigen||r.ad.alarm||r.ad.vast; r.cls=grijs?"eig":(ri<3?"hi":ri<6?"mid":"lo"); if(!grijs) ri++; });   // belangrijk → minder belangrijk: rood, oranje, geel; vaste punten, eigen punten en alarmen grijs
   const gedaan=rows.filter(r=>r.S.grp==="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);
   const run=AI_RUNAT(); const runTxt=run?whenTxt(run)+(AIADV.trigger==="donderdag"?" (donderdag)":""):"nog nooit";
-  const sam=AIADV&&AIADV.advice&&AIADV.advice.samenvatting?String(AIADV.advice.samenvatting).replace(/\s+/g," ").trim():"";
-  const samK=sam?(sam.split(" ").length>25?sam.split(" ").slice(0,25).join(" ")+"…":sam):"";
-  const tAi=`Adviezen doorvoeren: meet eerst budget en aan/uit in Google, Meta en TikTok, dan kijkt de AI (${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}) opnieuw met jullie vinkjes en opmerkingen. Gedaan vervalt, blijvend krijgt 🔁 met een reactie, nieuw komt erbij. Duurt 2 tot 4 minuten. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
+  const tAi=`Adviezen doorvoeren: meet eerst budget en aan/uit in Google, Meta en TikTok, dan kijkt de AI (${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}) opnieuw met jullie vinkjes en opmerkingen. Gedaan vervalt, blijvend krijgt 🔁 met een reactie, nieuw komt erbij. Duurt 2 tot 4 minuten en vraagt het AI-wachtwoord. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
   const tGer=`Naar Ger: rapport met wat nog te doen is, wat anders is gedaan met jullie opmerking en de reactie van de AI, en jullie eigen punten. Gaat via de Slack-bot naar Ger en Abel; je ziet eerst een voorbeeld.`;
   let h=`<div class="abar" style="justify-content:flex-end"><div class="abtns">`
     +`<button class="rbtn big pri" onclick="advDoorvoeren()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy?"⏳ Bezig…":"🤖 Adviezen doorvoeren"}</button>`
     +`<button class="rbtn big" onclick="folSendOpen()" title="${esc(tGer)}">🍆 Naar Ger</button></div></div>`;
   if(advBusy){ if(!document.getElementById("abusycss")){ const st=document.createElement("style"); st.id="abusycss"; st.textContent=".abusy{margin:-4px 0 12px;font-size:13px;color:var(--mut)}.abusy i{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-bottom:6px;position:relative}.abusy i:before{content:'';position:absolute;left:-40%;width:40%;height:100%;background:var(--plan,#7a6ee0);animation:abusy 1.2s linear infinite}@keyframes abusy{to{left:100%}}"; document.head.appendChild(st); }
-    h+=`<div class="abusy"><i></i>${advBusy==="ctl"?"Stap 1 van 2: budget en aan/uit meten in Google, Meta en TikTok. 10 tot 20 seconden.":"Stap 2 van 2: de AI verwerkt jullie vinkjes en opmerkingen en maakt nieuw advies. 2 tot 4 minuten."}</div>`; }
+    h+=`<div class="abusy"><i></i>Budget en aan/uit meten, daarna maakt de AI nieuw advies met jullie vinkjes en opmerkingen. 2 tot 4 minuten.</div>`; }
   if(AIRUN.err) h+=`<div class="aierr">${esc(AIRUN.err)}</div>`;
   h+=`<div class="arows">`+(todo.length?todo.map(r=>advRow(r.ad,r.cls)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
   if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad,"ok")).join("")}</div>`:"");
@@ -1058,42 +1035,31 @@ function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now
 function folNote(key,val){ FOLST[key]={...(FOLST[key]||{}),note:String(val||"").trim(),upd:Date.now()}; folSave(); folSync(key); drawAdvice(); }
 const LOCAL=()=>location.search.indexOf("local=1")>=0;
 function herlaad(data){ const oA=A,oB=B,oTab=tab; D=data; sel=null; initApp(); A=Math.max(0,Math.min(oA,NOW)); B=Math.max(A,Math.min(oB,NOW)); tab=oTab; render(); }
-// knop 1: Controleer nu → status_check (n8n meet via de entity-status-sync) → data opnieuw laden
-async function advControl(){
-  if(advBusy) return; advBusy="ctl"; AIRUN.err=null; drawAdvice();
-  try{
-    if(LOCAL()){ D.status_at=new Date().toISOString(); herlaad(D); }
-    else { const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"status_check"})});
-      const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok) throw new Error("meting mislukt ("+(j&&j.error||resp.status)+")");
-      herlaad(await laad(GCODE)); }
-  }catch(e){ AIRUN.err=e&&e.message?e.message:"meting mislukt"; }
+// knop 🤖: AI-wachtwoord vragen → één call naar workflow 21 (meet budget en aan/uit, laat de AI kijken) → pollen tot de nieuwe run in de data staat
+function advDoorvoeren(){
+  if(advBusy) return; AIRUN.err=null;
+  if(LOCAL()){ advBusy="ai"; drawAdvice(); setTimeout(()=>{ advBusy=null; D.status_at=new Date().toISOString(); herlaad(D); },800); return; }
+  const m=folModal();
+  m.innerHTML=`<div class="modalbox" style="width:min(380px,100%)" onclick="event.stopPropagation()"><div class="modalhd"><b>Adviezen doorvoeren</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
+    <input id="aiww" class="anote" style="width:100%;max-width:none" type="password" autocomplete="off" placeholder="AI-wachtwoord" onkeydown="if(event.key==='Enter'){aiStart(this.value)}">
+    <div class="aierr" id="aiwwfout" style="margin:8px 0 0;min-height:16px"></div>
+    <div class="modalft"><button class="rbtn sm2 pri" id="aistartbtn" onclick="aiStart(document.getElementById('aiww').value)">Start</button></div></div>`;
+  m.style.display="flex"; m.onclick=folReportClose; setTimeout(()=>{ const i=document.getElementById("aiww"); if(i) i.focus(); },30);
+}
+async function aiStart(ww){
+  ww=String(ww||"").trim(); const f=document.getElementById("aiwwfout"), b=document.getElementById("aistartbtn"); if(!ww||(b&&b.disabled)) return; if(f) f.textContent=""; if(b) b.disabled=true;
+  let resp=null; try{ resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,ww,model:"fable"})}); }catch(e){}
+  if(!resp){ if(f) f.textContent="geen verbinding"; if(b) b.disabled=false; return; }
+  if(resp.status===401){ if(f) f.textContent="wachtwoord klopt niet"; if(b) b.disabled=false; return; }
+  const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok){ if(f) f.textContent="starten mislukt ("+(j&&j.error||resp.status)+")"; if(b) b.disabled=false; return; }
+  folReportClose(); advBusy="ai"; drawAdvice();
+  try{ await aiWait(); }catch(e){ AIRUN.err=e&&e.message?e.message:"doorvoeren mislukt"; }
   advBusy=null; drawAdvice();
 }
-// knop 2: Opnieuw laten kijken → ai_advice (Fable). Een run duurt 2 tot 4 minuten; breekt de browser de verbinding af, dan wacht hij tot de nieuwe run in de data staat.
-async function advDoorvoeren(){
-  if(advBusy) return; advBusy="ctl"; AIRUN.err=null; drawAdvice();
-  try{
-    if(LOCAL()){ D.status_at=new Date().toISOString(); await new Promise(r=>setTimeout(r,800)); }
-    else { const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"status_check"})});
-      const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok) throw new Error("meting mislukt ("+(j&&j.error||resp.status)+")"); }
-    advBusy="ai"; drawAdvice();
-    await aiRunInner();
-  }catch(e){ AIRUN.err=e&&e.message?e.message:"doorvoeren mislukt"; }
-  advBusy=null; drawAdvice();
-}
-async function aiRunInner(){
+async function aiWait(){
   const before=AI_RUNAT(); const t0=Date.now();
-  {
-    if(LOCAL()){ await new Promise(r=>setTimeout(r,600)); herlaad(D); }
-    else {
-      let got=false;
-      try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"ai_advice",model:"fable"})});
-        const j=await resp.json().catch(()=>null); if(resp.ok&&j&&j.ok) got=true; else if(j&&j.error) throw new Error(j.error==="unauthorized"?"toegangscode geweigerd":String(j.error)); }
-      catch(e){ if(/toegangscode|JSON/.test(e.message||"")) throw e; }   // verbinding afgebroken: de run loopt door in n8n
-      for(let i=0;i<30;i++){ const data=await laad(GCODE); const ra=data.ai_advice&&data.ai_advice.run_at?Date.parse(data.ai_advice.run_at):0; if(ra>before){ herlaad(data); got=true; break; } if(got) break; await new Promise(r=>setTimeout(r,20000)); }
-      if(!got) throw new Error("nog geen nieuw advies na "+Math.round((Date.now()-t0)/60000)+" minuten; probeer later Ververs");
-    }
-  }
+  for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,15000)); const data=await laad(GCODE); const ra=data.ai_advice&&data.ai_advice.run_at?Date.parse(data.ai_advice.run_at):0; if(ra>before){ herlaad(data); return; } }
+  throw new Error("nog geen nieuw advies na "+Math.round((Date.now()-t0)/60000)+" minuten; probeer later Ververs");
 }
 // ---- knop 3: rapport naar Ger (visueel HTML via de Slack-bot). Nooit id's, alleen namen voluit. ----
 function mbRows(){ return aiAdvList().concat(eigenList()).filter(ad=>ad.kant!=="sales").map(ad=>({ad,S:advState(ad)})).filter(r=>!(r.ad.eigen&&r.S.grp==="gedaan")); }
@@ -1101,8 +1067,8 @@ function folReportHtml(rows,extra){
   const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const e=esc;
   const isOpen=r=>!r.S.chk||r.S.m==="warn";   // afgevinkt maar in het platform niets veranderd gezien = nog te doen
   const open=rows.filter(isOpen), anders=rows.filter(r=>!isOpen(r)&&r.S.note), gedaan=rows.filter(r=>!isOpen(r)&&!r.S.note);
-  const big=ad=>{ if(ad.eigen) return ""; if(ad.manual) return `<div class="big act">uitzoeken</div>`; const van=ad.absRef!=null?eur0(ad.absRef):"—"; if(ad.type==="stoppen"||ad.absTgt===0) return `<div class="big dn"><span>${van}</span><i>→</i><b>UIT</b></div>`; const up=ad.absRef==null||ad.absTgt>ad.absRef; return `<div class="big ${up?"up":"dn"}"><span>${van}</span><i>→</i><b>${eur0(ad.absTgt)}</b><small>per dag</small></div>`; };
-  const wie=ad=>ad.eigen?"":`<div class="unit"><span class="pl" style="background:${PC(ad.platform)}">${e(PN(ad.platform))}</span>${e(ad.cname)}${ad.sname?` <em>›</em> ${e(ad.sname)}`:""}</div>`;
+  const big=ad=>{ if(ad.eigen) return ""; if(ad.manual) return `<div class="big act">${e(ACTW[ad.actie]||"uitzoeken")}</div>`; const van=ad.absRef!=null?eur0(ad.absRef):"—"; if(ad.type==="stoppen"||ad.absTgt===0) return `<div class="big dn"><span>${van}</span><i>→</i><b>UIT</b></div>`; const up=ad.absRef==null||ad.absTgt>ad.absRef; return `<div class="big ${up?"up":"dn"}"><span>${van}</span><i>→</i><b>${eur0(ad.absTgt)}</b><small>per dag</small></div>`; };
+  const wie=ad=>ad.eigen?"":`<div class="unit"><span class="pl" style="background:${PC(ad.platform)}">${e(PN(ad.platform))}</span>${e(ad.cname)}${ad.sname?` <em>›</em> ${e(ad.sname)}`:""}${ad.adnaam?` <em>›</em> ${e(ad.adnaam)}`:""}</div>`;
   const card=r=>{ const ad=r.ad; return `<div class="card"><div class="top"><div class="ty">${e(ad.titel)}</div>${big(ad)}</div>${wie(ad)}${ad.txt?`<p>${e(ad.txt.replace(/\s+/g," ").slice(0,280))}${ad.txt.length>280?"…":""}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="note">📝 ${e(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="ai">🔁 ${e(ad.reactie)}</p>`:""}${r.S.note?`<p class="note">📝 ${e(r.S.note)}</p>`:""}</div>`; };
   const byP=ls=>["google","meta","tiktok","eigen"].map(p=>{ const x=ls.filter(r=>p==="eigen"?r.ad.eigen:r.ad.platform===p); return x.length?`<h3><span class="dot" style="background:${p==="eigen"?"#8e8e93":PC(p)}"></span>${p==="eigen"?"Eigen punten":e(PN(p))} <span>${x.length}</span></h3><div class="cards">${x.map(card).join("")}</div>`:""; }).join("");
   const mini=ls=>`<ul class="mini">${ls.map(r=>`<li><span class="dot" style="background:${PC(r.ad.platform)}"></span> ${e(r.ad.titel)} · ${e(r.ad.cname)}${r.ad.sname?` › ${e(r.ad.sname)}`:""}</li>`).join("")}</ul>`;
@@ -1285,13 +1251,84 @@ function render(){
   document.getElementById("dpLabel").textContent = fmtY(A)+" – "+fmtY(B);
   drawTabs(); drawKpis();
   document.getElementById("kpis").style.display = tab==="tree"?"":"none";
-  const ids={tree:"treewrap",best:"bestwrap",trend:"trendwrap",adv:"advwrap",sales:"saleswrap",sign:"signwrap",data:"datawrap"};
-  for(const k in ids) document.getElementById(ids[k]).style.display = tab===k?"block":"none";
-  if(tab==="tree") drawTree(); if(tab==="best") drawBest(); if(tab==="trend") drawTrend(); if(tab==="adv") drawAdvice(); if(tab==="sales") drawSales(); if(tab==="sign") drawSign(); if(tab==="data") drawData();
-  drawDetail();
+  document.getElementById("treewrap").style.display = tab==="tree"?"block":"none";
+  document.getElementById("advwrap").style.display = tab==="adv"?"block":"none";
+  if(tab==="tree") drawTree(); if(tab==="adv") drawAdvice();
   if(window.parent!==window){ try{ window.parent.postMessage({dpacMkt:"h",h:document.body.scrollHeight},"*"); }catch(e){} }
 }
 const jq = s => JSON.stringify(s).replace(/"/g,"&quot;");
 let _rz=null; window.addEventListener("resize",()=>{ if(!D) return; clearTimeout(_rz); _rz=setTimeout(()=>{ if(tab==="trend") drawTrend(); },250); });
 setTimeout(()=>{ const g=document.getElementById("gcode"); if(g && document.getElementById("gate").style.display!=="none") g.focus(); },50);
 try{ const c=sessionStorage.dpacMktCode; if(c) gTry(c, true); else if(location.search.indexOf("local=1")>=0) gTry("", true); }catch(e){}
+
+// ================= v4: herkomstlijst onder de weeklijn (Alles · Meta · Google · TikTok), namen onder de rij, directe tooltip =================
+let hkPlat=null, hkSort="n", hkAll=false, NMOPEN=new Set(), NMALL=new Set();
+const HKDEF={   // per tegel: welk aantal, welk percentage (of bedrag), welke namen
+  spend:{n:"Kosten",r:"Per lead",eur:true,low:true,set:"nieuw",num:m=>m.spend,rate:m=>m.cpl,den:m=>m.n,tip:m=>`${eur0(m.spend)} ÷ ${m.n} leads`},
+  plan:{n:"Gepland",r:"Plan %",set:"gepland",num:m=>m.g,rate:m=>m.plan,den:m=>m.n,tip:m=>`${m.g} van ${m.n} leads plannen een intake`},
+  show:{n:"Shows",r:"Show %",set:"shows",num:m=>m.sh,rate:m=>m.show,den:m=>m.i,tip:m=>`${m.sh} van ${m.i} intakes kwamen opdagen`},
+  sg:{n:"Klanten",r:"Klant %",set:"sign",num:m=>m.sg,rate:m=>m.l2k,den:m=>m.n,tip:m=>`${m.sg} van ${m.n} leads tekenden`},
+  cpk:{n:"Klanten",r:"€ / klant",eur:true,low:true,set:"sign",num:m=>m.sg,rate:m=>m.cpk,den:m=>m.sg,tip:m=>`${eur0(m.spend)} ÷ ${m.sg} klanten`},
+  roas:{n:"Klanten",r:"€ / klant",eur:true,low:true,set:"sign",num:m=>m.sg,rate:m=>m.cpk,den:m=>m.sg,tip:m=>`${eur0(m.spend)} ÷ ${m.sg} klanten · ${eur0(m.omzet)} omzet`}};
+const HKEUR=k=>!!HKDEF[k].eur;
+// diepste niveau: advertentie (Meta, TikTok), zoekwoord (Google) of campagne als dat niveau onbekend is. Bij euro-tegels Google per campagne, want kosten per zoekwoord bestaan niet.
+function hkGroups(key){
+  const g=new Map(); const eur=HKEUR(key);
+  for(const l of L){ if(!PARTY&&l.party) continue; if(l.cd<A||l.cd>B) continue;
+    let k,lab,sub,sp;
+    if(l.platform==="google"){ const cn=l.camp?l.camp.name:"(campagne onbekend)";
+      if(eur||!l.camp){ k="gc:"+l.ckey; lab=cn; sub="Google"; sp=()=>spendIn(A,B,r=>r.platform==="google"&&(r.cid||"")===(l.campaign_id||"")); }
+      else { k="kw:"+l.ckey+"|"+kwLab(l); lab=kwLab(l); sub=cn; sp=null; } }
+    else if(l.adObj){ const x=l.adObj; k="ad:"+x.i; lab=x.adName||x.adId||"(advertentie)"; sub=(l.camp?l.camp.name:"")+(x.adsetName?" › "+x.adsetName:""); sp=()=>spendAds(A,B,y=>y===x); }
+    else if(l.camp){ k="c:"+l.ckey; lab=l.camp.name; sub="advertentie onbekend"; const pl=l.platform, ci=l.campaign_id||""; sp=()=>{ const c=spendIn(A,B,r=>r.platform===pl&&(r.cid||"")===ci), a=spendAds(A,B,x=>x.platform===pl&&(x.cid||"")===ci); return {spend:a.spend>0.5?0:c.spend,clicks:0,imps:0}; }; }
+    else { k="p:"+l.platform; lab=PN(l.platform); sub=l.platform==="niet_betaald"?"organisch of direct":"bron onbekend"; sp=null; }
+    if(!g.has(k)) g.set(k,{k,lab,sub,plat:l.platform,ls:[],sp}); g.get(k).ls.push(l); }
+  // kosten zonder leads horen ook in de lijst bij Uitgegeven
+  if(key==="spend") for(const x of ADS){ if(PARTY===false&&(CAMPS.get(ck(x.platform,x.cid))||{}).party) continue; if(x.platform==="google") continue; const k="ad:"+x.i; if(g.has(k)) continue; const s=spendAds(A,B,y=>y===x); if(s.spend<0.5) continue; const c=CAMPS.get(ck(x.platform,x.cid)); g.set(k,{k,lab:x.adName||x.adId,sub:(c?c.name:"")+(x.adsetName?" › "+x.adsetName:""),plat:x.platform,ls:[],spv:s}); }
+  return [...g.values()].map(o=>{ o.m=metrics(o.ls,o.spv||(o.sp?o.sp():{spend:0,clicks:0,imps:0}),A,B); return o; });
+}
+function hkHtml(key){
+  const D=HKDEF[key]; if(!D) return "";
+  const zero=o=>key==='cpk'||key==='roas'?(o.m.sg===0&&o.m.spend>=100):(key==='spend'||key==='sg')?false:((D.den(o.m)||0)>=5&&D.num(o.m)===0);
+  const all=hkGroups(key).filter(o=>(D.num(o.m)||0)>0||zero(o));
+  const PL=["meta","google","tiktok"]; const cnt={}; all.forEach(o=>{ cnt[o.plat]=(cnt[o.plat]||0)+D.num(o.m); });
+  const tot=all.reduce((s,o)=>s+D.num(o.m),0);
+  const fmtN=v=>D.eur&&key==="spend"?eur0(v):Math.round(v);
+  let h=`<div class="hk"><div class="hkbar"><span class="${hkPlat?"":"on"}" onclick="hkP(null)">Alles<i>${fmtN(tot)}</i></span>`+PL.filter(p=>cnt[p]).map(p=>`<span class="${hkPlat===p?"on":""}" onclick="hkP('${p}')">${esc(PN(p))}<i>${fmtN(cnt[p])}</i></span>`).join("")+`</div>`;
+  const rows=all.filter(o=>!hkPlat||o.plat===hkPlat);
+  // totaal van de lijst = anker voor de kleur
+  const sum=f=>rows.reduce((s,o)=>s+f(o.m),0);
+  const T={spend:sum(m=>m.spend),n:sum(m=>m.n),g:sum(m=>m.g),i:sum(m=>m.i),sh:sum(m=>m.sh),sg:sum(m=>m.sg)};
+  const tRate={spend:T.n?T.spend/T.n:null,plan:T.n?T.g/T.n*100:null,show:T.i?T.sh/T.i*100:null,sg:T.n?T.sg/T.n*100:null,cpk:T.sg?T.spend/T.sg:null,roas:T.sg?T.spend/T.sg:null}[key];
+  const CPKT=key==='cpk'||key==='roas';
+  const grey=o=>CPKT?(o.m.sg===0?o.m.spend<100:false):((D.den(o.m)||0)<5||D.rate(o.m)==null);
+  const cls=o=>{ if(CPKT){ if(o.m.sg===0) return o.m.spend>=400?'bad':o.m.spend>=100?'warn':'nd'; const v=o.m.cpk; return v==null?'nd':v<=MAXCPK()*0.85?'good':v>MAXCPK()*1.25?'bad':'warn'; } if(grey(o)||tRate==null) return "nd"; const v=D.rate(o.m); const better=D.low?v<=tRate*0.9:v>=tRate*1.1, worse=D.low?v>=tRate*1.1:v<=tRate*0.9; return better?"good":worse?"bad":""; };
+  const nul=o=>D.rate(o.m)==null&&!(CPKT&&o.m.sg===0);
+  rows.sort((x,y)=> hkSort==="r" ? ((nul(x)?1:0)-(nul(y)?1:0) || (grey(x)?1:0)-(grey(y)?1:0) || (D.low?1:-1)*(((CPKT&&x.m.sg===0)?x.m.spend*9:(D.rate(x.m)??0))-((CPKT&&y.m.sg===0)?y.m.spend*9:(D.rate(y.m)??0))) || D.num(y.m)-D.num(x.m)) : (D.num(y.m)-D.num(x.m) || y.m.n-x.m.n));
+  const CAP=10; const shown=rows.filter((o,i)=>hkAll||i<CAP||cls(o)==="bad"||cls(o)==="warn");
+  const rf=v=>v==null?"—":D.eur?eur0(v):r1(v)+"%";
+  h+=`<table class="hkt"><tr><th class="num" onclick="hkS('n')">${D.n}${hkSort==="n"?" ▼":""}</th><th class="num" onclick="hkS('r')" title="${D.low?"lager is beter":"hoger is beter"} · gekleurd tegen het totaal van deze lijst (${rf(tRate)}) · grijs bij minder dan 5">${D.r}${hkSort==="r"?" ▼":""}</th><th>Advertentie / zoekwoord</th></tr>`;
+  for(const o of shown){ const v=D.num(o.m); const nk="hk:"+o.k; const namen=key==="spend"?o.m.S.nieuw:o.m.S[D.set]; const kan=namen&&namen.length;
+    h+=`<tr><td class="num${kan?" clk":""}"${kan?` onclick="nmTog(${jq(nk)})"`:""} title="${esc(kan?"klik voor de namen":"")}"><b>${fmtN(v)}</b></td><td class="num ${cls(o)}" title="${esc(CPKT&&o.m.sg===0?eur0(o.m.spend)+' uitgegeven zonder klant':D.tip(o.m))}"><b>${CPKT&&o.m.sg===0?eur0(o.m.spend)+' · 0':rf(D.rate(o.m))}</b></td><td class="nm"><span class="dot" style="background:${PC(o.plat)}"></span>${esc(o.lab)}<small>${esc(o.sub||"")}</small></td></tr>`;
+    if(NMOPEN.has(nk)) h+=`<tr class="nmrow hkn"><td colspan="3">${namesHtml(namen,nk)}</td></tr>`; }
+  if(hkAll?rows.length>CAP:rows.length>shown.length) h+=`<tr class="more"><td colspan="3" onclick="hkAll=!hkAll;hkDraw()">${hkAll?"minder":"nog "+(rows.length-shown.length)+" meer"}</td></tr>`;
+  if(!rows.length) h+=`<tr><td colspan="3" class="nd">Niets in deze periode.</td></tr>`;
+  return h+`</table></div>`;
+}
+function namesHtml(ls,nk){
+  ls=(ls||[]).slice().sort((x,y)=>(y.is_signed-x.is_signed)||(y.cd-x.cd)); const all=NMALL.has(nk); const cap=all?ls.length:25;
+  return `<table class="nml">`+ls.slice(0,cap).map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td class="m">${esc(l.stage_name||"")}${l.lost?" · verloren":""}</td><td class="m">${l.cd>=0?fmt(l.cd):"—"}</td><td class="m">${esc(l.owner||"—")}</td></tr>`).join("")+(ls.length>cap?`<tr class="more"><td colspan="4" onclick="NMALL.add(${jq(nk)});hkDraw();drawTree()">nog ${ls.length-cap} meer</td></tr>`:"")+`</table>`;
+}
+function hkDraw(){ const w=document.getElementById("hkwrap"); if(w&&kpiTrend) keepScroll(w,()=>{ w.innerHTML=hkHtml(kpiTrend); }); }
+function hkP(p){ hkPlat=p; hkAll=false; hkDraw(); }
+function hkS(s){ hkSort=s; hkDraw(); }
+function nmTog(k){ NMOPEN.has(k)?NMOPEN.delete(k):NMOPEN.add(k); if(k.startsWith("hk:")) hkDraw(); else drawTree(); }
+// directe tooltip: elke title en elke svg-title verschijnt meteen bij hover (geen trage browser-tooltip)
+(function(){
+  const tip=document.createElement("div"); tip.id="itip"; document.body.appendChild(tip);
+  const txtOf=e=>{ if(e.dataset&&e.dataset.tip) return e.dataset.tip; if(typeof e.title==="string"&&e.title){ e.dataset.tip=e.title; e.removeAttribute("title"); return e.dataset.tip; } if(e.namespaceURI&&e.namespaceURI.indexOf("svg")>=0&&e.querySelector){ const t=e.querySelector(":scope > title"); if(t){ e.dataset.tip=t.textContent; t.remove(); return e.dataset.tip; } } return ""; };
+  const pos=ev=>{ const x=Math.min(ev.clientX+14,innerWidth-tip.offsetWidth-8), y=ev.clientY+16; tip.style.left=Math.max(4,x)+"px"; tip.style.top=(y+tip.offsetHeight>innerHeight?ev.clientY-tip.offsetHeight-10:y)+"px"; };
+  document.addEventListener("mouseover",ev=>{ let e=ev.target, t=""; for(let i=0;i<5&&e&&e!==document.body;i++){ t=txtOf(e); if(t) break; e=e.parentElement; } if(!t){ tip.style.display="none"; return; } tip.textContent=t; tip.style.display="block"; pos(ev); });
+  document.addEventListener("mousemove",ev=>{ if(tip.style.display==="block") pos(ev); });
+  document.addEventListener("mouseout",ev=>{ if(!ev.relatedTarget) tip.style.display="none"; });
+})();
