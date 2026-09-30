@@ -515,6 +515,21 @@ tr.bestx td{white-space:normal;max-width:none;background:rgba(127,127,127,.05);p
 .fpills{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 16px 0} .fpills .lbl{font-size:11.5px;color:var(--mut);font-weight:600}
 .fpill{border:1px solid var(--plan);color:var(--plan-tx);background:var(--plan-bg);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer} .fpill b{font-weight:700} .fpill.clr{border-color:var(--line);background:transparent;color:var(--mut)}
 .dbrk{padding:10px 16px 6px}
+.dbrk-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:2px 0 8px} .dbrk-h b{font-size:14px} .dbrk-h span{font-size:11.5px;color:var(--mut)}
+.pstrip{display:flex;height:20px;border-radius:7px;overflow:hidden;margin:0 0 10px;font-size:11px;font-weight:700} .pstrip i{display:flex;align-items:center;justify-content:center;color:#0e0e0f;font-style:normal;white-space:nowrap;overflow:hidden;min-width:0}
+.brktbl.hk td{padding:7px 8px;vertical-align:middle} .brktbl.hk .big{font-size:20px;font-weight:800;letter-spacing:-.5px;line-height:1}
+.brktbl.hk .hb{display:inline-block;width:100px;height:9px;border-radius:5px;background:var(--line2);overflow:hidden;vertical-align:middle;margin-right:6px} .brktbl.hk .hb i{display:block;height:100%;background:var(--sand)}
+.brktbl.hk .barc small,.brktbl.hk .rt small{display:block;color:var(--mut);font-size:10.5px;font-weight:400;line-height:1.2}
+.brktbl.hk .src{max-width:380px} .brktbl.hk .src b{font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .brktbl.hk .src small{display:block;color:var(--mut);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brktbl.hk .rt b{font-size:13.5px} .brktbl.hk .rt.ok b{color:var(--sign-tx)} .brktbl.hk .rt.bad b{color:var(--close-tx)} .brktbl.hk .rt.nd b{color:var(--mut);font-weight:500}
+.brktbl.hk .barc .obar{width:90px;display:inline-flex;vertical-align:middle}
+.badge{display:inline-block;border-radius:99px;padding:3px 9px;font-size:11.5px;font-weight:700;white-space:nowrap} .badge.ok{background:var(--sign-bg);color:var(--sign-tx)} .badge.bad{background:var(--close-bg);color:var(--close-tx)} .badge.mid{background:var(--line2);color:var(--txt)} .badge.nd{background:var(--line2);color:var(--mut)}
+.miss{background:var(--close-bg);border:1px solid rgba(220,42,30,.25);border-radius:12px;margin:8px 16px 10px;padding:10px 14px} .miss h3{margin:0 0 4px;font-size:13.5px;color:var(--close-tx)}
+.miss .row{display:flex;gap:12px;align-items:center;padding:6px 0;border-top:1px solid rgba(220,42,30,.18);font-size:13px} .miss .row:first-of-type{border-top:0}
+.miss .row .big{font-size:20px;font-weight:800;color:var(--close-tx);min-width:44px;text-align:right;letter-spacing:-.5px} .miss .row .src{flex:1;min-width:0} .miss .row .src b{display:block;font-size:13px} .miss .row .src small{display:block;color:var(--mut);font-size:11px} .miss .row .why{color:var(--mut);font-size:12px;white-space:nowrap} .miss .row.note{color:var(--mut);font-size:11.5px;border-top:0;padding-top:2px}
+.miss.good{background:var(--sign-bg);border-color:rgba(26,154,61,.25)} .miss.good h3{color:var(--sign-tx)} .miss.good .row{border-color:rgba(26,154,61,.18)} .miss.good .row .big{color:var(--sign-tx)}
+.dsums.names-h{padding:4px 16px 12px}
+@media(max-width:900px){.miss .row .why{white-space:normal}}
 .brktbl{width:100%;border-collapse:collapse;font-size:12.5px} .brktbl th{color:var(--mut);font-weight:600;text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:11.5px} .brktbl td{padding:5px 8px;border-bottom:1px solid var(--line2);vertical-align:middle}
 .brktbl tr:not(:first-child){cursor:pointer} .brktbl tr:not(:first-child):hover td{background:var(--bg)} .brktbl tr.on td{background:var(--plan-bg)}
 .brktbl .num{text-align:right;white-space:nowrap} .brktbl .ck{width:22px;color:var(--mut)} .brktbl .val{max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -637,6 +652,6 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>
