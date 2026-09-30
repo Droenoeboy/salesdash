@@ -988,8 +988,8 @@ function advState(ad){
   const tChk=F.done?(F.ts||0):(F.rounded||0);   // "afgerond" uit v2.x telt ook als afgevinkt
   const chk=tChk>=run&&tChk>0;
   if(!chk) return {grp:"open",chk:false,note,F};
-  if(ad.manual) return {grp:"gedaan",chk:true,note,F,m:"ok"};
   const measured=STAT_AT>tChk;
+  if(ad.manual) return measured? {grp:"gedaan",chk:true,note,F,m:"ok"} : {grp:"wacht",chk:true,note,F,m:null};   // uitzoeken-punt: blijft staan tot de volgende controle
   if(!measured) return {grp:"wacht",chk:true,note,F,m:null};
   const sn=stNowOf(ad);
   if(!sn||ad.absRef==null) return {grp:"wacht",chk:true,note,F,m:"klok"};
@@ -1027,13 +1027,12 @@ function drawAdviceInner(){
   const w=document.getElementById("advwrap");
   const ai=aiAdvList();
   const rows=ai.map(ad=>({ad,S:advState(ad)}));
-  const open=rows.filter(r=>r.S.grp==="open").sort((a,b)=>a.ad.prio-b.ad.prio);
-  const wacht=rows.filter(r=>r.S.grp==="wacht").sort((a,b)=>a.ad.prio-b.ad.prio);
+  const todo=rows.filter(r=>r.S.grp!=="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);   // afgevinkt blijft op zijn plek staan tot de controle (rij verspringt niet onder de muis)
   const gedaan=rows.filter(r=>r.S.grp==="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);
   const run=AI_RUNAT(); const runTxt=run?whenTxt(run)+(AIADV.trigger==="donderdag"?" (donderdag)":""):"nog nooit";
   const sam=AIADV&&AIADV.advice&&AIADV.advice.samenvatting?String(AIADV.advice.samenvatting).replace(/\s+/g," ").trim():"";
   const samK=sam?(sam.split(" ").length>25?sam.split(" ").slice(0,25).join(" ")+"…":sam):"";
-  const tCtl=`Controleer nu: meet het ingestelde budget en aan/uit in Google, Meta en TikTok en vergelijkt dat met wat jullie hebben afgevinkt. ✓ klopt, ! niets veranderd gezien, 🕒 nog niet meetbaar. Dezelfde meting draait elke nacht om 06:25. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}.`;
+  const tCtl=`Controleer nu: meet het ingestelde budget en aan/uit in Google, Meta en TikTok en vergelijkt dat met wat jullie hebben afgevinkt. ✓ klopt, ! niets veranderd gezien, ⏱ nog niet meetbaar. Dezelfde meting draait elke nacht om 06:25. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}.`;
   const tAi=`Opnieuw laten kijken: ${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}, duurt 2 tot 4 minuten. De AI kijkt met frisse blik naar de cijfers en krijgt per bestaand advies mee of het gedaan of anders gedaan is, jullie opmerking en de meting. Hij laat een advies vervallen of laat het staan (🔁) met een reactie. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
   const tGer=`Naar Ger: rapport met de open adviezen, wat anders is gedaan met jullie opmerking en de reactie van de AI. Gaat via de Slack-bot naar Ger en Abel; je ziet eerst een voorbeeld.`;
   let h=`<div class="abar"><div class="asum">${samK?esc(samK):""}</div><div class="abtns">`
@@ -1041,7 +1040,7 @@ function drawAdviceInner(){
     +`<button class="rbtn sm2" onclick="aiRunAdvice()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy==="ai"?"⏳ AI kijkt…":"Opnieuw laten kijken"}</button>`
     +`<button class="rbtn sm2 pri" onclick="folSendOpen()" title="${esc(tGer)}">Naar Ger</button></div></div>`;
   if(AIRUN.err) h+=`<div class="aierr">${esc(AIRUN.err)}</div>`;
-  h+=`<div class="arows">`+(open.length||wacht.length?open.concat(wacht).map(r=>advRow(r.ad)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
+  h+=`<div class="arows">`+(todo.length?todo.map(r=>advRow(r.ad)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
   if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad)).join("")}</div>`:"");
   w.innerHTML=h;
 }
