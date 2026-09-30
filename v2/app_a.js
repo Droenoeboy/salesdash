@@ -294,19 +294,16 @@ function drawTabs(){
     t.onclick=()=>{tab=id; sel=null; render();}; el.appendChild(t); };
   mk("vandaag","📞 Vandaag");
   mk("tot","📊 Week");
-  // personenkiezer: één tab met uitklapmenu i.p.v. losse tabs
-  const cur=repOf(); const pt=document.createElement("div"); pt.className="tab persoon"+((cur||tab==="ov")?" on":""); pt.id="persoonTab";
-  pt.innerHTML=(cur?`<span class="dot" style="background:${RCOL[cur]}"></span>${esc(cur)}`:tab==="ov"?"Σ Iedereen":"👤 Persoon")+` <span class="caret">▾</span>`;
-  pt.onclick=(e)=>{ e.stopPropagation(); persoonMenu(pt); }; el.appendChild(pt);
-  mk("cmp","⚖️ Vergelijk");
+  // v4.3: 8 tabbladen, werk eerst en analyse daarna. Team = Vergelijk + Trend + Persoon (subkeuze bovenin);
+  // Bronnen & Ads is verhuisd naar het marketingdashboard (link rechts).
+  const tt=document.createElement("div"); tt.className="tab"+(isTeamTab()?" on":""); tt.textContent="⚖️ Team";
+  tt.onclick=()=>{ tab=teamLast; sel=null; render(); }; el.appendChild(tt);
   mk("int","🗓 Intakes");
   mk("won","🏆 Gewonnen");
-  // Afspraken-tab verwijderd in v2.6 (alles staat in Intakes + Dag & Week)
-  mk("trend","📈 Trend");
-  mk("bron","📣 Bronnen & Ads");
   mk("lost","🚫 Verloren");
-  mk("dag","📅 Dag & Week");
   mk("adv","⚡ Adviezen");
+  mk("dag","📅 Log");
+  const mk2=document.createElement("a"); mk2.className="tab tablink"; mk2.href="../marketing/"; mk2.target="_blank"; mk2.title="Bronnen, campagnes en advertenties staan in het marketingdashboard"; mk2.textContent="📣 Marketing ↗"; el.appendChild(mk2);
   const sw=document.createElement("div"); sw.className="modesw"; sw.title="Rollen = elke rate op de persoon die er echt over gaat (setter / intaker / eigenaar). Per rep = de oude v1-telling: plan op de setter, show/sign/pay op de eigenaar van de deal.";
   sw.innerHTML=`<span class="${MODE==="rol"?"on":""}" onclick="setMode('rol')">Rollen</span><span class="${MODE==="rep"?"on":""}" onclick="setMode('rep')">Per rep (v1)</span>`;
   const mb=document.getElementById("modebar"); mb.innerHTML=""; mb.appendChild(sw);
@@ -321,6 +318,13 @@ function persoonMenu(anchor){
 const ROL = ph => ph==="l2s" ? "cohort" : MODE==="rep" ? (ph==="plan"?"setter":"eigenaar") : ({plan:"setter",show:"setter",signS:"setter",sign:"intaker",close:"eigenaar",pay:"eigenaar"})[ph];
 const jq = s => JSON.stringify(s).replace(/"/g,"&quot;");
 const repOf = () => (tab.startsWith("p")? tab.slice(1) : null);
+// ---- ⚖️ Team (v4.3): Vergelijk, Trend en de persoonspagina's onder één tabblad ----
+let teamLast="cmp";
+const isTeamTab = () => tab==="cmp"||tab==="trend"||tab==="ov"||tab.startsWith("p");
+function teamSubHtml(){
+  const c=(id,lab,dot)=>`<div class="wchip sm${tab===id?" on":""}" onclick="tab=${jq(id)};sel=null;render()">${dot?`<span class="dot" style="background:${dot};display:inline-block;width:8px;height:8px;border-radius:50%"></span>`:""}${lab}</div>`;
+  return `<div class="wonchips teamsub">${c("cmp","⚖️ Vergelijk")}${c("trend","📈 Trend")}<span class="lbl" style="margin-left:6px">Persoon:</span>${c("ov","Σ Iedereen")}${REPS.map(p=>c("p"+p.n,esc(p.n),RCOL[p.n])).join("")}</div>`;
+}
 
 // ---- kpi's ----
 function drawKpis(){
@@ -397,7 +401,8 @@ function colHtml(who, name, color, tot){
 function drawCols(){
   const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap"), iw=document.getElementById("intwrap"), vw=document.getElementById("vdwrap");
   for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw,vw]) if(x) x.style.display="none";
-  const wpw=document.getElementById("wpwrap"); if(wpw) wpw.innerHTML = tab==="tot" ? weekPulsHtml() : "";   // v4.3: weekpuls bovenaan het tabblad Week
+  const wpw=document.getElementById("wpwrap"); if(wpw) wpw.innerHTML = tab==="tot" ? weekPulsHtml() : isTeamTab() ? teamSubHtml() : "";   // v4.3: weekpuls bovenaan Week, subkeuze bovenaan Team
+  if(isTeamTab()) teamLast=tab;
   if(tab==="vandaag"){ vw.style.display="block"; drawVandaag(); return; }
   if(tab==="cmp"){ cw.style.display="block"; drawCmp(); return; }
   if(tab==="trend"){ tw.style.display="block"; drawTrend(); return; }
@@ -835,6 +840,7 @@ function drawDag(){
   const nieuw=L.filter(l=>l.cd===dagSel).length, apts=AP.filter(a=>a.sd===dagSel);
   let h=`<div class="dgkies"><button onclick="dagStap(-1)">‹</button><span class="dgdag">${wd} ${fmtY(dagSel)}</span><button onclick="dagStap(1)" ${dagSel>=TODAY?"disabled":""}>›</button><span class="dgvand" onclick="dagGa(TODAY)">vandaag</span>
     <span style="font-size:11.5px;color:var(--mut)">· ✨ ${nieuw} nieuwe leads · ${apts.length} intakes op de agenda (${apts.filter(a=>a.is_show).length} show, ${apts.filter(a=>a.is_noshow).length} no-show, ${apts.filter(a=>a.is_cancelled).length} geannuleerd) · ${evts.length} live-events met tijd</span></div>`;
+  h+=`<p class="note" style="margin:-6px 0 12px">Drie tellingen op deze pagina: de <b>weektabel</b> telt leads op de datum van de stap, de <b>samenvatting per rep</b> telt acties op naam in het CRM, de <b>kaarten per rep</b> tonen live-events met tijdstip. Daardoor kan "4 intake gepland" naast "3 ingepland" staan; allebei kloppen.</p>`;
   h+=weekHtml();
   h+=repDagHtml(dagSel);
   if(!keys.length){ h+=`<div class="dgleeg">Geen sales-activiteit gevonden op deze dag${nieuw?` (wel ${nieuw} nieuwe leads binnengekomen)`:""}.</div>`; }
