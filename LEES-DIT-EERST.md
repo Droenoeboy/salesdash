@@ -17,7 +17,8 @@ bij de periode waarin de lead binnenkwam, niet bij de periode waarin de uitkomst
 ## Mappen in deze repo
 
 - `v2/` - sales-dashboard (huidige versie)
-- `marketing/` - marketing-dashboard
+- `marketing/` - marketing-dashboard (v4, sinds 1 okt 2026)
+- `marketing-v3.2/` - archief van het marketing-dashboard v3.2 (tot 30 sep 2026); `marketing-preview/` = de mock-ups die tot v4 leidden, draaien op dat archief
 - `finance/` - debiteuren-dashboard
 - `data/` - versleutelde dataset, leest het dashboard bij openen
 
