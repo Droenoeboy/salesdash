@@ -419,6 +419,7 @@
   .tab.persoon .caret{font-size:10px;opacity:.7;margin-left:2px}
   .tab.tablink{text-decoration:none;color:var(--mut);border-style:dashed} .tab.tablink:hover{color:var(--txt);border-color:var(--plan)}
   .teamsub{margin-bottom:12px}
+  .standbar{font-size:12px;color:var(--mut);margin:-4px 0 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap} .standbar b{color:var(--txt);font-weight:700} .standbar a{color:var(--plan-tx);font-weight:700;text-decoration:none}
   .repgrid{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:12px;align-items:start}
   .repgrid .cols .fcol{flex:1 1 auto}
   .repside .two{margin-bottom:0}
@@ -448,7 +449,7 @@
     <div class="logo" aria-hidden="true"><img src="https://deproduceracademie.nl/wp-content/uploads/2023/02/cropped-FAV-270x270.jpg" alt="" onerror="this.remove()"><i></i></div>
     <div style="min-width:0">
       <h1>DPAC · Sales Dashboard <span class="v2tag">v2</span></h1>
-      <div class="sub">Sales pijplijn · uit de DPAC-datalaag (Supabase) · stand <span id="gen"></span></div>
+      <div class="sub">Sales pijplijn · uit de DPAC-datalaag (Supabase) · opgehaald <span id="gen"></span></div>
     </div>
   </div>
   <div class="spacer"></div>
@@ -467,6 +468,7 @@
 </div>
 <div class="tabsrow"><div class="tabs" id="tabs"></div><div id="modebar"></div></div>
 <main>
+  <div class="standbar" id="standbar"></div>
   <div id="wpwrap"></div>
   <div class="kpis" id="kpis"></div>
   <div id="advwrap" style="display:none"></div>
@@ -488,6 +490,6 @@
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=55"></script>
+<script src="app.js?v=56"></script>
 </body>
 </html>
