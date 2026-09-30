@@ -974,151 +974,111 @@ async function folSyncFlush(){ SYNCT=null; if(!GCODE||!SYNCQ.size) return; const
   try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"fol_sync",items})}); const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok) throw new Error("sync "+resp.status); keys.forEach(k=>{ if(FOLST[k]) FOLST[k].sy=true; }); folSave(); }
   catch(e){ keys.forEach(k=>SYNCQ.add(k)); if(!SYNCT) SYNCT=setTimeout(folSyncFlush,15000); } }
 function folExtra(val){ try{ localStorage.dpacMktFolExtra=String(val||""); }catch(e){} }
-// herkomst + onderbouwing van één advies (uitklappaneel, gedeeld door Advies- en Opgevolgd-tab)
-function advSrc(ad){
-  const sn=stNowOf(ad);
-  const WHY={stoppen:"Show-regel: gemeten op de verse laatste 30 dagen — een intake verschijnt binnen dagen, dus dit signaal is snel én eerlijk.",halveren:"Show-regel: gemeten op de verse laatste 30 dagen — er zijn wel shows, dus knijpen in plaats van stoppen (de handtekening kan nog komen).",opschalen:"Kosten/klant-regel: gemeten op leads van 2–6 weken geleden — die hebben hun doorlooptijd gehad, en narijpers kunnen het alleen nog béter maken. Daarom mag dit advies vroeg.",terugschroeven:"Kosten/klant-regel: gemeten op leads van 4–8 weken geleden — dan heeft ~95% getekend, dus dit (negatieve) oordeel is zeker.",kwaliteit:"Kwaliteitsregel: gemeten op leads van 2–8 weken geleden, vergeleken met het account-gemiddelde in datzelfde venster. Goedkoop is pas goed als het ook intakes en klanten oplevert.",vroeg:"Vroeg signaal: laatste 14 dagen (geld zonder leads) of leads van 7–20 dagen oud (plan %). Geen eindoordeel, wel een reden om nu al te kijken in plaats van 6 weken te wachten.",opvolging:"Opvolgregel: leads van 2–8 weken geleden, per verkoper vergeleken met de rest van het team op dezelfde bron (beide ≥ 10 leads). Levert dezelfde bron bij de rest wél intakes op, dan ligt het niet aan de advertentie. Zie de tab 🤝 Sales × bron.",actie:"Actiepunt: een instelling in het advertentieplatform (targeting, formulier, URL-parameters, structuur) — geen budgetknop, dus niet automatisch meetbaar. Afvinken op ✔️ Opgevolgd zodra het staat."};
-  if(ad.type==="actie") return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname)}</b></div>${ad.sname?`<div><small>Adset / onderdeel</small><b>${esc(ad.sname)}</b></div>`:""}<div><small>Sinds</small><b>${esc(ad.since||"—")}</b></div></div><p style="margin:8px 0 0;font-size:12.5px"><b>Waarom:</b> ${esc(ad.why||"")}</p><p style="margin:4px 0 0;font-size:12.5px"><b>Waar:</b> ${esc(ad.doen||"")}</p><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY.actie}</p>`;
-  return `<div class="bxg"><div><small>Platform</small><b><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))}</b></div><div><small>Campagne</small><b>${esc(ad.cname||ad.label)}</b></div>${ad.sname?`<div><small>${ad.type==="opvolging"?"Verkoper":"Adset"}</small><b>${esc(ad.sname)}</b></div>`:""}${ad.wa!=null?`<div><small>Meetvenster (leads)</small><b>${fmtY(ad.wa)} t/m ${fmtY(ad.wb)}</b></div>`:""}<div><small>Cijfers in dat venster</small><b>${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}${ad.m.cpk!=null?" · "+eur0(ad.m.cpk)+"/klant":""}</b></div>${sn?`<div><small>Nu ingesteld</small><b>${sn.status==="uit"?"staat uit":(sn.budget!=null?eur0(sn.budget)+"/dag":"aan")}</b></div>`:""}</div><p style="margin:6px 0 0;font-size:12px;color:var(--mut)">${WHY[ad.type]||""}</p>`;
-}
-let advSig=false;
-function drawAdvice(){
-  const w=document.getElementById("advwrap");
-  const ai=aiAdvList(); const eng=advList(0);
-  const run=AIADV?new Date(AIADV.run_at):null; const rl=run?`${run.getDate()} ${MND[run.getMonth()]} ${String(run.getHours()).padStart(2,"0")}:${String(run.getMinutes()).padStart(2,"0")}`:null;
-  const M=AI_MODELS[AIRUN.model]||AI_MODELS.fable;
-  let h=`<div class="aibar"><div><b>🤖 AI-advies${rl?` van ${rl}`:""}</b><span>${AIADV?`${aiModelLab(AIADV.model)} · ${AIADV.trigger==="donderdag"?"weekrun (donderdag 06:40)":"op de knop"} · leest de cijfers, de sales-data en jullie afrondingen met opmerkingen; het algoritme rekent alleen voor.`:"Nog geen AI-advies. Draait elke donderdag 06:40, of nu op de knop."}</span></div>`
-    +`<div class="aibtns"><select class="aisel" onchange="aiModelPick(this.value)" ${AIRUN.busy?"disabled":""}>${Object.entries(AI_MODELS).map(([k,v])=>`<option value="${k}"${AIRUN.model===k?" selected":""}>${v[0]} · ${v[1]}</option>`).join("")}</select><button class="rbtn sm2 pri" onclick="aiRunAdvice()" ${AIRUN.busy?"disabled":""}>${AIRUN.busy?"⏳ Bezig (± 1 minuut)…":"🔄 Opnieuw laten kijken"}</button></div></div>`;
-  if(AIRUN.err) h+=`<div class="aierr">AI-advies mislukt: ${esc(AIRUN.err)}.</div>`;
-  if(AIADV&&AIADV.advice.samenvatting) h+=`<div class="cmp aisum">${esc(AIADV.advice.samenvatting)}</div>`;
-  const PCNT={}; for(const ad of ai) PCNT[ad.platform]=(PCNT[ad.platform]||0)+1;
-  let shown=advPlat?ai.filter(ad=>ad.platform===advPlat):ai;
-  if(ai.length) h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${advPlat==null?" on":""}" onclick="advPlat=null;drawAdvice()">Alle <span class="n">${ai.length}</span></div>`+["google","meta","tiktok"].filter(p=>PCNT[p]).map(p=>`<div class="wchip sm${advPlat===p?" on":""}" onclick="advPlat='${p}';drawAdvice()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]}</span></div>`).join("")+`</div>`;
-  const sev=ad=> ad.prio<=2?"hi":ad.prio<=5?"mid":"lo"; const SEVLAB={hi:"Super belangrijk",mid:"Belangrijk",lo:"Minder urgent"};
-  h+=`<div class="advrows">`+(shown.length?shown.map(ad=>{ const key=folKey(ad); const opn=advOpen.has(key); const sv=sev(ad); const F=folGet(ad); const V=advVerdict(ad);
-      const big=ad.manual?`<span class="advbig act">${ad.kant==="sales"?"👤 sales-punt":"instelling"}</span>`:`<span class="advbig"><span>${ad.absRef!=null?eur0(ad.absRef):"—"}</span> → <b>${ad.type==="stoppen"?"uit":eur0(ad.absTgt)}</b><small>${ad.type==="stoppen"?"":"per dag"}</small></span>`;
-      const st=F.rounded?`<span class="sevb ok">✅ afgerond</span>`:F.done?`<span class="sevb ok">☑ afgevinkt</span>`:V.st==="ok"?`<span class="sevb ok">✅ staat al zo</span>`:"";
-      return `<div class="advrow ${sv}${opn?" open":""}" onclick="advTog(${jq(key)})"><span class="rank">${ad.prio}</span><span class="sevb ${sv}">${SEVLAB[sv]}</span>`
-        +`<span class="advmain"><b>${ADV_ICON[ad.type]} ${esc(ad.titel||ADV_LAB[ad.type])}</b><br><small><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} · ${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}</small></span>`
-        +big+`<span class="advw">${st}${ad.w?`≈ ${eur0(ad.w)}/mnd`:""}</span><i class="chev${opn?" open":""}"></i>`
-        +(opn?`<div class="advx"><p>${esc(ad.txt)}</p><div class="doen">${esc(advShort(ad))} Zekerheid: ${esc(ad.zekerheid||"—")}.${F.note?` <b>📝 ${esc(F.note)}</b>`:""} · Afvinken en afronden doe je op ✔️ Opgevolgd.</div></div>`:"")+`</div>`; }).join("")
-    :`<div class="advrow lo"><span class="advmain">${AIADV?"Geen adviezen voor dit platform.":"Klik op 🔄 Opnieuw laten kijken voor het eerste AI-advies."}</span></div>`)+`</div>`;
-  if(AIADV){ const A=AIADV.advice; if(A.eerst_uitzoeken||A.niet_eens_met_algoritme) h+=`<div class="aigrid">${A.eerst_uitzoeken?`<div class="cmp"><h3>🔎 Eerst uitzoeken</h3><p>${esc(A.eerst_uitzoeken)}</p></div>`:""}${A.niet_eens_met_algoritme?`<div class="cmp"><h3>⚖️ Waar de AI het algoritme niet volgt</h3><p>${esc(A.niet_eens_met_algoritme)}</p></div>`:""}</div>`; }
-  // ruwe signalen van het algoritme (ingeklapt)
-  h+=`<div class="folgrp"><div class="folgrph" onclick="advSig=!advSig;drawAdvice()"><i class="chev${advSig?" open":""}"></i><b>🧮 Ruwe signalen van het algoritme</b><span class="n">${eng.length}</span><small>rekenregels zonder weging; de AI hierboven weegt ze mee met sales en jullie opmerkingen</small></div>`
-    +(advSig?`<div class="advrows">`+eng.slice(0,25).map(ad=>`<div class="advrow lo"><span class="advmain"><b>${ADV_ICON[ad.type]} ${ADV_LAB[ad.type]}</b> · <span class="dot" style="background:${PC(ad.platform)}"></span>${esc(ad.label)}</span><span class="advdata">${ad.type==="actie"?`sinds ${esc(ad.since||"—")}`:`${eur0(ad.m.spend)} · ${ad.m.n} leads · ${ad.m.sh} shows · ${ad.m.sg} klant${ad.m.sg===1?"":"en"}`}</span><span class="advw">≈ ${eur0(ad.w)}/mnd</span></div>`).join("")+`</div>`:"")+`</div>`;
-  h+=`<p class="note"><b>Hoe het werkt.</b> De AI (${M[0]}) leest elke donderdag om 06:40, en als je op 🔄 klikt, de cijfers per campagne en adset (vers en rijp), het ingestelde budget, de sales-cijfers per verkoper, de verliesredenen, en jullie afrondingen met opmerkingen van de laatste 6 weken. Volgorde: eerst sales, dan leadkwaliteit, dan geld per rijpheid (snel oordelen op shows, langzaam op kosten per klant), dan jullie eerdere keuzes. Het algoritme levert alleen signalen. Er wordt <b>niets automatisch gewijzigd</b>: jullie klikken, en op ✔️ Opgevolgd vink je af en rond je af. Het openen van het dashboard kost nooit iets; alleen de knop (${M[1]}).</p>`;
-  w.innerHTML=h;
-}
-
-// ---- opgevolgd: is elk advies daadwerkelijk uitgevoerd? (ingesteld budget/aan-uit uit het platform; terugval = besteding) ----
-// v2.13 (23 sep, Abel): afvinken → rij blijft staan (groen) → knop "Afgevinkte punten afronden" → blok "Afgerond, controle vannacht" →
-// meting 06:25: klopt → ✅ Doorgevoerd (afronding valt weg, meting neemt over); klopt niet → terug bovenaan Nog te doen met ⚠️.
-// Niet-meetbare acties (🎯 ⚠️ ⏱ 👤) zijn na afronden meteen ✅. Per advies in localStorage: done (afgevinkt), rounded (afrondmoment, ms), note.
-let folOpen=new Set(), folPlat=null, folGrpOpen=new Set(["todo","wacht"]);
-function folTog(k){ folOpen.has(k)?folOpen.delete(k):folOpen.add(k); drawFollow(); }
-function folGrpTog(g){ folGrpOpen.has(g)?folGrpOpen.delete(g):folGrpOpen.add(g); drawFollow(); }
+// ---- ⚡ Advies v3.0: rijen, drie knoppen, meting ----
+let advDoneOpen=false, advBusy=null;
 const hhmm=ms=>{ const t=new Date(ms); return String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0"); };
 const dayOfTs=ts=>{ const t=new Date(ts); return s2d(new Date(t.getFullYear(),t.getMonth(),t.getDate())); };
 const whenTxt=ms=>{ if(!ms) return "—"; const d=dayOfTs(ms); return (d===TODAY?"vandaag":d===TODAY-1?"gisteren":fmtY(d))+" "+hhmm(ms); };
-const FOL_STL={no:["❌","Niet doorgevoerd"],mid:["🌓","Deels"],man:["☐","Nog te doen"],ok:["✅","Doorgevoerd"],ey:["⏳","Nog niet te zien"]};
-const FOL_GRP={todo:["🔴","Nog te doen","vink af wat je doet; de rij blijft staan tot je op Afronden klikt"],wacht:["🌙","Afgerond, controle vannacht","vannacht om 06:25 kijkt het dashboard of het zo in Google, Meta of TikTok staat"],ok:["✅","Doorgevoerd","bevestigd door de meting, of afgerond bij acties die niet meetbaar zijn"],ey:["⏳","Nog niet te beoordelen","nog niets om mee te vergelijken"]};
-function folMeasuredAfter(ms){ if(!ms) return false; return STAT_AT? STAT_AT>ms : STLAST>dayOfTs(ms); }
-function folRows(){
-  const ai=aiAdvList(); const aiKeys=new Set(ai.map(folKey));
-  const hasState=ad=>{ const F=folGet(ad); return !!(F.done||F.rounded||F.note||F.confirmed); };
-  // motor-adviezen alleen als jullie er iets mee gedaan hebben (afgevinkt/afgerond/opmerking); de AI-lijst is leidend
-  const list=ai.concat(advList(0).filter(ad=>!aiKeys.has(folKey(ad))&&hasState(ad)));
-  const prev=advList(7,true).filter(p=>!list.some(c=>c.label===p.label&&c.type===p.type)&&hasState(p)).map(p=>({...p,vervallen:true}));
-  let dirty=false;
-  const rows=list.concat(prev).map(ad=>{ const V=advVerdict(ad); const ch=stChange(ad); const key=folKey(ad); let F=folGet(ad); ADVBYKEY.set(key,ad);
-    if(F.rounded&&V.src!=="manual"&&V.st==="ok"){ FOLST[key]={...F,rounded:0,confirmed:Date.now(),upd:Date.now()}; F=FOLST[key]; dirty=true; folSync(key); }   // meting bevestigt → afronding valt weg, meting neemt over
-    let disp; if(V.src==="manual") disp=F.rounded?"afgerond":"";
-    else if(V.uit) disp=`${V.bRef!=null?eur0(V.bRef):"—"} → <b>uit</b>${V.src==="status"?" ingesteld":" (geen besteding)"}`;
-    else if(V.bRef==null) disp="—";
-    else disp=`${eur0(V.bRef)} → <b>${eur0(V.bNow)}/dag</b> ${V.src==="status"?"ingesteld":"besteed"}${V.tgt!=null?` <small>doel ≈ ${eur0(V.tgt)}</small>`:""}`;
-    const rd=F.rounded||0; const meas=!!(rd&&V.src!=="manual"&&folMeasuredAfter(rd));
-    const changed=!!(ch&&ch.d>=dayOfTs(rd||Date.now())-7);                 // in de week vóór het afronden is er iets gewijzigd in het platform
-    const fout=!!(meas&&V.st!=="ok"&&!changed&&!F.note);                   // afgerond, maar niets veranderd én geen opmerking: waarschijnlijk niet opgeslagen
-    const anders=!!(rd&&V.src!=="manual"&&V.st!=="ok"&&(changed||F.note)); // bewust anders gedaan dan het advies (opmerking legt uit waarom)
-    let grp; if(V.src==="manual") grp=rd?"ok":"todo"; else if(V.st==="ok") grp="ok"; else if(rd&&!meas) grp="wacht"; else if(fout) grp="todo"; else if(rd) grp="ok"; else if(V.st==="ey") grp="ey"; else grp="todo";
-    let uitleg=V.uitleg;
-    const nuTxt=V.uit?"uit":(V.bNow!=null?eur0(V.bNow)+"/dag":"—"); const doelTxt=ad.type==="stoppen"?"uit":(V.tgt!=null?eur0(V.tgt)+"/dag":"—");
-    let kort;   // één korte zin: wat is de stand en waarom staat hij hier
-    if(V.src==="manual") kort=rd?`Afgerond ${whenTxt(rd)}.`:"Niet meetbaar in het platform: vink af zodra het gedaan is.";
-    else if(fout) kort=`Afgerond ${whenTxt(rd)}, maar in het platform is niets veranderd: staat nog op ${nuTxt}${ch?` (sinds ${fmtY(ch.d)})`:""}, advies was ${doelTxt}. Niet opgeslagen? Of zet een opmerking waarom jullie het anders deden.`;
-    else if(grp==="wacht") kort=`Afgerond ${whenTxt(rd)}; staat nu op ${nuTxt}. Vannacht 06:25 controleert het dashboard het.`;
-    else if(anders) kort=`Afgerond ${whenTxt(rd)}, bewust anders dan het advies: staat op ${nuTxt}, advies was ${doelTxt}.`;
-    else if(V.st==="ok") kort=`Doorgevoerd: staat op ${nuTxt}${ch?` sinds ${fmtY(ch.d)}`:""}${V.tgt!=null?` (advies ${doelTxt})`:""}.`;
-    else if(V.st==="ey") kort=`Nog niets om mee te vergelijken; staat op ${nuTxt}.`;
-    else kort=`${V.st==="mid"?"Deels gedaan":"Nog niet gedaan"}: staat op ${nuTxt}, advies ${doelTxt}.${F.done?` ☑ Afgevinkt ${whenTxt(F.ts)}; klik bovenaan op Afronden.`:""}`;
-    uitleg=kort;
-    return {...ad,V,st:V.st,uitleg,disp,ch,F,grp,fout,anders}; });
-  rows.forEach(r=>ADVBYKEY.set(folKey(r),r));
-  if(dirty) folSave();
-  const ORD={no:0,mid:1,man:2,ok:3,ey:4}, PO={google:0,meta:1,tiktok:2};
-  rows.sort((x,y)=> ((PO[x.platform]??9)-(PO[y.platform]??9)) || (y.fout?1:0)-(x.fout?1:0) || ORD[x.st]-ORD[y.st] || y.rank-x.rank);
-  return rows;
+const w8=s=>{ const w=String(s||"").replace(/\s+/g," ").trim().split(" ").filter(Boolean); return w.length>8? w.slice(0,8).join(" ")+"…" : w.join(" "); };
+// stand van één advies: open · wacht (afgevinkt, nog niet gecontroleerd of niet kloppend) · gedaan
+// afgevinkt telt alleen als het ná de laatste AI-run gebeurde; een advies dat de AI laat staan (🔁) staat daardoor weer open
+function advState(ad){
+  const F=folGet(ad); const run=AI_RUNAT();
+  const note=(F.note&&((F.upd||0)>=run||!run))?F.note:"";
+  const tChk=F.done?(F.ts||0):(F.rounded||0);   // "afgerond" uit v2.x telt ook als afgevinkt
+  const chk=tChk>=run&&tChk>0;
+  if(!chk) return {grp:"open",chk:false,note,F};
+  if(ad.manual) return {grp:"gedaan",chk:true,note,F,m:"ok"};
+  const measured=STAT_AT>tChk;
+  if(!measured) return {grp:"wacht",chk:true,note,F,m:null};
+  const sn=stNowOf(ad);
+  if(!sn||ad.absRef==null) return {grp:"wacht",chk:true,note,F,m:"klok"};
+  const bNow=stUit(ad)?0:(sn.budget==null?null:+sn.budget);
+  if(bNow==null) return {grp:"wacht",chk:true,note,F,m:"klok"};
+  const TOL=Math.max(2,Math.min(5,ad.absRef*0.10));
+  let ok;
+  if(note) ok=Math.abs(bNow-ad.absRef)>TOL||(ad.type==="stoppen"&&bNow<1);    // anders gedaan: klopt zodra het platform veranderd is
+  else { const V=advVerdict(ad); ok=V.st==="ok"; if(V.st==="ey") return {grp:"wacht",chk:true,note,F,m:"klok",bNow}; }
+  return ok? {grp:"gedaan",chk:true,note,F,m:"ok",bNow} : {grp:"wacht",chk:true,note,F,m:"warn",bNow};
 }
-const folMB=rows=>rows.filter(r=>r.type!=="opvolging");   // sales-opvolging (👤) hoort niet in het rapport voor de media buyer
-function folGroups(rows){ const G={todo:[],wacht:[],ok:[],ey:[]}; for(const r of rows) (G[r.grp]||G.todo).push(r); return G; }
-// ✅ Afronden: alle afgevinkte punten verhuizen naar "Afgerond, controle vannacht" (niet-meetbare acties meteen naar Doorgevoerd)
-function folRound(){ const now=Date.now(); let n=0; for(const k in FOLST){ const F=FOLST[k]; if(F&&F.done){ FOLST[k]={...F,done:false,rounded:now,upd:now}; n++; folSync(k); } } if(n) folSave(); drawFollow(); }
-function folUnround(key){ const F=FOLST[key]||{}; FOLST[key]={...F,rounded:0,done:true,ts:Date.now(),upd:Date.now()}; folSave(); folSync(key); drawFollow(); }
-function drawFollow(){ const w=document.getElementById("folwrap"); if(w) keepScroll(w,drawFollowInner); }
-function drawFollowInner(){
-  const w=document.getElementById("folwrap");
-  const all=folRows(); const GA=folGroups(all);
-  const PCNT={}; for(const r of GA.todo) PCNT[r.platform]=(PCNT[r.platform]||0)+1;
-  const rows=folPlat?all.filter(r=>r.platform===folPlat):all; const G=folGroups(rows);
-  const nChk=all.filter(r=>r.grp==="todo"&&r.F.done).length, nFout=GA.todo.filter(r=>r.fout).length;
-  const CLS={no:"hi",mid:"mid",man:"man",ok:"ok",ey:"ey"};
-  let h=`<div class="folbar"><div class="folkpis">`
-    +`<div class="folkpi todo${folGrpOpen.has("todo")?" on":""}" onclick="folGrpTog('todo')"><b>${G.todo.length}</b><span>🔴 Nog te doen${nFout?` · <em>⚠️ ${nFout} klopt niet</em>`:""}</span></div>`
-    +`<div class="folkpi wacht${folGrpOpen.has("wacht")?" on":""}" onclick="folGrpTog('wacht')"><b>${G.wacht.length}</b><span>🌙 Afgerond, controle vannacht</span></div>`
-    +`<div class="folkpi ok${folGrpOpen.has("ok")?" on":""}" onclick="folGrpTog('ok')"><b>${G.ok.length}</b><span>✅ Doorgevoerd</span></div>`
-    +`</div><div class="folbtns"><button class="rbtn sm2${nChk?" pri":""}" onclick="folRound()" ${nChk?"":"disabled"} title="Zet alle afgevinkte punten op Afgerond. Vannacht om 06:25 controleert het dashboard of ze echt in het platform staan.">✅ Afgevinkte punten afronden${nChk?` (${nChk})`:""}</button><button class="rbtn sm2" onclick="folSendOpen()" title="Stuurt alles wat nog open staat als visueel rapport via de Slack-bot naar Ger en Abel (eerst zie je een voorbeeld)">📨 Naar Ger</button></div></div>`;
-  h+=`<div class="wonchips"><span class="lbl">Platform:</span><div class="wchip sm${folPlat==null?" on":""}" onclick="folPlat=null;drawFollow()">Alle <span class="n">${GA.todo.length} te doen</span></div>`+["google","meta","tiktok"].filter(p=>all.some(r=>r.platform===p)).map(p=>`<div class="wchip sm${folPlat===p?" on":""}" onclick="folPlat='${p}';drawFollow()"><span class="dot" style="background:${PC(p)}"></span>${PN(p)} <span class="n">${PCNT[p]||0} te doen</span></div>`).join("")+`<span class="lbl" style="margin-left:auto">laatste controle: ${whenTxt(STAT_AT)} · volgende vannacht 06:25</span></div>`;
-  const rowHtml=r=>{ const key=folKey(r); const opn=folOpen.has(key); const inTodo=r.grp==="todo"; const cls=r.fout?"hi":r.grp==="wacht"?"man":CLS[r.st];
-    const badge=r.fout?`<span class="sevb hi">⚠️ Klopt niet</span>`:r.grp==="wacht"?`<span class="sevb man">🌙 Controle vannacht</span>`:(r.V.src==="manual"&&r.F.rounded)?`<span class="sevb ok">✅ Afgerond</span>`:r.anders?`<span class="sevb ok" title="bewust anders gedaan dan het advies">✅ Anders dan advies</span>`:`<span class="sevb ${CLS[r.st]}">${FOL_STL[r.st][0]} ${FOL_STL[r.st][1]}</span>`;
-    const chk=inTodo?`<label class="folchk" onclick="event.stopPropagation()" title="afvinken = dit heb ik gedaan. De rij blijft staan; met Afronden (bovenaan) maak je het definitief."><input type="checkbox" ${r.F.done?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
-      : r.grp==="wacht"?`<span class="folchk" onclick="event.stopPropagation()"><span class="lnk" onclick="folUnround(${jq(key)})" title="terug naar Nog te doen (als je het toch niet hebt gedaan)">↩︎</span></span>`:`<span class="folchk"></span>`;
-    return `<div class="advrow ${cls}${opn?" open":""}${inTodo&&r.F.done?" done":""}" onclick="folTog(${jq(key)})">`
-      +chk+badge
-      +`<span class="advmain"><b>${ADV_ICON[r.type]} ${r.ai&&r.titel?esc(r.titel):ADV_LAB[r.type]}</b> · <span class="dot" style="background:${PC(r.platform)}"></span>${esc(r.label)}${r.ai?` <span class="aiTag">🤖</span>`:""}${inTodo&&r.F.done?` <span class="doneTag">☑ afgevinkt</span>`:""}</span>`
-      +`<span class="advw">${r.disp}${r.st==="ok"&&r.ch?` · ${fmtY(r.ch.d)}`:""}</span>`
-      +`<input class="folnote-in${r.F.note?" has":""}" type="text" value="${esc(r.F.note||"")}" placeholder="opmerking (komt in het rapport)" title="Opmerking voor Ger én terugkoppeling voor Claude; komt letterlijk in het rapport" onclick="event.stopPropagation()" onchange="folNote(${jq(key)},this.value);this.classList.toggle('has',!!this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
-      +`<i class="chev${opn?" open":""}"></i>`
-      +(opn?`<div class="advx" onclick="event.stopPropagation()"><p>${esc(r.ai&&r.titel?r.titel+". ":"")}${esc(r.txt.replace(/\s+/g," ").slice(0,300))}${r.txt.length>300?"…":""}</p><div class="doen ${r.fout?"bad":""}">${esc(r.uitleg)}</div>${r.F.note?`<div class="folnoteBig">📝 ${esc(r.F.note)}</div>`:""}${r.vervallen?`<div class="doen">Dit advies vuurde vorige week nog, nu niet meer.</div>`:""}</div>`:"")
-      +`</div>`; };
-  for(const g of ["todo","wacht","ok","ey"]){ const ls=G[g]; if(!ls.length&&g!=="todo") continue; const opn=folGrpOpen.has(g);
-    h+=`<div class="folgrp ${g}"><div class="folgrph" onclick="folGrpTog('${g}')"><i class="chev${opn?" open":""}"></i><b>${FOL_GRP[g][0]} ${FOL_GRP[g][1]}</b><span class="n">${ls.length}</span><small>${FOL_GRP[g][2]}</small></div>`;
-    if(opn){ if(!ls.length) h+=`<div class="advrows"><div class="advrow ok"><span class="advmain">Niets meer te doen${folPlat?" voor "+esc(PN(folPlat)):""}. 👌</span></div></div>`;
-      else { let lastP=null; h+=`<div class="advrows">`; for(const r of ls){ if(r.platform!==lastP){ lastP=r.platform; h+=`<div class="folplat"><span class="dot" style="background:${PC(r.platform)}"></span>${esc(PN(r.platform))}<span class="n">${ls.filter(x=>x.platform===r.platform).length}</span></div>`; } h+=rowHtml(r); } h+=`</div>`; } }
-    h+=`</div>`; }
-  h+=`<p class="note"><b>Hoe het werkt.</b> Overdag <b>vink je af</b> wat je doet; de rij blijft staan (groen) zodat je ziet wat je hebt aangevinkt. Aan het eind klik je op <b>✅ Afgevinkte punten afronden</b>: die rijen gaan naar 🌙 Afgerond. <b>Vannacht om 06:25</b> meet het dashboard het ingestelde budget en de aan/uit-status in Google, Meta en TikTok. Klopt het (minstens driekwart van de geadviseerde stap gezet, of uit), dan schuift de rij naar ✅ Doorgevoerd. Is er in het platform niets veranderd én staat er geen opmerking bij, dan komt hij terug bovenaan Nog te doen met ⚠️ (waarschijnlijk niet opgeslagen). Heb je bewust iets anders gedaan dan het advies, zet dat in de opmerking: dan telt het als doorgevoerd en blijft het advies 14 dagen van ⚡ Advies weg. Acties die niet meetbaar zijn (🎯 ⚠️ ⏱ 👤) zijn na afronden meteen ✅. <b>📨 Naar Ger</b> zet alles wat nog open staat (plus jullie opmerkingen) in een visueel rapport en stuurt de link via de Slack-bot naar Ger en Abel. Vinkjes en opmerkingen bewaart deze browser.</p>`;
+const M_ICO={ok:['<span class="mk ok" title="klopt met het platform">✓</span>'],warn:['<span class="mk warn" title="afgevinkt, maar in het platform is niets veranderd gezien">!</span>'],klok:['<span class="mk klok" title="nog niet meetbaar">⏱</span>']};
+function budHtml(ad){
+  if(ad.manual) return `<span class="abud uitz">uitzoeken</span>`;
+  const van=ad.absRef!=null?eur0(ad.absRef):"—";
+  if(ad.type==="stoppen"||ad.absTgt===0) return `<span class="abud dn">${van} → ⛔ UIT</span>`;
+  const up=ad.absRef==null||ad.absTgt>ad.absRef;
+  return `<span class="abud ${up?"up":"dn"}">${van} → ${eur0(ad.absTgt)}</span>`;
+}
+function advTog(k){ advOpen.has(k)?advOpen.delete(k):advOpen.add(k); drawAdvice(); }
+function advRow(ad){
+  const key=folKey(ad); const S=advState(ad); const opn=advOpen.has(key);
+  const sn=stNowOf(ad);
+  const panel=opn?`<div class="apanel">${ad.txt?`<p>${esc(ad.txt)}</p>`:""}<p class="amut">Zekerheid ${esc(ad.zekerheid||"—")}${ad.w?` · ≈ ${eur0(ad.w)} per maand`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p></div>`:"";
+  const hist=(ad.ref&&(ad.opmTeam||ad.reactie))?`<div class="ahist">${ad.opmTeam?`<span>📝 ${esc(ad.opmTeam)}</span>`:""}${ad.reactie?`<span>🔁 ${esc(ad.reactie)}</span>`:""}</div>`:"";
+  return `<div class="arow ${S.grp}${opn?" open":""}">`
+    +`<label class="achk" title="Gedaan. Zonder opmerking = advies gevolgd. Met opmerking = anders gedaan."><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
+    +`<span class="amk">${S.m?M_ICO[S.m][0]:""}</span>`
+    +`<div class="amain" onclick="advTog(${jq(key)})"><b>${esc(w8(ad.titel))}${ad.ref?` <span class="rep" title="blijft staan uit de vorige run">🔁</span>`:""}</b><small><span class="dot" style="background:${PC(ad.platform)}"></span>${esc(PN(ad.platform))} › ${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}</small></div>`
+    +`<input class="anote" type="text" value="${esc(S.note)}" placeholder="opmerking" title="Anders gedaan? Schrijf hier wat jullie wél deden. Gaat naar Ger en naar de AI." onchange="folNote(${jq(key)},this.value)" onkeydown="if(event.key==='Enter'){this.blur()}">`
+    +budHtml(ad)+hist+panel+`</div>`;
+}
+function drawAdvice(){ const w=document.getElementById("advwrap"); if(w) keepScroll(w,drawAdviceInner); }
+function drawAdviceInner(){
+  const w=document.getElementById("advwrap");
+  const ai=aiAdvList();
+  const rows=ai.map(ad=>({ad,S:advState(ad)}));
+  const open=rows.filter(r=>r.S.grp==="open").sort((a,b)=>a.ad.prio-b.ad.prio);
+  const wacht=rows.filter(r=>r.S.grp==="wacht").sort((a,b)=>a.ad.prio-b.ad.prio);
+  const gedaan=rows.filter(r=>r.S.grp==="gedaan").sort((a,b)=>a.ad.prio-b.ad.prio);
+  const run=AI_RUNAT(); const runTxt=run?whenTxt(run)+(AIADV.trigger==="donderdag"?" (donderdag)":""):"nog nooit";
+  const sam=AIADV&&AIADV.advice&&AIADV.advice.samenvatting?String(AIADV.advice.samenvatting).replace(/\s+/g," ").trim():"";
+  const samK=sam?(sam.split(" ").length>25?sam.split(" ").slice(0,25).join(" ")+"…":sam):"";
+  const tCtl=`Controleer nu: meet het ingestelde budget en aan/uit in Google, Meta en TikTok en vergelijkt dat met wat jullie hebben afgevinkt. ✓ klopt, ! niets veranderd gezien, 🕒 nog niet meetbaar. Dezelfde meting draait elke nacht om 06:25. Laatste meting: ${STAT_AT?whenTxt(STAT_AT):"—"}.`;
+  const tAi=`Opnieuw laten kijken: ${AI_MODELS.fable[0]}, ${AI_MODELS.fable[1]}, duurt 2 tot 4 minuten. De AI kijkt met frisse blik naar de cijfers en krijgt per bestaand advies mee of het gedaan of anders gedaan is, jullie opmerking en de meting. Hij laat een advies vervallen of laat het staan (🔁) met een reactie. Draait ook elke donderdag om 06:40. Laatste run: ${runTxt}. Er wordt nooit iets automatisch gewijzigd in de platforms.`;
+  const tGer=`Naar Ger: rapport met de open adviezen, wat anders is gedaan met jullie opmerking en de reactie van de AI. Gaat via de Slack-bot naar Ger en Abel; je ziet eerst een voorbeeld.`;
+  let h=`<div class="abar"><div class="asum">${samK?esc(samK):""}</div><div class="abtns">`
+    +`<button class="rbtn sm2" onclick="advControl()" title="${esc(tCtl)}" ${advBusy?"disabled":""}>${advBusy==="ctl"?"⏳ Meten…":"Controleer nu"}</button>`
+    +`<button class="rbtn sm2" onclick="aiRunAdvice()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy==="ai"?"⏳ AI kijkt…":"Opnieuw laten kijken"}</button>`
+    +`<button class="rbtn sm2 pri" onclick="folSendOpen()" title="${esc(tGer)}">Naar Ger</button></div></div>`;
+  if(AIRUN.err) h+=`<div class="aierr">${esc(AIRUN.err)}</div>`;
+  h+=`<div class="arows">`+(open.length||wacht.length?open.concat(wacht).map(r=>advRow(r.ad)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
+  if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad)).join("")}</div>`:"");
   w.innerHTML=h;
 }
-// ---- rapport voor de media buyer: tekst (kopiëren) en visueel (HTML, via de Slack-bot) ----
-const folTarget=r=>{ const mt=/zet naar ≈ € ([\d.]+)\/dag/.exec(r.txt||""); return mt?"€ "+mt[1]:eur0(r.V.tgt); };   // zelfde doelbedrag als in de adviestekst
-function folReportText(rows){
-  const LAB=ADV_LAB, ICO=ADV_ICON; const t=d2s(NOW); const G=folGroups(rows); const open=G.todo;
-  let extra=""; try{ extra=localStorage.dpacMktFolExtra||""; }catch(e){}
-  const line=r=>{ const V=r.V; let s=`• ${ICO[r.type]} *${LAB[r.type]}*: ${r.label}`;
-    if(V.src!=="manual"&&V.bRef!=null){ s+=`: nu ${V.uit?"uit":eur0(V.bNow)+"/dag"} → ${r.type==="stoppen"?"uitzetten":"naar ≈ "+folTarget(r)+"/dag"}`; if(r.st==="mid") s+=` (nu ${Math.round((V.f||0)*100)}% van de stap)`; }
-    if(r.fout) s+=` ⚠️ was afgerond, maar in het platform is niets gewijzigd`;
-    s+=`\n   _${r.txt.replace(/\s+/g," ").slice(0,220)}${r.txt.length>220?"…":""}_`;
-    if(r.F.note) s+=`\n   📝 ${r.F.note}`;
-    return s; };
-  const byPlat=list=>["google","meta","tiktok"].map(p=>{ const ls=list.filter(r=>r.platform===p); return ls.length?`*${PN(p)}*\n`+ls.map(line).join("\n"):""; }).filter(Boolean).join("\n\n");
-  let out=`*Marketing · open punten* (${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()})\n(uit het DPAC-marketingdashboard, tabblad Opgevolgd)\n\n`;
-  out+= open.length? `*Nog te doen (${open.length})*\n\n`+byPlat(open) : "*Nog te doen*: niets open, alles is doorgevoerd. 👌";
-  if(extra.trim()) out+=`\n\n*Extra punten*\n${extra.trim()}`;
-  if(rows.some(r=>r.F.note)) out+=`\n\n_📝 = onze opmerkingen; die gaan ook terug naar Claude als terugkoppeling op de adviezen._`;
-  if(G.wacht.length) out+=`\n\n*Afgerond in het overleg, controle vannacht (${G.wacht.length})* 🌙\n`+G.wacht.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
-  if(G.ok.length) out+=`\n\n*Doorgevoerd (${G.ok.length})* ✅\n`+G.ok.map(r=>`• ${ICO[r.type]} ${LAB[r.type]}: ${r.label}${r.ch?` (${fmtY(r.ch.d)})`:""}${r.F.note?` (📝 ${r.F.note})`:""}`).join("\n");
-  return out;
+function folCheck(key,on){ FOLST[key]={...(FOLST[key]||{}),done:!!on,ts:Date.now(),rounded:on?(FOLST[key]||{}).rounded||0:0,upd:Date.now()}; folSave(); folSync(key); drawAdvice(); }
+function folNote(key,val){ FOLST[key]={...(FOLST[key]||{}),note:String(val||"").trim(),upd:Date.now()}; folSave(); folSync(key); drawAdvice(); }
+const LOCAL=()=>location.search.indexOf("local=1")>=0;
+function herlaad(data){ const oA=A,oB=B,oTab=tab; D=data; sel=null; initApp(); A=Math.max(0,Math.min(oA,NOW)); B=Math.max(A,Math.min(oB,NOW)); tab=oTab; render(); }
+// knop 1: Controleer nu → status_check (n8n meet via de entity-status-sync) → data opnieuw laden
+async function advControl(){
+  if(advBusy) return; advBusy="ctl"; AIRUN.err=null; drawAdvice();
+  try{
+    if(LOCAL()){ D.status_at=new Date().toISOString(); herlaad(D); }
+    else { const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"status_check"})});
+      const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok) throw new Error("meting mislukt ("+(j&&j.error||resp.status)+")");
+      herlaad(await laad(GCODE)); }
+  }catch(e){ AIRUN.err=e&&e.message?e.message:"meting mislukt"; }
+  advBusy=null; drawAdvice();
 }
+// knop 2: Opnieuw laten kijken → ai_advice (Fable). Een run duurt 2 tot 4 minuten; breekt de browser de verbinding af, dan wacht hij tot de nieuwe run in de data staat.
+async function aiRunAdvice(){
+  if(advBusy) return; advBusy="ai"; AIRUN.err=null; drawAdvice();
+  const before=AI_RUNAT(); const t0=Date.now();
+  try{
+    if(LOCAL()){ await new Promise(r=>setTimeout(r,600)); }
+    else {
+      let got=false;
+      try{ const resp=await fetch(DATA_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"ai_advice",model:"fable"})});
+        const j=await resp.json().catch(()=>null); if(resp.ok&&j&&j.ok) got=true; else if(j&&j.error) throw new Error(j.error==="unauthorized"?"toegangscode geweigerd":String(j.error)); }
+      catch(e){ if(/toegangscode|JSON/.test(e.message||"")) throw e; }   // verbinding afgebroken: de run loopt door in n8n
+      for(let i=0;i<30;i++){ const data=await laad(GCODE); const ra=data.ai_advice&&data.ai_advice.run_at?Date.parse(data.ai_advice.run_at):0; if(ra>before){ herlaad(data); got=true; break; } if(got) break; await new Promise(r=>setTimeout(r,20000)); }
+      if(!got) throw new Error("nog geen nieuw advies na "+Math.round((Date.now()-t0)/60000)+" minuten; probeer later Ververs");
+    }
+  }catch(e){ AIRUN.err="AI-advies mislukt: "+(e&&e.message?e.message:"onbekend"); }
+  advBusy=null; drawAdvice();
+}
+// ---- knop 3: rapport naar Ger (visueel HTML via de Slack-bot). Nooit id's, alleen namen voluit. ----
+function mbRows(){ return aiAdvList().filter(ad=>ad.kant!=="sales").map(ad=>({ad,S:advState(ad)})); }
 function folReportHtml(rows,extra){
   const t=d2s(NOW), dat=`${t.getDate()} ${MNDF[t.getMonth()]} ${t.getFullYear()}`; const G=folGroups(rows); const open=G.todo; const e=esc;
   const big=r=>{ const V=r.V; if(V.src==="manual"||V.bRef==null) return `<div class="big act">${r.type==="actie"?"instelling":"actie"}</div>`;
