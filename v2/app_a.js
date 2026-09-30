@@ -65,8 +65,11 @@ async function gTry(code, stil){
   }catch(e){
     gBusy(false);
     if(e.message==="code"){ try{ localStorage.removeItem("dpacSalesCode"); sessionStorage.removeItem("dpacSalesCode"); }catch(x){} }
-    if(!stil){ document.getElementById("gfout").textContent = e.message==="code"?"Onjuiste code":"Laden mislukt ("+e.message+"), probeer het nog eens"; document.getElementById("gcode").value=""; }
-    else if(e.message!=="code"){ document.getElementById("gfout").textContent="Laden mislukt ("+e.message+"), voer de code in en probeer opnieuw"; }
+    const gb=document.querySelector(".gatebox");
+    if(e.message==="code"){ if(gb) gb.classList.remove("srvfout"); if(!stil){ document.getElementById("gfout").textContent="Onjuiste code"; document.getElementById("gcode").value=""; } return false; }
+    // v4.3: de code klopt, de server geeft nu geen bruikbare gegevens → gewone melding met een knop, niet opnieuw om de code vragen
+    if(gb) gb.classList.add("srvfout");
+    document.getElementById("gfout").innerHTML=`<b>De gegevens konden nu niet geladen worden.</b><br>De server geeft op dit moment geen bruikbaar antwoord. Probeer het over een minuut opnieuw.<button class="gretry" onclick="gTry(${jq(code)}, true)">⟳ Opnieuw laden</button><small>technisch: ${esc(e.message)}</small>`;
     return false;
   }
 }
@@ -229,20 +232,23 @@ let dSide=null;   // v4.3: detail toont één tabel op volle breedte; null = aut
 let colF = {ok:{}, bad:{}};
 let fOpen = null, expand = {};
 let collapsed = new Set();
-// ---- teamkiezer (welke kaarten tonen) — onthouden in localStorage + URL ?reps= ----
-let teamSel=null;   // Set van namen; null = nog niet geladen
-const TEAM_KEY="salesdash_reps";
+// ---- teamkiezer (welke kaarten tonen) — v4.3: onthoudt wie je UITvinkt (localStorage + URL ?uit=), zodat nieuwe reps vanzelf verschijnen ----
+let teamSel=null, teamUit=new Set();   // teamSel = wie nu zichtbaar is; teamUit = bewust uitgevinkt
+const TEAM_KEY="salesdash_reps_uit";
 function isRawId(n){ return /^[A-Za-z0-9]{18,24}$/.test(String(n||"")) && !/\s/.test(String(n)); }
 function teamLoad(){
-  const known=new Set(REPS.map(p=>p.n)); let sel=null;
-  try{ const u=new URL(location.href).searchParams.get("reps"); if(u!==null){ sel=new Set(u.split(",").map(x=>decodeURIComponent(x).trim()).filter(x=>known.has(x))); } }catch(e){}
-  if(!sel){ try{ const raw=localStorage.getItem(TEAM_KEY); if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)) sel=new Set(arr.filter(x=>known.has(x))); } }catch(e){} }
-  if(!sel) sel=new Set(known);   // eerste bezoek: iedereen met activiteit; vink zelf af wie niet hoort
-  teamSel=sel; teamSave(false);
+  const known=new Set(REPS.map(p=>p.n)); let uit=null;
+  try{ const u=new URL(location.href).searchParams.get("uit"); if(u!==null) uit=new Set(u.split(",").map(x=>decodeURIComponent(x).trim()).filter(Boolean)); }catch(e){}
+  if(!uit){ try{ const raw=localStorage.getItem(TEAM_KEY); const arr=raw?JSON.parse(raw):null; if(Array.isArray(arr)) uit=new Set(arr); }catch(e){} }
+  teamUit=uit||new Set();   // eerste bezoek: iedereen met activiteit; een nieuwe rep staat nooit in deze lijst en is dus altijd zichtbaar
+  teamSel=new Set([...known].filter(n=>!teamUit.has(n)));
+  try{ const u=new URL(location.href); if(u.searchParams.has("reps")){ u.searchParams.delete("reps"); history.replaceState(null,"",u.toString()); } }catch(e){}   // oude ?reps= (lijst van wie aan stond) niet meer gebruiken
 }
 function teamSave(url){
-  try{ localStorage.setItem(TEAM_KEY, JSON.stringify([...teamSel])); }catch(e){}
-  if(url!==false){ try{ const u=new URL(location.href); u.searchParams.set("reps",[...teamSel].join(",")); history.replaceState(null,"",u.toString()); }catch(e){} }
+  const known=new Set(REPS.map(p=>p.n));
+  teamUit=new Set([...[...teamUit].filter(n=>!known.has(n)), ...[...known].filter(n=>!teamSel.has(n))]);   // uitgevinkte namen die nu geen data hebben blijven uit
+  try{ localStorage.setItem(TEAM_KEY, JSON.stringify([...teamUit])); }catch(e){}
+  if(url!==false){ try{ const u=new URL(location.href); if(teamUit.size) u.searchParams.set("uit",[...teamUit].join(",")); else u.searchParams.delete("uit"); history.replaceState(null,"",u.toString()); }catch(e){} }
 }
 function teamOn(n){ return !teamSel || teamSel.has(n); }
 function teamToggle(n){ if(!teamSel) teamSel=new Set(REPS.map(p=>p.n)); teamSel.has(n)? teamSel.delete(n) : teamSel.add(n); teamSave(); drawCols(); }
