@@ -597,6 +597,20 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
 /* v2.15 · AI-advies */
 .aisel{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:10px;padding:6px 10px;font-size:12px}
 .aisum{padding:12px 16px;margin:0 0 10px;font-size:14px;line-height:1.5}
+.abar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 12px}.asum{flex:1 1 360px;font-size:14px;line-height:1.45;color:var(--txt)}.abtns{display:flex;gap:8px;flex:none}
+.arows{display:flex;flex-direction:column;gap:8px}
+.arow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:var(--shadow)}
+.arow.wacht{background:linear-gradient(90deg,rgba(26,154,61,.08),transparent 55%)}.arow.gedaan{opacity:.75}
+.achk{display:flex;flex:none}.achk input{width:18px;height:18px;margin:0;cursor:pointer;accent-color:var(--green)}
+.amk{width:22px;flex:none;display:flex;justify-content:center}.mk{display:inline-flex;width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;font-weight:900;font-size:13px;cursor:help}
+.mk.ok{background:rgba(49,162,76,.18);color:#31a24c}.mk.warn{background:rgba(224,138,0,.2);color:#e08a00}.mk.klok{background:rgba(142,142,147,.22);color:var(--mut);font-size:12px}
+.amain{flex:1 1 280px;min-width:0;cursor:pointer;display:flex;flex-direction:column;gap:2px}.amain b{font-size:14.5px}.amain small{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.amain .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}.rep{font-size:13px;cursor:help}
+.anote{flex:0 1 240px;min-width:140px;border:1px solid var(--line);border-radius:9px;padding:6px 10px;font:inherit;font-size:12.5px;background:var(--bg);color:var(--txt)}.anote:focus{outline:none;border-color:var(--plan)}
+.abud{flex:none;min-width:150px;text-align:right;font-size:19px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}.abud.up{color:#31a24c}.abud.dn{color:#e04b4b}.abud.uitz{color:var(--mut);font-size:14px;font-weight:600}
+.ahist{flex:1 1 100%;display:flex;flex-direction:column;gap:2px;padding-left:68px;font-size:12px;color:var(--mut)}
+.apanel{flex:1 1 100%;padding:8px 0 2px 68px;border-top:1px dashed var(--line);margin-top:2px}.apanel p{margin:0 0 4px;font-size:13px;line-height:1.5}.apanel .amut{color:var(--mut);font-size:12px}
+.adone{display:flex;align-items:center;gap:8px;margin:14px 2px 8px;font-size:13.5px;font-weight:700;cursor:pointer;color:var(--mut)}.aempty{padding:14px;color:var(--mut)}
+@media(max-width:760px){.ahist,.apanel{padding-left:0}.abud{min-width:0}.anote{flex:1 1 100%}}
 .aigrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.aigrid .cmp{padding:12px 16px}.aigrid h3{margin:0 0 6px;font-size:14px}.aigrid p{margin:0;font-size:13px;line-height:1.5}
 @media(max-width:900px){.aigrid{grid-template-columns:1fr}}
 .advbig{font-size:18px;font-weight:700;white-space:nowrap;margin:0 10px}.advbig span{color:var(--mut);font-weight:600}.advbig small{font-size:11px;color:var(--mut);margin-left:4px;font-weight:500}.advbig.act{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
@@ -645,13 +659,12 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
   <div class="detail" id="detail" style="display:none"></div>
   <div id="trendwrap" style="display:none"></div>
   <div id="advwrap" style="display:none"></div>
-  <div id="folwrap" style="display:none"></div>
   <div id="saleswrap" style="display:none"></div>
   <div id="signwrap" style="display:none"></div>
   <div id="datawrap" style="display:none"></div>
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>
