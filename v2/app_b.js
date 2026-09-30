@@ -1,5 +1,5 @@
 // ---- 📊 grafiek-helpers (SVG, geen libraries) ----
-const CHART_COL = ["#1f6fd8","#1a9a3d","#dc2a1e","#c99a00","#8f845e","#5856d6","#0e9aa7","#d95fa2"];
+const CHART_COL = ["#1f6fd8","#8b5cf6","#0e9aa7","#d95fa2","#6b7a99","#b3a678","#3f51b5","#a0785a"];   // v4.3: geen rood/groen voor categorieën
 const repCol = n => RCOL[n] || "#8e8e93";
 function svgLine(series, o={}){
   const w=o.w||640, h=o.h||190, pl=o.pl||38, pr=o.pr||(series.some(x=>x.showVals)?46:12), pt=o.pt||14, pb=o.pb||26;
