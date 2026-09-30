@@ -293,7 +293,7 @@ function drawTabs(){
     t.appendChild(document.createTextNode(label));
     t.onclick=()=>{tab=id; sel=null; render();}; el.appendChild(t); };
   mk("vandaag","📞 Vandaag");
-  mk("tot","Totaal");
+  mk("tot","📊 Week");
   // personenkiezer: één tab met uitklapmenu i.p.v. losse tabs
   const cur=repOf(); const pt=document.createElement("div"); pt.className="tab persoon"+((cur||tab==="ov")?" on":""); pt.id="persoonTab";
   pt.innerHTML=(cur?`<span class="dot" style="background:${RCOL[cur]}"></span>${esc(cur)}`:tab==="ov"?"Σ Iedereen":"👤 Persoon")+` <span class="caret">▾</span>`;
@@ -396,7 +396,8 @@ function colHtml(who, name, color, tot){
 }
 function drawCols(){
   const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap"), iw=document.getElementById("intwrap"), vw=document.getElementById("vdwrap");
-  for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw,vw]) x.style.display="none";
+  for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw,vw]) if(x) x.style.display="none";
+  const wpw=document.getElementById("wpwrap"); if(wpw) wpw.innerHTML = tab==="tot" ? weekPulsHtml() : "";   // v4.3: weekpuls bovenaan het tabblad Week
   if(tab==="vandaag"){ vw.style.display="block"; drawVandaag(); return; }
   if(tab==="cmp"){ cw.style.display="block"; drawCmp(); return; }
   if(tab==="trend"){ tw.style.display="block"; drawTrend(); return; }
@@ -410,6 +411,40 @@ function drawCols(){
   if(tab==="tot"){ el.style.display="flex"; el.style.flexWrap="wrap"; el.innerHTML=teamChipsHtml()+kindChipsHtml()+colHtml(null,"Totaal","#1a2233",true)+REPS.filter(p=>teamOn(p.n)).map(p=>colHtml(p.n,p.n,RCOL[p.n],false)).join("")+unkColHtml(); return; }
   if(tab==="ov"){ el.style.display="block"; el.innerHTML=repPage(null); return; }
   const n=repOf(); el.style.display="block"; el.innerHTML=repPage(n);
+}
+
+// ---- 📊 weekpuls (v4.3) ----
+// Besluit Abel 30-09: kleur t.o.v. het eigen gemiddelde van de vorige 4 weken (zelfde weekdagen, samen geteld):
+// rood onder 85%, amber 85 tot 100%, groen vanaf 100%. Geen vaste weekdoelen. Alleen volle dagen; vandaag loopt nog.
+const WP_ROOD=85, WP_GROEN=100;
+function wpVenster(){ const wk=weekKey(TODAY), dn=TODAY-wk;
+  if(dn>=1) return {a:wk, b:TODAY-1, prev:k=>[wk-7*k, TODAY-1-7*k], lab:`week ${isoWeek(wk)} · ma t/m ${dgn(TODAY-1)} (volle dagen)`, vlab:`ma t/m ${dgn(TODAY-1)} vorige week`, today:true};
+  return {a:wk-7, b:wk-1, prev:k=>[wk-7-7*k, wk-1-7*k], lab:`vorige week (week ${isoWeek(wk-7)}, volledig)`, vlab:"de week ervoor", today:false}; }
+const WP_M=[
+  {k:"leads",t:"Nieuwe leads",c:(a,b)=>({n:L.filter(l=>inR(l.cd,a,b)).length}),ph:"l2s"},
+  {k:"gep",t:"Intakes gepland",c:(a,b)=>({n:funnel(null,a,b).gepland.length}),ph:"plan",side:"ok"},
+  {k:"show",t:"Shows",c:(a,b)=>({n:funnel(null,a,b).show.length}),ph:"show",side:"ok"},
+  {k:"ins",t:"Ingeschreven",c:(a,b)=>({n:L.filter(l=>l.is_signed&&inR(l.insE,a,b)).length}),won:true,sub:"op inschrijfdatum"},
+  {k:"pr",t:"Plan rate",r:true,c:(a,b)=>{ const f=funnel(null,a,b); return {n:f.gepland.length,d:f.gepland.length+f.verloren.length}; },ph:"plan",min:()=>+(DEFS.min_volume_plan||15)},
+  {k:"sr",t:"Show rate",r:true,c:(a,b)=>{ const f=funnel(null,a,b); return {n:f.show.length,d:f.agenda.length}; },ph:"show",min:()=>+(DEFS.min_volume_show||8)},
+  {k:"gs",t:"Sign rate",r:true,c:(a,b)=>{ const f=funnel(null,a,b); return {n:f.signS.length,d:f.show.length}; },ph:"signS",min:()=>+(DEFS.min_volume_sign||5)}];
+function wpPick(k){ const v=wpVenster(), m=WP_M.find(x=>x.k===k); setRange(v.a,v.b);
+  if(m.won){ wonRep=null; tab="won"; render(); return; }
+  pick("tot",m.ph); if(m.side){ dSide=m.side; drawDetail(); } }
+function weekPulsHtml(){
+  const v=wpVenster(); const tiles=WP_M.map(m=>{
+    const cur=m.c(v.a,v.b), vw=m.c(...v.prev(1)), pr=[1,2,3,4].map(k=>m.c(...v.prev(k)));
+    let val, vgl, gem, ratio=null, weinig=false;
+    if(m.r){ const sn=pr.reduce((s,x)=>s+x.n,0), sd=pr.reduce((s,x)=>s+x.d,0);
+      val=cur.d?pct(cur.n,cur.d):null; gem=sd?pct(sn,sd):null; vgl=vw.d?pct(vw.n,vw.d):null;
+      weinig=cur.d<m.min(); if(val!=null&&gem) ratio=val/gem*100; }
+    else { val=cur.n; gem=Math.round(pr.reduce((s,x)=>s+x.n,0)/4*10)/10; vgl=vw.n; weinig=gem<3; if(gem>0) ratio=val/gem*100; }
+    const kl = weinig||ratio==null ? "grijs" : ratio<WP_ROOD ? "rood" : ratio<WP_GROEN ? "amber" : "groen";
+    const f=x=>x==null?"—":m.r?(x+"").replace(".",",")+"%":(x+"").replace(".",",");
+    const vandaag = v.today&&!m.r ? m.c(TODAY,TODAY).n : null;
+    const tip=`${m.t}: ${f(val)}${m.r?` (${cur.n}/${cur.d})`:""} · ${v.vlab}: ${f(vgl)} · gemiddelde vorige 4 weken (zelfde dagen): ${f(gem)}${ratio!=null?` · ${Math.round(ratio)}% van het gemiddelde`:""}${weinig?" · te weinig volume voor een oordeel":""} · klik voor de namen`;
+    return `<div class="wpt ${kl}" onclick="wpPick('${m.k}')" title="${esc(tip)}"><span class="wpl">${m.t}</span><b>${f(val)}</b><small>vorige week ${f(vgl)} · 4-wk gem. ${f(gem)}</small>${vandaag!=null?`<small>+${vandaag} vandaag (loopt nog)</small>`:""}${weinig?`<small class="wpv">te weinig volume</small>`:ratio!=null?`<small class="wpv">${Math.round(ratio)}% van gemiddelde</small>`:""}</div>`; }).join("");
+  return `<div class="wp"><div class="wph"><b>Weekpuls</b><span>${v.lab} · kleur t.o.v. het eigen gemiddelde van de 4 weken ervoor (zelfde dagen): 🔴 onder ${WP_ROOD}% · 🟠 ${WP_ROOD} tot ${WP_GROEN}% · 🟢 vanaf ${WP_GROEN}% · klik een tegel voor de namen</span></div><div class="wpg">${tiles}</div></div>`;
 }
 
 // ---- persoonlijke pagina ----
