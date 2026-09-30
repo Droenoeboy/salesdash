@@ -17,7 +17,7 @@
   .ptile:hover{border-color:var(--plan)}
   .pulsrates{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))} .pulsrates .ptile b{font-size:20px}
   .pulsoordeel{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px;font-size:14px}
-  .pulsoordeel .dotb{width:12px;height:12px;border-radius:50%;flex:none} .dotb.ok{background:var(--green)} .dotb.warn{background:#e08a00} .dotb.bad{background:var(--red)}
+  .pulsoordeel .dotb{width:12px;height:12px;border-radius:50%;flex:none;background:var(--line)} .dotb.ok{background:var(--green)} .dotb.warn{background:#e08a00} .dotb.bad{background:var(--red)}
   .pulsoordeel .lopend{margin-left:auto;font-size:11.5px;color:var(--mut)}
   .pulstwo{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:12px;align-items:start;margin-bottom:12px}
   @media(max-width:1000px){.pulstwo{grid-template-columns:1fr}}
@@ -85,6 +85,8 @@ function drawPuls(){
   const w=document.getElementById("pulswrap"); if(!w) return;
   const [a,b]=pulsRange(); const lopend=!pulsWeek;
   const c=pulsCijfers(null,a,b), p=pulsCijfers(null,a-7,b-7);
+  if(!L.length){ keepScroll(w,()=>{ w.innerHTML=`<div class="pcard" style="text-align:center;padding:36px 20px"><div style="font-size:28px">📭</div><h3 style="justify-content:center">Geen leads in de data</h3><p style="color:var(--mut);margin:6px 0 14px">De datalaag gaf een leeg antwoord. Meestal helpt ⟳ Ververs; blijft het leeg, dan ligt het aan de n8n-workflow (wf11), niet aan dit dashboard.</p><button class="rbtn" onclick="ververs()">⟳ Ververs</button></div>`; }); return; }
+  const nWk=L.filter(l=>inR(l.cd,a,b)).length + L.filter(l=>inR(l.cd,a-28,b-1)).length;
   const wkLab=`Week ${isoWeek(a)} · ${dgn(a)} ${fmt(a)}${b>a?" t/m "+dgn(b)+" "+fmt(b):""}`;
   // tegels: aantal, oordeel t.o.v. 4-weeks gemiddelde van dezelfde weekdagen, pijl t.o.v. vorige week
   const T=[
@@ -106,12 +108,12 @@ function drawPuls(){
   let worst=null, best=null;
   for(const [k,lab] of checks){ const avg=pulsGem(null,a,b,k); if(avg==null||avg<PULS_MINVOL) continue; const d=(c[k]-avg)/avg*100; if(d<=PULS_ROOD&&(!worst||d<worst.d)) worst={k,lab,d,avg}; if(d>=PULS_GROEN&&(!best||d>best.d)) best={k,lab,d,avg}; }
   for(const [k,lab,nk] of [["pr","plan rate","prN"],["sr","show rate","srN"],["gs","sign rate","gsN"]]){ const avg=pulsGem(null,a,b,k); if(avg==null||c[k]==null||(c[nk]||0)<PULS_MINVOL) continue; const d=c[k]-avg; if(d<=-8&&(!worst||d<worst.d)) worst={k,lab,d,avg,pp:true}; if(d>=5&&(!best||d>best.d)) best={k,lab,d,avg,pp:true}; }
-  const oordeelCls=worst?"bad":best?"ok":"warn";
+  const oordeelCls=!nWk?"na":worst?"bad":best?"ok":"warn";
   const fmtD=x=>x.pp?`${x.d>0?"+":""}${r1(x.d)} pp`:`${x.d>0?"+":""}${r1(x.d)}%`;
   const fmtV=x=>x.pp?r1(c[x.k])+"%":c[x.k];
   const fmtA=x=>x.pp?r1(x.avg)+"%":r1(x.avg);
   const cap=x=>x.lab[0].toUpperCase()+x.lab.slice(1);
-  const oordeel = worst ? `<b>${cap(worst)} ${worst.pp?"blijft":"blijven"} achter:</b> ${fmtV(worst)} tegenover gemiddeld ${fmtA(worst)} op deze weekdagen (${fmtD(worst)}).${best?` ${cap(best)} ${best.pp?"loopt":"lopen"} voor (${fmtD(best)}).`:""}`
+  const oordeel = !nWk ? `<b>Geen leads in deze en de vorige 4 weken.</b> Kies een andere periode via de datumkiezer of ga naar 🧮 Totaal.` : worst ? `<b>${cap(worst)} ${worst.pp?"blijft":"blijven"} achter:</b> ${fmtV(worst)} tegenover gemiddeld ${fmtA(worst)} op deze weekdagen (${fmtD(worst)}).${best?` ${cap(best)} ${best.pp?"loopt":"lopen"} voor (${fmtD(best)}).`:""}`
                  : best ? `<b>Op koers.</b> ${cap(best)} ${best.pp?"loopt":"lopen"} voor: ${fmtV(best)} tegenover gemiddeld ${fmtA(best)} (${fmtD(best)}).`
                  : `<b>Normale week.</b> Alles binnen de marge van het 4-weeks gemiddelde.`;
   // nu doen (bellijst per reden, hele team)
