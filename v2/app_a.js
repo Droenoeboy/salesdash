@@ -168,6 +168,7 @@ function initApp(){
   const tx=document.getElementById("rtxt"); if(tx&&!tx.textContent) tx.textContent=L.length+" leads · "+AP.length+" intake-afspraken · "+EV.length+" live-events";
   A=s2d(new Date(_n.getFullYear(),_n.getMonth(),1)); B=NOW;
   dagSel=null; dagOpen=new Set(); dagUur=null;
+  if(!vdInit){ vdInit=true; if(ikBen&&REPS.some(p=>p.n===ikBen)) tab="vandaag"; }   // v4.3: bekende rep opent op zijn eigen bellijst
   render();
 }
 
@@ -277,6 +278,7 @@ function drawTabs(){
     if(color){const d=document.createElement("span");d.className="dot";d.style.background=color;t.appendChild(d);}
     t.appendChild(document.createTextNode(label));
     t.onclick=()=>{tab=id; sel=null; render();}; el.appendChild(t); };
+  mk("vandaag","📞 Vandaag");
   mk("tot","Totaal");
   // personenkiezer: één tab met uitklapmenu i.p.v. losse tabs
   const cur=repOf(); const pt=document.createElement("div"); pt.className="tab persoon"+((cur||tab==="ov")?" on":""); pt.id="persoonTab";
@@ -308,8 +310,9 @@ const repOf = () => (tab.startsWith("p")? tab.slice(1) : null);
 
 // ---- kpi's ----
 function drawKpis(){
+  const k=document.getElementById("kpis"); k.style.display=tab==="vandaag"?"none":"";   // v4.3: bellijst staat direct bovenaan
+  if(tab==="vandaag") return;
   const who=repOf(); const f=funnel(who,A,B); const s=slots(who,A,B,"setter");
-  const k=document.getElementById("kpis");
   const first = who==null ? [L.filter(l=>inR(l.cd,A,B)).length,"Nieuwe leads"] : [f.gepland.length+f.verloren.length,"Leads afgehandeld"];
   const held = s.show.length+s.noshow.length+s.late.length;
   // v4.3: periode binnen één week (bv. "Deze week" op woensdag) → dezelfde weekdagen van vorige week; anders de even lange periode direct ervoor
@@ -373,8 +376,9 @@ function colHtml(who, name, color, tot){
   </div>`;
 }
 function drawCols(){
-  const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap"), iw=document.getElementById("intwrap");
-  for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw]) x.style.display="none";
+  const el=document.getElementById("cols"), aw=document.getElementById("advwrap"), ww=document.getElementById("wonwrap"), dw=document.getElementById("dagwrap"), pw=document.getElementById("aptwrap"), tw=document.getElementById("trendwrap"), bw=document.getElementById("bronwrap"), lw=document.getElementById("lostwrap"), cw=document.getElementById("cmpwrap"), iw=document.getElementById("intwrap"), vw=document.getElementById("vdwrap");
+  for(const x of [el,aw,ww,dw,pw,tw,bw,lw,cw,iw,vw]) x.style.display="none";
+  if(tab==="vandaag"){ vw.style.display="block"; drawVandaag(); return; }
   if(tab==="cmp"){ cw.style.display="block"; drawCmp(); return; }
   if(tab==="trend"){ tw.style.display="block"; drawTrend(); return; }
   if(tab==="bron"){ bw.style.display="block"; drawBron(); return; }
@@ -420,6 +424,74 @@ function repPage(n){
     <div class="two"><div class="cmp"><h3>Actie nodig</h3>${todo}</div><div class="cmp"><h3>Verliesredenen (als eigenaar) · ${lost.length}</h3>${lostH}</div></div>
     <div class="two"><div class="cmp"><h3>Komende intakes</h3>${upH}</div><div class="cmp"><h3>Agenda-slots in de periode <span class="chsub">afspraken uit de GHL-agenda, als setter (jij boekte) vs als intaker (jouw agenda)</span></h3><table><tr><th></th><th>Als setter</th><th>Als intaker</th></tr><tr><td>Op de agenda</td><td>${s.all.length}</td><td>${si.all.length}</td></tr><tr><td>Show</td><td>${s.show.length}</td><td>${si.show.length}</td></tr><tr><td>No-show</td><td>${s.noshow.length}</td><td>${si.noshow.length}</td></tr><tr><td>Late cancel</td><td>${s.late.length}</td><td>${si.late.length}</td></tr><tr><td>Show rate per slot</td><td><b>${fpct(s.show.length,s.show.length+s.noshow.length+s.late.length)}</b></td><td><b>${fpct(si.show.length,si.show.length+si.noshow.length+si.late.length)}</b></td></tr><tr><td>Reactietijd (mediaan)</td><td colspan="2">${fmin(s2l)}</td></tr></table></div></div>
   </div></div>`;
+}
+
+// ---- 📞 vandaag: bellijst per rep (v4.3) ----
+// Volgorde (besluit Abel 30-09): 1 nieuwe lead nog niet gebeld (langst wachtend eerst; amber ≥15 min, rood ≥60 min),
+// 2 intake morgen nog niet bevestigd, 3 no-show vandaag of gisteren, 4 na show nog geen besluit, 5 getekend maar niet betaald.
+const IKBEN_KEY="salesdash_ikben";
+let ikBen=null, vdWho=undefined, vdGrp=null, vdSort={c:0,d:1}, vdKies=false, vdInit=false;
+try{ ikBen=localStorage.getItem(IKBEN_KEY)||null; }catch(e){}
+const VD_GRP={1:"📞 Nieuwe lead, nog niet gebeld",2:"📅 Intake morgen, niet bevestigd",3:"👻 No-show, herplannen",4:"🪑 Na show, nog geen besluit",5:"💶 Getekend, niet betaald"};
+const S2L_AMBER=15, S2L_ROOD=60;   // minuten, besluit Abel 30-09
+const ghlUrl = cid => `https://app.gohighlevel.com/v2/location/${LOC}/contacts/detail/${cid}`;
+function ikBenZet(n){ ikBen=n; vdWho=undefined; vdKies=false; try{ if(n) localStorage.setItem(IKBEN_KEY,n); else localStorage.removeItem(IKBEN_KEY); }catch(e){} drawVandaag(); }
+function belLijst(){
+  const nu=Date.now(), dagMin=d=>Math.max(0,(TODAY-d)*1440), out=[], gezien=new Set();
+  const add=(grp,l,cid,naam,who,reden,wacht,extra)=>{ const k=cid||(l&&l.lead_id); if(gezien.has(k)) return; gezien.add(k); out.push({grp,l,cid,naam,who,reden,wacht,team:!who,...(extra||{})}); };
+  const herk=l=>l? [l.kanaal, l.utm_campaign, l.utm_content].filter(Boolean).join(" › ") : "";
+  // 1 · nieuwe lead, nog geen menselijke actie (first_touch_min leeg), open in de Leads-fase, laatste 14 dagen
+  for(const l of L){ if(!l.open||l.stage_position!==0||l.has_planned||l.cd<TODAY-14) continue; const ft=FT.get(String(l.lead_id)); if(!ft||ft.first_touch_min!=null) continue;
+    const t0=new Date(l.created_at).getTime(); if(isNaN(t0)) continue; const m=Math.max(0,Math.round((nu-t0)/6e4));
+    add(1,l,l.contact_id,l.name,l.setter&&!isRawId(l.setter)?l.setter:null,`binnen ${fmt(l.cd)} ${tsHM(l.created_at)}${ft.in_work_window===false?" (buiten werktijd)":""}`,m,{herk:herk(l),s2l:true}); }
+  // 2 · intake morgen, nog niet bevestigd (afspraakstatus ≠ confirmed)
+  const byC=new Map(); for(const l of L) if(!byC.has(l.contact_id)) byC.set(l.contact_id,l);
+  for(const a of AP){ if(a.sd!==TODAY+1||a.is_cancelled||a.is_show||a.is_noshow||a.status==="confirmed") continue; const l=byC.get(a.contact_id); if(l&&l.lost) continue;
+    const t0=new Date(a.booked_at).getTime(); add(2,l,a.contact_id,a.name,(a.setter&&!isRawId(a.setter)?a.setter:null)||(a.intaker&&!isRawId(a.intaker)?a.intaker:null),`intake morgen ${a.hm} ${a.kind?KIND_LBL[a.kind]||"":""}, nog niet bevestigd`,isNaN(t0)?null:Math.max(0,Math.round((nu-t0)/6e4)),{herk:herk(l),sinds:"geboekt"}); }
+  // 3 · no-show vandaag of gisteren, nog open en nog niet opnieuw ingepland
+  const herpland=new Set(AP.filter(a=>a.sd>=TODAY&&!a.is_cancelled&&a.is_upcoming).map(a=>a.contact_id));
+  for(const l of L){ if(!l.is_noshow||!l.open||l.id_<TODAY-1||l.id_>TODAY||herpland.has(l.contact_id)) continue;
+    const t0=l.appt? new Date(l.appt.starts_at).getTime() : NaN; add(3,l,l.contact_id,l.name,l.setter&&!isRawId(l.setter)?l.setter:(l.owner||null),`no-show ${l.id_===TODAY?"vandaag":"gisteren"}${l.appt?" "+l.appt.hm:""}, herplannen`,isNaN(t0)?dagMin(l.id_):Math.max(0,Math.round((nu-t0)/6e4)),{herk:herk(l),dag:isNaN(t0)}); }
+  // 4 · na show nog geen besluit (open, niet getekend, niet verloren) · eigenaar
+  for(const l of L){ if(!l.is_show||l.is_signed||!l.open) continue;
+    add(4,l,l.contact_id,l.name,(l.owner&&!isRawId(l.owner)?l.owner:null)||(l.intaker&&!isRawId(l.intaker)?l.intaker:null),`show op ${fmt(l.id_)}, nu in ${l.stage_name}`,l.id_>=0?dagMin(l.id_):null,{herk:herk(l),dag:true}); }
+  // 5 · getekend, nog niet betaald · eigenaar
+  for(const l of L){ if(!l.is_signed||l.is_paid||l.lost) continue;
+    add(5,l,l.contact_id,l.name,l.owner&&!isRawId(l.owner)?l.owner:null,`getekend ${l.insE>=0?fmt(l.insE):""}, nog niet betaald`,l.insE>=0?dagMin(l.insE):null,{herk:herk(l),dag:true}); }
+  out.sort((x,y)=>x.grp-y.grp||((y.wacht??-1)-(x.wacht??-1)));
+  return out;
+}
+function vdWachtHtml(r){
+  if(r.wacht==null) return `<span class="dim">—</span>`;
+  const t=r.dag? (r.wacht<1440?"vandaag":Math.round(r.wacht/1440)+" d") : fmin(r.wacht);
+  if(r.s2l){ const c=r.wacht>=S2L_ROOD?"rood":r.wacht>=S2L_AMBER?"amber":"ok"; return `<span class="vdw ${c}" title="wacht sinds binnenkomst · amber vanaf ${S2L_AMBER} min, rood vanaf ${S2L_ROOD} min">${t}</span>`; }
+  return `<span class="vdw">${r.sinds?r.sinds+" ":""}${t}${r.sinds?" geleden":""}</span>`;
+}
+function drawVandaag(){
+  const w=document.getElementById("vdwrap");
+  if(ikBen && !REPS.some(p=>p.n===ikBen)) ikBen=null;
+  const who = vdWho===undefined ? ikBen : vdWho;   // vdWho = tijdelijk andere weergave (null = hele team), ikBen = onthouden
+  const all=belLijst();
+  const mine = who==null ? all : all.filter(r=>r.who===who||r.team);
+  mine.forEach((r,i)=>r.prio=i+1);   // nummering binnen de getoonde lijst
+  const lst = vdGrp==null ? mine : mine.filter(r=>r.grp===vdGrp);
+  const nR=mine.filter(r=>r.s2l&&r.wacht>=S2L_ROOD).length, nA=mine.filter(r=>r.s2l&&r.wacht>=S2L_AMBER&&r.wacht<S2L_ROOD).length;
+  const repChips=REPS.map(p=>`<div class="wchip sm${ikBen===p.n?" on":""}" onclick="ikBenZet(${jq(p.n)})"><span class="dot" style="background:${RCOL[p.n]};display:inline-block;width:8px;height:8px;border-radius:50%"></span>${esc(p.n)}</div>`).join("");
+  let h=`<div class="vdtop">`;
+  if(!ikBen||vdKies) h+=`<div class="vdkies"><b>Wie ben jij?</b><span class="chsub">Dit dashboard onthoudt je keuze in deze browser en opent daarna meteen op jouw lijst. Geen inlog, alleen een voorkeur.</span><div class="wonchips" style="margin:8px 0 0">${repChips}${ikBen?`<div class="wchip sm" onclick="vdKies=false;drawVandaag()">annuleren</div><div class="wchip sm" onclick="ikBenZet(null)">vergeet mij</div>`:""}</div></div>`;
+  else h+=`<div class="vdik"><span class="ava" style="background:${RCOL[ikBen]||"#8a94a8"};width:28px;height:28px;font-size:12px">${esc(ikBen.slice(0,2).toUpperCase())}</span><span>Ik ben <b>${esc(ikBen)}</b></span><button class="vdwissel" onclick="vdKies=true;drawVandaag()">🔄 Wissel van persoon</button></div>`;
+  h+=`<div class="wonchips" style="margin:0"><span class="lbl">Bekijk:</span>${ikBen?`<div class="wchip sm${who===ikBen?" on":""}" onclick="vdWho=undefined;drawVandaag()">Mijn lijst</div>`:""}<div class="wchip sm${who==null?" on":""}" onclick="vdWho=null;drawVandaag()">Hele team<span class="n">${all.length}</span></div>`+REPS.filter(p=>p.n!==ikBen).map(p=>`<div class="wchip sm${who===p.n&&vdWho!==undefined?" on":""}" onclick="vdWho=${jq(p.n)};drawVandaag()">${esc(p.n)}</div>`).join("")+`</div></div>`;
+  h+=`<div class="vdsum">${nR?`<span class="vdw rood">🔴 ${nR} ${nR===1?"lead wacht":"leads wachten"} langer dan ${S2L_ROOD} min</span>`:""}${nA?`<span class="vdw amber">🟠 ${nA} langer dan ${S2L_AMBER} min</span>`:""}${!nR&&!nA?`<span class="vdw ok">✓ geen nieuwe lead wacht langer dan ${S2L_AMBER} min</span>`:""}<span class="chsub">stand van de data: ${esc(document.getElementById("gen").textContent||"—")} · ververs voor de nieuwste stand</span></div>`;
+  h+=`<div class="wonchips"><span class="lbl">Reden:</span><div class="wchip sm${vdGrp==null?" on":""}" onclick="vdGrp=null;drawVandaag()">Alles<span class="n">${mine.length}</span></div>`+Object.entries(VD_GRP).map(([g,t])=>{ const n=mine.filter(r=>r.grp===+g).length; return `<div class="wchip sm${vdGrp===+g?" on":""}${n?"":" dim"}" onclick="vdGrp=${g};drawVandaag()">${g} · ${t}<span class="n">${n}</span></div>`; }).join("")+`</div>`;
+  const cols=[
+    {t:"#",v:r=>r.prio},{t:"Naam",v:r=>(r.naam||"").toLowerCase()},{t:"Reden",v:r=>r.grp*1e9-(r.wacht||0)},{t:"Wachttijd",v:r=>r.wacht??-1},
+    {t:"Voor",v:r=>r.team?"~":r.who},{t:"Herkomst",v:r=>r.herk||""},{t:"GHL",v:r=>r.naam||""}];
+  const s=vdSort; const rows=[...lst].sort((x,y)=>{ const a=cols[s.c].v(x), b=cols[s.c].v(y); return (a<b?-1:a>b?1:0)*s.d; });
+  h+=`<div class="wontbl vdtbl"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="vdSort.c===${i}?vdSort.d=-vdSort.d:(vdSort={c:${i},d:${i===3?-1:1}});drawVandaag()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`;
+  for(const r of rows) h+=`<tr class="g${r.grp}"><td class="dim">${r.prio}</td><td>${ghl(r.cid,r.naam)}</td><td><span class="vdg g${r.grp}">${r.grp}</span> ${esc(r.reden)}</td><td>${vdWachtHtml(r)}</td><td>${r.team?`<span class="stg" title="nog niemand toegewezen: wie het eerst belt">team</span>`:esc(r.who)}</td><td><small>${esc(r.herk||"—")}</small></td><td>${r.cid?`<a href="${ghlUrl(r.cid)}" target="_blank">GHL ↗</a>`:"—"}</td></tr>`;
+  if(!rows.length) h+=`<tr><td colspan="${cols.length}" class="empty">${vdGrp?"Niets met deze reden.":"Niets dat nu op actie wacht. 👌"}</td></tr>`;
+  h+=`</table></div><p class="note">Volgorde: 1 nieuwe lead nog niet gebeld (langst wachtend bovenaan; wachttijd vanaf binnenkomst, 🟠 vanaf ${S2L_AMBER} min, 🔴 vanaf ${S2L_ROOD} min), 2 intake morgen nog niet bevestigd, 3 no-show vandaag of gisteren (nog niet opnieuw ingepland), 4 na show nog geen besluit, 5 getekend maar nog niet betaald. Binnen elke reden: langst wachtend bovenaan. <b>Voor wie:</b> nieuwe leads hebben nog geen setter en staan daarom op ieders lijst ("team"); bevestigen en no-shows bij de setter, na show en betaling bij de eigenaar. Nog niet gebeld = geen menselijke actie in het CRM (taak, belpoging, afspraak of fasewissel). Klik een naam of GHL ↗ voor de contactkaart.</p>`;
+  w.innerHTML=h;
 }
 
 // ---- detail ----
@@ -512,7 +584,7 @@ function rowsTable(rows, phase, win, tblKey){
 }
 function drawDetail(){
   const el=document.getElementById("detail");
-  if(!sel || ["adv","won","dag","apt","trend","bron","lost","int"].includes(tab)){ el.style.display="none"; return; }
+  if(!sel || ["adv","won","dag","apt","trend","bron","lost","int","vandaag"].includes(tab)){ el.style.display="none"; return; }
   if(tab==="cmp"){ el.style.marginTop="12px"; } else el.style.marginTop="";
   const who = sel.repKey==="tot"? null : sel.repKey;
   const name = who==null? "Totaal" : who;
