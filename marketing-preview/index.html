@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview marketingdashboard v2.16</title>
+<style>
+  :root{
+    --ink:#0e0e0f; --sand:#d8d1b3; --bg:#0e0e0f; --card:#1a1a1c; --line:#2b2b2e;
+    --txt:#f1eee4; --mut:#a3a39e; --green:#5fd77f; --blue:#7fb3ff; --red:#ff8a7e; --yellow:#f2cd4a; --violet:#9d91ff;
+    --redbg:#3a1512; --greenbg:#0f2c1a; --bluebg:#15243b; --yellowbg:#33290c;
+  }
+  *{box-sizing:border-box} body{margin:0;color:var(--txt);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:transparent}
+  .wrap{width:min(1180px,100%);padding:0 0 22px}
+  .top{background:var(--ink);border:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 18px;position:relative;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .top:after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,#1a9a3d 0 25%,#1f6fd8 25% 50%,#dc2a1e 50% 75%,#f2c400 75%)}
+  .logo{width:38px;height:38px;border-radius:10px;background:#222;display:grid;place-items:center;font-weight:900;color:var(--sand)}
+  h1{font-size:18px;margin:0}.sub{font-size:12px;color:var(--sand);opacity:.75}.spacer{flex:1}.btn{border:1px solid #3a3a3c;background:#232326;color:var(--sand);border-radius:10px;padding:8px 12px;font-weight:700;font-size:12px}
+  .tabs{display:flex;gap:6px;overflow:auto;padding:12px 0 0}.tab{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 15px;font-weight:700;font-size:13px;white-space:nowrap}.tab.on{background:var(--sand);color:#111;border-color:var(--sand)}
+  main{padding:14px 0 0}.workboard{display:grid;grid-template-columns:minmax(260px,1.2fr) minmax(260px,1fr) auto;gap:12px;align-items:stretch;background:linear-gradient(135deg,var(--card),rgba(31,111,216,.08));border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-bottom:12px}
+  .eyebrow{font-size:11px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:var(--mut)}.workcopy b{display:block;font-size:18px;line-height:1.25;margin:3px 0}.workcopy small{color:var(--mut)}
+  .cards{display:grid;grid-template-columns:repeat(4,minmax(72px,1fr));gap:8px}.card{background:#111113;border:1px solid var(--line);border-radius:13px;padding:9px 10px}.card b{display:block;font-size:25px;line-height:1}.card span{display:block;color:var(--mut);font-size:11px;font-weight:700;margin-top:4px}.todo b{color:var(--red)}.checked b{color:var(--yellow)}.wait b{color:var(--violet)}.ok b{color:var(--green)}
+  .actions{display:flex;flex-direction:column;gap:7px;justify-content:center;min-width:150px}.actions .btn:first-child{background:var(--sand);color:#111;border-color:var(--sand)}
+  .chips{display:flex;gap:8px;overflow:auto;margin:0 0 12px}.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-weight:700;white-space:nowrap}.chip.on{background:var(--sand);color:#111}.n{background:rgba(255,255,255,.12);border-radius:999px;padding:1px 7px;margin-left:4px}
+  .section{margin:14px 0}.sectionhead{display:flex;align-items:center;gap:8px;padding:6px 2px}.sectionhead b{font-size:15px}.sectionhead small{color:var(--mut)}.rows{display:flex;flex-direction:column;gap:8px}.row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--red);border-radius:12px;padding:10px 14px;flex-wrap:wrap}.row.mid{border-left-color:#e08a00}.row.ok{border-left-color:#31a24c}.row.done{background:linear-gradient(90deg,rgba(49,162,76,.14),transparent 60%)}
+  input[type=checkbox]{width:17px;height:17px;accent-color:#1a9a3d}.badge{font-size:10px;font-weight:900;border-radius:999px;padding:3px 9px;text-transform:uppercase}.badge.hi{background:rgba(224,75,75,.16);color:var(--red)}.badge.mid{background:rgba(224,138,0,.16);color:#f0a23a}.badge.ok{background:rgba(49,162,76,.16);color:var(--green)}
+  .main{flex:1 1 280px;min-width:240px}.main b{display:block}.main small{color:var(--mut)}.metric{font-size:12px;color:var(--mut);font-weight:700}.note{flex:0 1 300px;min-width:210px;border:1px solid var(--line);background:#111113;color:var(--txt);border-radius:10px;padding:8px 10px;min-height:42px;font:12px/1.35 inherit;resize:vertical}.note.has{border-color:var(--blue);background:#132239}.chev{color:var(--mut);font-weight:900}
+  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;color:var(--mut);font-size:12.5px} summary{cursor:pointer;color:var(--txt);font-weight:700}
+  .track{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.2fr);gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-top:18px}.track h2{margin:2px 0;font-size:20px}.track small{color:var(--mut)}.track .card.bad b{color:var(--red)}.track .card.warn b{color:var(--yellow)}
+  @media(max-width:900px){.workboard,.track{grid-template-columns:1fr}.actions{flex-direction:row;flex-wrap:wrap}.cards{grid-template-columns:repeat(2,1fr)}.note{flex:1 1 100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo">DP</div>
+    <div><h1>DPAC · Marketing Dashboard <span style="font-size:12px;background:var(--sand);color:#111;border-radius:999px;padding:2px 8px">v2.16</span></h1><div class="sub">Ads naar leads naar intakes naar inschrijvingen · preview van de nieuwe werkwijze</div></div>
+    <div class="spacer"></div><button class="btn">Ververs</button><button class="btn">Laatste 30 dagen</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on">Acties</div><div class="tab">AI-advies</div><div class="tab">Tracking-check</div><div class="tab">Sales × bron</div><div class="tab">Resultaten</div><div class="tab">Kanalen & ads</div><div class="tab">Beste ads</div><div class="tab">Trend</div>
+  </div>
+
+  <main>
+    <div class="workboard">
+      <div class="workcopy"><span class="eyebrow">Vandaag met Ger</span><b>Loop alleen de open punten langs. Vink af, zet jullie opmerking erbij en stuur daarna de rest naar Ger.</b><small>Opmerkingen gaan mee naar de AI en het rapport.</small></div>
+      <div class="cards"><div class="card todo"><b>5</b><span>open</span></div><div class="card checked"><b>2</b><span>afgevinkt</span></div><div class="card wait"><b>1</b><span>controle vannacht</span></div><div class="card ok"><b>7</b><span>klaar</span></div></div>
+      <div class="actions"><button class="btn">Afronden (2)</button><button class="btn">Naar Ger</button><button class="btn">AI check opmerkingen</button></div>
+    </div>
+
+    <div class="chips"><div class="chip on">Alle <span class="n">5 te doen</span></div><div class="chip">Google <span class="n">1</span></div><div class="chip">Meta <span class="n">3</span></div><div class="chip">TikTok <span class="n">1</span></div><div style="margin-left:auto;color:var(--mut);font-size:12px;align-self:center;white-space:nowrap">laatste controle: vandaag 06:25</div></div>
+
+    <div class="section"><div class="sectionhead"><b>🔴 Nog te doen</b><span class="n">5</span><small>vink af wat je doet</small></div>
+      <div class="rows">
+        <div class="row done"><input type="checkbox" checked><span class="badge hi">Klopt niet</span><div class="main"><b>🎯 Meta UTM URL-parameters herstellen</b><small>Meta (FB/IG) · Abel DPAC - landingpage GHL - Dijs Media · Video 2 Hook 2</small></div><div class="metric">campagne/adset-id ontbreekt</div><textarea class="note has">We hebben de URL-template aangepast, maar bewust nog niet op oude ads gezet vanwege leerfase-reset.</textarea><span class="chev">⌄</span></div>
+        <div class="row done mid"><input type="checkbox" checked><span class="badge mid">Deels</span><div class="main"><b>🔻 Budget terugschroeven</b><small>Google · 4.0 PMax Producer Opleiding</small></div><div class="metric">€ 80 → € 40/dag</div><textarea class="note">Ger checkt of dit niet botst met lopende test.</textarea><span class="chev">⌄</span></div>
+        <div class="row"><input type="checkbox"><span class="badge hi">Super belangrijk</span><div class="main"><b>⚠️ TikTok-formulier telefoonnummer verplicht maken</b><small>TikTok · leadformulier 2024 new form juiste UTM</small></div><div class="metric">3 leads zonder nummer</div><textarea class="note" placeholder="opmerking: waarom anders gedaan?"></textarea><span class="chev">⌄</span></div>
+        <div class="row mid"><input type="checkbox"><span class="badge mid">Belangrijk</span><div class="main"><b>🚀 Beste Meta-adset opschalen</b><small>Meta · Video 3 · Hook 1</small></div><div class="metric">€ 45 → € 65/dag</div><textarea class="note" placeholder="opmerking: waarom anders gedaan?"></textarea><span class="chev">⌄</span></div>
+      </div>
+    </div>
+
+    <div class="section"><div class="sectionhead"><b>✅ Doorgevoerd</b><span class="n">7</span><small>bevestigd of bewust anders gedaan</small></div>
+      <div class="rows"><div class="row ok"><span class="badge ok">Doorgevoerd</span><div class="main"><b>🎯 Google 2.1 Search niet opschalen</b><small>bewust niet gedaan, want 2.0 en 2.1 zijn zoekwoordtests</small></div><div class="metric">met opmerking verwerkt</div></div></div>
+    </div>
+
+    <details><summary>Hoe werkt deze werklijst?</summary><p>Vink af wat jullie doen. De rij blijft zichtbaar. Zet erbij waarom jullie afwijken. Klik aan het einde op Afronden. Vannacht om 06:25 checkt het dashboard budget en aan/uit-status in Google, Meta en TikTok. Met opmerking telt het als bewust anders gedaan en neemt de AI het mee bij de volgende run.</p></details>
+
+    <div class="track">
+      <div><span class="eyebrow">ITM/UTM-check</span><h2>Tracking vraagt aandacht</h2><small>Laatste 30 dagen betaalde leads. Dit checkt campagnekoppeling, advertentiekoppeling en zachte attributie.</small></div>
+      <div class="cards"><div class="card bad"><b>6</b><span>campagne onbekend</span><small>8%</small></div><div class="card warn"><b>24</b><span>advertentie onbekend</span><small>31%</small></div><div class="card warn"><b>11</b><span>zachte koppeling</span><small>14%</small></div><div class="card bad"><b>4</b><span>open tracking-acties</span><small>uit actiepunten</small></div></div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
