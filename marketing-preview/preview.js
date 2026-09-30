@@ -157,3 +157,91 @@ drawAdviceInner=function(){
 };
 // data al binnen vóór dit script? dan meteen opnieuw tekenen
 if(typeof D!=="undefined"&&D){ A=RIJP_A(); B=RIJP_B(); tab="adv"; render(); }
+// ================= v3: herkomst onder de weeklijn, boom onaangeraakt, getal = namen onder de rij =================
+(function(){ const st=document.createElement("style"); st.textContent=
+ ".hk{margin-top:14px;border-top:1px solid var(--line,#2a2731);padding-top:12px}"
++".hkbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.hkbar span{padding:4px 10px;border:1px solid var(--line,#2a2731);border-radius:4px;cursor:pointer;font-size:13px;transition:background .15s}.hkbar span:hover{background:rgba(255,255,255,.05)}.hkbar span.on{border-color:var(--plan,#1f6fd8);background:rgba(31,111,216,.15)}.hkbar i{font-style:normal;opacity:.6;margin-left:4px}"
++"table.hkt{width:100%;border-collapse:collapse;font-size:13.5px}table.hkt th{text-align:left;font-weight:500;color:var(--mut);font-size:12px;padding:4px 8px;cursor:pointer;user-select:none;white-space:nowrap}table.hkt th.num{text-align:right}table.hkt td{padding:6px 8px;border-top:1px solid var(--line,#2a2731);vertical-align:top}table.hkt td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}table.hkt td.num small{display:block;opacity:.55;font-size:11px}table.hkt td.nd b{color:var(--mut);font-weight:500}table.hkt td.nm small{display:block;opacity:.55;font-size:11.5px}table.hkt td.clk b{text-decoration:underline dotted;cursor:pointer}table.hkt tr.more td{text-align:center;color:var(--mut);cursor:pointer}"
++"tr.nmrow>td{padding:0 8px 8px!important;background:rgba(255,255,255,.02)}table.nml{width:100%;border-collapse:collapse;font-size:12.5px}table.nml td{padding:3px 8px;border-top:1px solid var(--line,#2a2731)!important;text-align:left!important}table.nml td.m{color:var(--mut)}table.nml tr.more td{color:var(--mut);cursor:pointer}"
++"table.hkt .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}"+"tr.nmrow.hkn>td{padding-left:172px!important}table.nml{width:100%}table.nml td:nth-child(3),table.nml td:nth-child(4){text-align:right!important;white-space:nowrap;font-variant-numeric:tabular-nums}table.nml a{color:var(--tx);text-decoration:none}table.nml a:hover{text-decoration:underline}table.hkt th{white-space:normal}"+"#detail{display:none!important}table.hkt{table-layout:fixed}table.hkt th:nth-child(1){width:88px}table.hkt th:nth-child(2){width:92px}table.hkt td,table.nml td{white-space:normal;overflow:visible;text-overflow:clip;max-width:none}table.hkt td.nm{overflow-wrap:anywhere}table.nml{table-layout:auto}@media(max-width:600px){table.hkt th:nth-child(1){width:64px}table.hkt th:nth-child(2){width:74px}table.nml td:nth-child(n+3){display:none}table.nml td:first-child{min-width:0}tr.nmrow.hkn>td,tr.nmrow>td{padding-left:12px!important}table.nml{min-width:0;width:100%}}";
+ document.head.appendChild(st); document.title="DPAC · Marketing (mock-up v3)"; })();
+
+let hkPlat=null, hkSort="n", hkAll=false, NMOPEN=new Set(), NMALL=new Set();
+const HKDEF={   // per tegel: welk aantal, welk percentage (of bedrag), welke namen
+  spend:{n:"Kosten",r:"Per lead",eur:true,low:true,set:"nieuw",num:m=>m.spend,rate:m=>m.cpl,den:m=>m.n,tip:m=>`${eur0(m.spend)} ÷ ${m.n} leads`},
+  plan:{n:"Gepland",r:"Plan %",set:"gepland",num:m=>m.g,rate:m=>m.plan,den:m=>m.n,tip:m=>`${m.g} van ${m.n} leads plannen een intake`},
+  show:{n:"Shows",r:"Show %",set:"shows",num:m=>m.sh,rate:m=>m.show,den:m=>m.i,tip:m=>`${m.sh} van ${m.i} intakes kwamen opdagen`},
+  sg:{n:"Klanten",r:"Klant %",set:"sign",num:m=>m.sg,rate:m=>m.l2k,den:m=>m.n,tip:m=>`${m.sg} van ${m.n} leads tekenden`},
+  cpk:{n:"Klanten",r:"€ / klant",eur:true,low:true,set:"sign",num:m=>m.sg,rate:m=>m.cpk,den:m=>m.sg,tip:m=>`${eur0(m.spend)} ÷ ${m.sg} klanten`},
+  roas:{n:"Klanten",r:"€ / klant",eur:true,low:true,set:"sign",num:m=>m.sg,rate:m=>m.cpk,den:m=>m.sg,tip:m=>`${eur0(m.spend)} ÷ ${m.sg} klanten · ${eur0(m.omzet)} omzet`}};
+const HKEUR=k=>!!HKDEF[k].eur;
+
+// diepste niveau: advertentie (Meta, TikTok), zoekwoord (Google) of campagne als dat niveau onbekend is. Bij euro-tegels Google per campagne, want kosten per zoekwoord bestaan niet.
+function hkGroups(key){
+  const g=new Map(); const eur=HKEUR(key);
+  for(const l of L){ if(!PARTY&&l.party) continue; if(l.cd<A||l.cd>B) continue;
+    let k,lab,sub,sp;
+    if(l.platform==="google"){ const cn=l.camp?l.camp.name:"(campagne onbekend)";
+      if(eur||!l.camp){ k="gc:"+l.ckey; lab=cn; sub="Google"; sp=()=>spendIn(A,B,r=>r.platform==="google"&&(r.cid||"")===(l.campaign_id||"")); }
+      else { k="kw:"+l.ckey+"|"+kwLab(l); lab=kwLab(l); sub=cn; sp=null; } }
+    else if(l.adObj){ const x=l.adObj; k="ad:"+x.i; lab=x.adName||x.adId||"(advertentie)"; sub=(l.camp?l.camp.name:"")+(x.adsetName?" › "+x.adsetName:""); sp=()=>spendAds(A,B,y=>y===x); }
+    else if(l.camp){ k="c:"+l.ckey; lab=l.camp.name; sub="advertentie onbekend"; const pl=l.platform, ci=l.campaign_id||""; sp=()=>{ const c=spendIn(A,B,r=>r.platform===pl&&(r.cid||"")===ci), a=spendAds(A,B,x=>x.platform===pl&&(x.cid||"")===ci); return {spend:a.spend>0.5?0:c.spend,clicks:0,imps:0}; }; }
+    else { k="p:"+l.platform; lab=PN(l.platform); sub=l.platform==="niet_betaald"?"organisch of direct":"bron onbekend"; sp=null; }
+    if(!g.has(k)) g.set(k,{k,lab,sub,plat:l.platform,ls:[],sp}); g.get(k).ls.push(l); }
+  // kosten zonder leads horen ook in de lijst bij Uitgegeven
+  if(key==="spend") for(const x of ADS){ if(PARTY===false&&(CAMPS.get(ck(x.platform,x.cid))||{}).party) continue; if(x.platform==="google") continue; const k="ad:"+x.i; if(g.has(k)) continue; const s=spendAds(A,B,y=>y===x); if(s.spend<0.5) continue; const c=CAMPS.get(ck(x.platform,x.cid)); g.set(k,{k,lab:x.adName||x.adId,sub:(c?c.name:"")+(x.adsetName?" › "+x.adsetName:""),plat:x.platform,ls:[],spv:s}); }
+  return [...g.values()].map(o=>{ o.m=metrics(o.ls,o.spv||(o.sp?o.sp():{spend:0,clicks:0,imps:0}),A,B); return o; });
+}
+function hkHtml(key){
+  const D=HKDEF[key]; if(!D) return "";
+  const zero=o=>key==='cpk'||key==='roas'||key==='sg'?(o.m.sg===0&&o.m.spend>=100):key==='spend'?false:((D.den(o.m)||0)>=5&&D.num(o.m)===0);
+  const all=hkGroups(key).filter(o=>(D.num(o.m)||0)>0||zero(o));
+  const PL=["meta","google","tiktok"]; const cnt={}; all.forEach(o=>{ cnt[o.plat]=(cnt[o.plat]||0)+D.num(o.m); });
+  const tot=all.reduce((s,o)=>s+D.num(o.m),0);
+  const fmtN=v=>D.eur&&key==="spend"?eur0(v):Math.round(v);
+  let h=`<div class="hk"><div class="hkbar"><span class="${hkPlat?"":"on"}" onclick="hkP(null)">Alles<i>${fmtN(tot)}</i></span>`+PL.filter(p=>cnt[p]).map(p=>`<span class="${hkPlat===p?"on":""}" onclick="hkP('${p}')">${esc(PN(p))}<i>${fmtN(cnt[p])}</i></span>`).join("")+`</div>`;
+  const rows=all.filter(o=>!hkPlat||o.plat===hkPlat);
+  // totaal van de lijst = anker voor de kleur
+  const sum=f=>rows.reduce((s,o)=>s+f(o.m),0);
+  const T={spend:sum(m=>m.spend),n:sum(m=>m.n),g:sum(m=>m.g),i:sum(m=>m.i),sh:sum(m=>m.sh),sg:sum(m=>m.sg)};
+  const tRate={spend:T.n?T.spend/T.n:null,plan:T.n?T.g/T.n*100:null,show:T.i?T.sh/T.i*100:null,sg:T.n?T.sg/T.n*100:null,cpk:T.sg?T.spend/T.sg:null,roas:T.sg?T.spend/T.sg:null}[key];
+  const CPKT=key==='cpk'||key==='roas';
+  const grey=o=>CPKT?(o.m.sg===0?o.m.spend<100:false):((D.den(o.m)||0)<5||D.rate(o.m)==null);
+  const cls=o=>{ if(CPKT){ if(o.m.sg===0) return o.m.spend>=400?'bad':o.m.spend>=100?'warn':'nd'; const v=o.m.cpk; return v==null?'nd':v<=MAXCPK()*0.85?'good':v>MAXCPK()*1.25?'bad':'warn'; } if(key==='sg'&&o.m.sg===0) return 'bad'; if(grey(o)||tRate==null) return "nd"; const v=D.rate(o.m); const better=D.low?v<=tRate*0.9:v>=tRate*1.1, worse=D.low?v>=tRate*1.1:v<=tRate*0.9; return better?"good":worse?"bad":""; };
+  const nul=o=>D.rate(o.m)==null&&!(CPKT&&o.m.sg===0);
+  rows.sort((x,y)=> hkSort==="r" ? ((nul(x)?1:0)-(nul(y)?1:0) || (grey(x)?1:0)-(grey(y)?1:0) || (D.low?1:-1)*(((CPKT&&x.m.sg===0)?x.m.spend*9:(D.rate(x.m)??0))-((CPKT&&y.m.sg===0)?y.m.spend*9:(D.rate(y.m)??0))) || D.num(y.m)-D.num(x.m)) : (D.num(y.m)-D.num(x.m) || y.m.n-x.m.n));
+  const CAP=10; const shown=rows.filter((o,i)=>hkAll||i<CAP||cls(o)==="bad"||cls(o)==="warn");
+  const rf=v=>v==null?"—":D.eur?eur0(v):r1(v)+"%";
+  h+=`<table class="hkt"><tr><th class="num" onclick="hkS('n')">${D.n}${hkSort==="n"?" ▼":""}</th><th class="num" onclick="hkS('r')" title="${D.low?"lager is beter":"hoger is beter"} · gekleurd tegen het totaal van deze lijst (${rf(tRate)}) · grijs bij minder dan 5">${D.r}${hkSort==="r"?" ▼":""}</th><th>Advertentie / zoekwoord</th></tr>`;
+  for(const o of shown){ const v=D.num(o.m); const nk="hk:"+o.k; const namen=key==="spend"?o.m.S.nieuw:o.m.S[D.set]; const kan=namen&&namen.length;
+    h+=`<tr><td class="num${kan?" clk":""}"${kan?` onclick="nmTog(${jq(nk)})"`:""} title="${esc(kan?"klik voor de namen":"")}"><b>${fmtN(v)}</b></td><td class="num ${cls(o)}" title="${esc(CPKT&&o.m.sg===0?eur0(o.m.spend)+' uitgegeven zonder klant':D.tip(o.m))}"><b>${CPKT&&o.m.sg===0?eur0(o.m.spend)+' · 0':rf(D.rate(o.m))}</b></td><td class="nm"><span class="dot" style="background:${PC(o.plat)}"></span>${esc(o.lab)}<small>${esc(o.sub||"")}</small></td></tr>`;
+    if(NMOPEN.has(nk)) h+=`<tr class="nmrow hkn"><td colspan="3">${namesHtml(namen,nk)}</td></tr>`; }
+  if(hkAll?rows.length>CAP:rows.length>shown.length) h+=`<tr class="more"><td colspan="3" onclick="hkAll=!hkAll;hkDraw()">${hkAll?"minder":"nog "+(rows.length-shown.length)+" meer"}</td></tr>`;
+  if(!rows.length) h+=`<tr><td colspan="3" class="nd">Niets in deze periode.</td></tr>`;
+  return h+`</table></div>`;
+}
+function namesHtml(ls,nk){
+  ls=(ls||[]).slice().sort((x,y)=>(y.is_signed-x.is_signed)||(y.cd-x.cd)); const all=NMALL.has(nk); const cap=all?ls.length:25;
+  return `<table class="nml">`+ls.slice(0,cap).map(l=>`<tr><td>${ghl(l.contact_id,l.nm)}</td><td class="m">${esc(l.stage_name||"")}${l.lost?" · verloren":""}</td><td class="m">${l.cd>=0?fmt(l.cd):"—"}</td><td class="m">${esc(l.owner||"—")}</td></tr>`).join("")+(ls.length>cap?`<tr class="more"><td colspan="4" onclick="NMALL.add(${jq(nk)});hkDraw();drawTree()">nog ${ls.length-cap} meer</td></tr>`:"")+`</table>`;
+}
+function hkDraw(){ const w=document.getElementById("hkwrap"); if(w&&kpiTrend) keepScroll(w,()=>{ w.innerHTML=hkHtml(kpiTrend); }); }
+function hkP(p){ hkPlat=p; hkAll=false; hkDraw(); }
+function hkS(s){ hkSort=s; hkDraw(); }
+function nmTog(k){ NMOPEN.has(k)?NMOPEN.delete(k):NMOPEN.add(k); if(k.startsWith("hk:")) hkDraw(); else drawTree(); }
+
+// tegelklik: alleen de weeklijn met herkomst eronder; de boom blijft zoals hij was
+kpiTog=function(k){ kpiTrend=kpiTrend===k?null:k; treeFocus=null; hkPlat=null; hkSort="n"; hkAll=false; [...NMOPEN].forEach(x=>{ if(x.startsWith("hk:")) NMOPEN.delete(x); }); render(); };
+const _kth=kpiTrendHtml; kpiTrendHtml=function(key){ const h=_kth(key).replace(/<h3([^>]*)>([^<]*)<span class="chsub">([^<]*)<\/span><\/h3>/,(x,a,t,sub)=>`<h3${a} title="${esc(sub.trim())}">${t}</h3>`); return h.replace(/<\/div>$/,`<div id="hkwrap">${hkHtml(key)}</div></div>`); };
+// getal in de boom: namen onder die rij, geen apart paneel
+showDetail=function(key,set){ nmTog("t:"+key+"|"+set); };
+drawDetail=function(){ const e=document.getElementById("detail"); if(e) e.style.display="none"; };
+const _rowV2=rowHtml; rowHtml=function(n,depth){ let h=_rowV2(n,depth); const i=h.indexOf("</tr>")+5;
+  const add=["nieuw","sign"].filter(s=>NMOPEN.has("t:"+n.key+"|"+s)).map(s=>`<tr class="nmrow"><td colspan="${COLS.length+1}" style="padding-left:${10+(depth+1)*22+24}px!important">${namesHtml(n.m.S[s],"t:"+n.key+"|"+s)}</td></tr>`).join("");
+  return add?h.slice(0,i)+add+h.slice(i):h; };
+if(typeof D!=="undefined"&&D) render();
+
+{ const cc=COLS.find(c=>c.k==="cpk"); const f0=cc.f, t0=cc.tipc; const paid=m=>m.S.sign.filter(l=>PAIDP(l.platform)).length;
+  cc.f=m=>m===TOTM?(paid(m)&&m.spend?eur0(m.spend/paid(m)):"—"):f0(m);
+  cc.tipc=m=>m===TOTM?`${eur0(m.spend)} ÷ ${paid(m)} betaalde klanten`:(t0?t0(m):""); }
+if(typeof D!=="undefined"&&D) render();
+
