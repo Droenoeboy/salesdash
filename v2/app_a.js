@@ -469,13 +469,15 @@ function repPage(n){
   </div></div>`;
 }
 
-// ---- 📞 vandaag: bellijst per rep (v4.3) ----
-// Volgorde (besluit Abel 30-09): 1 nieuwe lead nog niet gebeld (langst wachtend eerst; amber ≥15 min, rood ≥60 min),
-// 2 intake morgen nog niet bevestigd, 3 no-show vandaag of gisteren, 4 na show nog geen besluit, 5 getekend maar niet betaald.
+// ---- 📞 vandaag: bellijst per rep (v4.3, volgorde v4.4) ----
+// Volgorde (besluit Abel 30-09, v4.4): van rechts naar links in de pijplijn, belangrijk boven:
+// 1 net klant geworden of betaling binnen, 2 getekend maar betaaldeadline verstreken, 3 na show nog geen besluit,
+// 4 no-show vandaag of gisteren, 5 intake morgen nog niet bevestigd, 6 nieuwe lead nog niet gebeld. Binnen een groep op wachttijd.
 const IKBEN_KEY="salesdash_ikben";
 let ikBen=null, vdWho=undefined, vdGrp=null, vdSort={c:0,d:1}, vdKies=false, vdInit=false;
 try{ ikBen=localStorage.getItem(IKBEN_KEY)||null; }catch(e){}
-const VD_GRP={1:"📞 Nieuwe lead, nog niet gebeld",2:"📅 Intake morgen, niet bevestigd",3:"👻 No-show, herplannen",4:"🪑 Na show, nog geen besluit",5:"💶 Getekend, niet betaald"};
+const VD_GRP={1:"🎉 Net klant / betaling binnen",2:"⏰ Getekend, betaaldeadline verstreken",3:"🪑 Na show, nog geen besluit",4:"👻 No-show, herplannen",5:"📅 Intake morgen, niet bevestigd",6:"📞 Nieuwe lead, nog niet gebeld"};
+const VD_KLANT_DAGEN=7;   // "net klant" = getekend in de laatste 7 dagen (op inschrijfdatum)
 const S2L_AMBER=15, S2L_ROOD=60;   // minuten, besluit Abel 30-09
 const ghlUrl = cid => `https://app.gohighlevel.com/v2/location/${LOC}/contacts/detail/${cid}`;
 function ikBenZet(n){ ikBen=n; vdWho=undefined; vdKies=false; try{ if(n) localStorage.setItem(IKBEN_KEY,n); else localStorage.removeItem(IKBEN_KEY); }catch(e){} drawVandaag(); }
@@ -483,24 +485,28 @@ function belLijst(){
   const nu=Date.now(), dagMin=d=>Math.max(0,(TODAY-d)*1440), out=[], gezien=new Set();
   const add=(grp,l,cid,naam,who,reden,wacht,extra)=>{ const k=cid||(l&&l.lead_id); if(gezien.has(k)) return; gezien.add(k); out.push({grp,l,cid,naam,who,reden,wacht,team:!who,...(extra||{})}); };
   const herk=l=>l? [l.kanaal, l.utm_campaign, l.utm_content].filter(Boolean).join(" › ") : "";
-  // 1 · nieuwe lead, nog geen menselijke actie (first_touch_min leeg), open in de Leads-fase, laatste 14 dagen
-  for(const l of L){ if(!l.open||l.stage_position!==0||l.has_planned||l.cd<TODAY-14) continue; const ft=FT.get(String(l.lead_id)); if(!ft||ft.first_touch_min!=null) continue;
-    const t0=new Date(l.created_at).getTime(); if(isNaN(t0)) continue; const m=Math.max(0,Math.round((nu-t0)/6e4));
-    add(1,l,l.contact_id,l.name,l.setter&&!isRawId(l.setter)?l.setter:null,`binnen ${fmt(l.cd)} ${tsHM(l.created_at)}${ft.in_work_window===false?" (buiten werktijd)":""}`,m,{herk:herk(l),s2l:true}); }
-  // 2 · intake morgen, nog niet bevestigd (afspraakstatus ≠ confirmed)
-  const byC=new Map(); for(const l of L) if(!byC.has(l.contact_id)) byC.set(l.contact_id,l);
-  for(const a of AP){ if(a.sd!==TODAY+1||a.is_cancelled||a.is_show||a.is_noshow||a.status==="confirmed") continue; const l=byC.get(a.contact_id); if(l&&l.lost) continue;
-    const t0=new Date(a.booked_at).getTime(); add(2,l,a.contact_id,a.name,(a.setter&&!isRawId(a.setter)?a.setter:null)||(a.intaker&&!isRawId(a.intaker)?a.intaker:null),`intake morgen ${a.hm} ${a.kind?KIND_LBL[a.kind]||"":""}, nog niet bevestigd`,isNaN(t0)?null:Math.max(0,Math.round((nu-t0)/6e4)),{herk:herk(l),sinds:"geboekt"}); }
-  // 3 · no-show vandaag of gisteren, nog open en nog niet opnieuw ingepland
+  const cool=+(DEFS.cooling_off_days||14);
+  // 1 · net klant geworden (getekend in de laatste 7 dagen) of betaling binnen · eigenaar
+  for(const l of L){ if(!l.is_signed||l.lost||l.insE<TODAY-VD_KLANT_DAGEN) continue;
+    add(1,l,l.contact_id,l.name,l.owner&&!isRawId(l.owner)?l.owner:null,`getekend ${fmt(l.insE)}${l.is_paid?", betaald":""}: welkom en onboarding`,dagMin(l.insE),{herk:herk(l),dag:true}); }
+  // 2 · getekend, niet betaald en de betaaldeadline (bedenktermijn) is verstreken · eigenaar
+  for(const l of L){ if(!l.is_signed||l.is_paid||l.lost||l.insE<0||l.insE+cool>=TODAY) continue;
+    add(2,l,l.contact_id,l.name,l.owner&&!isRawId(l.owner)?l.owner:null,`getekend ${fmt(l.insE)}, deadline ${fmt(l.insE+cool)} verstreken, nog niet betaald`,dagMin(l.insE+cool),{herk:herk(l),dag:true}); }
+  // 3 · na show nog geen besluit (open, niet getekend, niet verloren) · eigenaar
+  for(const l of L){ if(!l.is_show||l.is_signed||!l.open) continue;
+    add(3,l,l.contact_id,l.name,(l.owner&&!isRawId(l.owner)?l.owner:null)||(l.intaker&&!isRawId(l.intaker)?l.intaker:null),`show op ${fmt(l.id_)}, nu in ${l.stage_name}`,l.id_>=0?dagMin(l.id_):null,{herk:herk(l),dag:true}); }
+  // 4 · no-show vandaag of gisteren, nog open en nog niet opnieuw ingepland
   const herpland=new Set(AP.filter(a=>a.sd>=TODAY&&!a.is_cancelled&&a.is_upcoming).map(a=>a.contact_id));
   for(const l of L){ if(!l.is_noshow||!l.open||l.id_<TODAY-1||l.id_>TODAY||herpland.has(l.contact_id)) continue;
-    const t0=l.appt? new Date(l.appt.starts_at).getTime() : NaN; add(3,l,l.contact_id,l.name,l.setter&&!isRawId(l.setter)?l.setter:(l.owner||null),`no-show ${l.id_===TODAY?"vandaag":"gisteren"}${l.appt?" "+l.appt.hm:""}, herplannen`,isNaN(t0)?dagMin(l.id_):Math.max(0,Math.round((nu-t0)/6e4)),{herk:herk(l),dag:isNaN(t0)}); }
-  // 4 · na show nog geen besluit (open, niet getekend, niet verloren) · eigenaar
-  for(const l of L){ if(!l.is_show||l.is_signed||!l.open) continue;
-    add(4,l,l.contact_id,l.name,(l.owner&&!isRawId(l.owner)?l.owner:null)||(l.intaker&&!isRawId(l.intaker)?l.intaker:null),`show op ${fmt(l.id_)}, nu in ${l.stage_name}`,l.id_>=0?dagMin(l.id_):null,{herk:herk(l),dag:true}); }
-  // 5 · getekend, nog niet betaald · eigenaar
-  for(const l of L){ if(!l.is_signed||l.is_paid||l.lost) continue;
-    add(5,l,l.contact_id,l.name,l.owner&&!isRawId(l.owner)?l.owner:null,`getekend ${l.insE>=0?fmt(l.insE):""}, nog niet betaald`,l.insE>=0?dagMin(l.insE):null,{herk:herk(l),dag:true}); }
+    const t0=l.appt? new Date(l.appt.starts_at).getTime() : NaN; add(4,l,l.contact_id,l.name,l.setter&&!isRawId(l.setter)?l.setter:(l.owner||null),`no-show ${l.id_===TODAY?"vandaag":"gisteren"}${l.appt?" "+l.appt.hm:""}, herplannen`,isNaN(t0)?dagMin(l.id_):Math.max(0,Math.round((nu-t0)/6e4)),{herk:herk(l),dag:isNaN(t0)}); }
+  // 5 · intake morgen, nog niet bevestigd (afspraakstatus ≠ confirmed)
+  const byC=new Map(); for(const l of L) if(!byC.has(l.contact_id)) byC.set(l.contact_id,l);
+  for(const a of AP){ if(a.sd!==TODAY+1||a.is_cancelled||a.is_show||a.is_noshow||a.status==="confirmed") continue; const l=byC.get(a.contact_id); if(l&&l.lost) continue;
+    const t0=new Date(a.booked_at).getTime(); add(5,l,a.contact_id,a.name,(a.setter&&!isRawId(a.setter)?a.setter:null)||(a.intaker&&!isRawId(a.intaker)?a.intaker:null),`intake morgen ${a.hm} ${a.kind?KIND_LBL[a.kind]||"":""}, nog niet bevestigd`,isNaN(t0)?null:Math.max(0,Math.round((nu-t0)/6e4)),{herk:herk(l),sinds:"geboekt"}); }
+  // 6 · nieuwe lead, nog geen menselijke actie (first_touch_min leeg), open in de Leads-fase, laatste 14 dagen
+  for(const l of L){ if(!l.open||l.stage_position!==0||l.has_planned||l.cd<TODAY-14) continue; const ft=FT.get(String(l.lead_id)); if(!ft||ft.first_touch_min!=null) continue;
+    const t0=new Date(l.created_at).getTime(); if(isNaN(t0)) continue; const m=Math.max(0,Math.round((nu-t0)/6e4));
+    add(6,l,l.contact_id,l.name,l.setter&&!isRawId(l.setter)?l.setter:null,`binnen ${fmt(l.cd)} ${tsHM(l.created_at)}${ft.in_work_window===false?" (buiten werktijd)":""}`,m,{herk:herk(l),s2l:true}); }
   out.sort((x,y)=>x.grp-y.grp||((y.wacht??-1)-(x.wacht??-1)));
   return out;
 }
@@ -533,7 +539,7 @@ function drawVandaag(){
   h+=`<div class="wontbl vdtbl"><table><tr>`+cols.map((c,i)=>`<th><span class="sortl" onclick="vdSort.c===${i}?vdSort.d=-vdSort.d:(vdSort={c:${i},d:${i===3?-1:1}});drawVandaag()">${c.t} <span class="arr">${s.c===i?(s.d>0?"▲":"▼"):""}</span></span></th>`).join("")+`</tr>`;
   for(const r of rows) h+=`<tr class="g${r.grp}"><td class="dim">${r.prio}</td><td>${ghl(r.cid,r.naam)}</td><td><span class="vdg g${r.grp}">${r.grp}</span> ${esc(r.reden)}</td><td>${vdWachtHtml(r)}</td><td>${r.team?`<span class="stg" title="nog niemand toegewezen: wie het eerst belt">team</span>`:esc(r.who)}</td><td><small>${esc(r.herk||"—")}</small></td><td>${r.cid?`<a href="${ghlUrl(r.cid)}" target="_blank">GHL ↗</a>`:"—"}</td></tr>`;
   if(!rows.length) h+=`<tr><td colspan="${cols.length}" class="empty">${vdGrp?"Niets met deze reden.":"Niets dat nu op actie wacht. 👌"}</td></tr>`;
-  h+=`</table></div><p class="note">Volgorde: 1 nieuwe lead nog niet gebeld (langst wachtend bovenaan; wachttijd vanaf binnenkomst, 🟠 vanaf ${S2L_AMBER} min, 🔴 vanaf ${S2L_ROOD} min), 2 intake morgen nog niet bevestigd, 3 no-show vandaag of gisteren (nog niet opnieuw ingepland), 4 na show nog geen besluit, 5 getekend maar nog niet betaald. Binnen elke reden: langst wachtend bovenaan. <b>Voor wie:</b> nieuwe leads hebben nog geen setter en staan daarom op ieders lijst ("team"); bevestigen en no-shows bij de setter, na show en betaling bij de eigenaar. Nog niet gebeld = geen menselijke actie in het CRM (taak, belpoging, afspraak of fasewissel). Klik een naam of GHL ↗ voor de contactkaart.</p>`;
+  h+=`</table></div><p class="note">Volgorde van rechts naar links in de pijplijn: 1 net klant (getekend in de laatste ${VD_KLANT_DAGEN} dagen) of betaling binnen, 2 getekend maar betaaldeadline (bedenktermijn ${DEFS.cooling_off_days||14} dagen) verstreken, 3 na show nog geen besluit, 4 no-show vandaag of gisteren, 5 intake morgen nog niet bevestigd, 6 nieuwe lead nog niet gebeld (🟠 vanaf ${S2L_AMBER} min, 🔴 vanaf ${S2L_ROOD} min). Binnen elke reden: langst wachtend bovenaan. Nieuwe leads zonder setter staan op ieders lijst ("team").</p>`;
   keepScroll(w,()=>{ w.innerHTML=h; });
 }
 
