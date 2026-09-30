@@ -7,7 +7,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DPAC Marketing">
-<title>DPAC · Marketing Dashboard</title>
+<title>DPAC · Marketing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* ============ DPAC huisstijl (logo): zwart, zand, groen, blauw, rood, geel ============ */
   :root{
@@ -20,9 +22,9 @@
     --sign:var(--green); --sign-bg:#e5f5ea; --sign-tx:#15803a;
     --close:var(--red); --close-bg:#fde9e7; --close-tx:#b91f15;
     --pay:#8f845e; --pay-bg:var(--sand2); --pay-tx:#5f5638;
-    --red-bg:#fde9e7; --radius:16px; --r2:12px;
+    --red-bg:#fde9e7; --radius:4px; --r2:4px; --roze:#C927B4; --roze-d:#8E1A80; --ijs:#8FD8FF;
     --shadow:0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(20,20,20,.05);
-    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-family:Barlow,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html{-webkit-text-size-adjust:100%}
@@ -75,9 +77,9 @@
   .tabsrow{display:flex;align-items:center;gap:10px;padding:12px 22px 0}
   .tabs{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;scroll-snap-type:x proximity}
   .tabs::-webkit-scrollbar{display:none}
-  .tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 15px;font-size:13px;font-weight:600;cursor:pointer;display:flex;gap:7px;align-items:center;white-space:nowrap;flex:none;scroll-snap-align:start;color:var(--txt)}
+  .tab{border:1px solid var(--line);background:var(--card);border-radius:var(--radius);padding:8px 15px;font-size:13px;font-weight:600;cursor:pointer;display:flex;gap:7px;align-items:center;white-space:nowrap;flex:none;scroll-snap-align:start;color:var(--txt)}
   .tab .dot{width:8px;height:8px;border-radius:50%}
-  .tab.on{background:var(--sel-bg);color:var(--sel-tx);border-color:var(--sel-bg)}
+  .tab.on{background:var(--roze);color:#fff;border-color:var(--roze)}
   .modesw{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;background:var(--card);font-size:12px;font-weight:700;flex:none;padding:2px}
   .modesw span{padding:6px 12px;cursor:pointer;color:var(--mut);border-radius:99px} .modesw span.on{background:var(--sel-bg);color:var(--sel-tx2)}
   main{padding:16px 22px 48px;max-width:1600px;margin:0 auto}
@@ -86,7 +88,7 @@
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);min-width:0}
   .kpi b{font-size:22px;display:block;letter-spacing:-.4px;line-height:1.15}
-  .kpi span{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;font-weight:600;display:block;margin-top:2px}
+  .kpi span{font-size:12px;color:var(--mut);font-weight:500;display:block;margin-top:2px}
   .kpi .dlt{display:block;font-style:normal;font-size:11px;font-weight:700;margin-top:4px} .kpi .dlt.up{color:var(--sign-tx)} .kpi .dlt.dn{color:var(--close-tx)} .kpi .dlt.eq{color:var(--mut2)}
 
   /* ---- funnelkolommen ---- */
@@ -617,6 +619,32 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
 .advmain small{color:var(--mut);font-size:12px}.aiTag{font-size:12px}
 .folnoteBig{margin-top:8px;padding:8px 12px;border-left:3px solid #7a6ee0;background:rgba(122,110,224,.12);font-size:13.5px;font-weight:600}
 .doen.bad{color:#e04b4b;font-weight:600}
+
+  /* ---- v4 (1 okt 2026): huisstijl en herkomstlijst ---- */
+  h1,.kpi b,.abud,.rbtn.big,.gatebox h2{font-family:"IBM Plex Sans Condensed",Barlow,sans-serif;font-weight:700}
+  .top h1{font-size:22px;letter-spacing:0;text-transform:uppercase}
+  .kpi b{font-size:26px}
+  .rbtn.pri,html[data-theme="dark"] .rbtn.pri{background:var(--roze);border-color:var(--roze);color:#fff} .rbtn.pri:hover,html[data-theme="dark"] .rbtn.pri:hover{background:var(--roze-d);border-color:var(--roze-d);filter:none}
+  .tab.on,html[data-theme="dark"] .tab.on{background:var(--roze);color:#fff;border-color:var(--roze)}
+  .rbtn.big{text-transform:uppercase;letter-spacing:.3px}
+  .rbtn,.anote,.arow,.modalbox,.fdrop,.dp-pop,.gatebox,.gatebox input,.gatebox button,.wchip,.chip,.dp-field{border-radius:var(--radius)!important}
+  .kpis{grid-template-columns:repeat(6,1fr)} @media(max-width:900px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpi.good,.kpi.warn,.kpi.bad{box-shadow:var(--shadow)} .kpi.good b{color:var(--sign-tx)} .kpi.warn b{color:var(--show-tx)} .kpi.bad b{color:var(--close-tx)}
+  .kpi.on,.kpi.on.good,.kpi.on.warn,.kpi.on.bad{box-shadow:inset 0 0 0 2px var(--ijs)} .kpi.kclk:hover{box-shadow:inset 0 0 0 1px var(--ijs)}
+  #kpitrend{margin:-6px 0 16px}
+  table.tree th,table.hkt th,.kpi span{text-transform:none;letter-spacing:0}
+  .arow.al{border-left-color:#8e8e93}
+  .arow .anote{max-width:220px}
+  .chart circle{transition:r .12s;cursor:pointer;stroke:transparent;stroke-width:22px;paint-order:stroke} .chart circle:hover{r:7px}
+  #itip{position:fixed;z-index:9999;pointer-events:none;background:var(--card);color:var(--txt);border:1px solid var(--line);border-radius:var(--radius);padding:6px 9px;font-size:12.5px;line-height:1.35;max-width:340px;display:none;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  .hk{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+  .hkbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px} .hkbar span{padding:4px 10px;border:1px solid var(--line);border-radius:var(--radius);cursor:pointer;font-size:13px;transition:background .15s} .hkbar span:hover{background:rgba(127,127,127,.08)} .hkbar span.on{border-color:var(--ijs);box-shadow:inset 0 0 0 1px var(--ijs)} .hkbar i{font-style:normal;opacity:.7;margin-left:4px}
+  table.hkt{width:100%;border-collapse:collapse;font-size:13.5px;table-layout:fixed} table.hkt th{text-align:left;font-weight:500;color:var(--mut);font-size:12px;padding:4px 8px;cursor:pointer;user-select:none;white-space:normal} table.hkt th.num{text-align:right} table.hkt th:nth-child(1){width:88px} table.hkt th:nth-child(2){width:92px}
+  table.hkt td{padding:6px 8px;border-top:1px solid var(--line);vertical-align:top;white-space:normal;overflow-wrap:anywhere} table.hkt td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap} table.hkt td.num small{display:block;opacity:.55;font-size:11px} table.hkt td.nd b{color:var(--mut);font-weight:500} table.hkt td.nm small{display:block;opacity:.55;font-size:11.5px} table.hkt td.clk b{text-decoration:underline dotted;cursor:pointer} table.hkt tr.more td{text-align:center;color:var(--mut);cursor:pointer}
+  table.hkt .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+  tr.nmrow>td{padding:0 8px 8px!important;background:rgba(127,127,127,.04)} tr.nmrow.hkn>td{padding-left:172px!important}
+  table.nml{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:auto} table.nml td{padding:3px 8px;border-top:1px solid var(--line)!important;text-align:left!important;white-space:normal} table.nml td.m{color:var(--mut)} table.nml td:nth-child(3),table.nml td:nth-child(4){text-align:right!important;white-space:nowrap;font-variant-numeric:tabular-nums} table.nml tr.more td{color:var(--mut);cursor:pointer} table.nml a{color:var(--txt);text-decoration:none} table.nml a:hover{text-decoration:underline}
+  @media(max-width:600px){table.hkt th:nth-child(1){width:64px}table.hkt th:nth-child(2){width:74px}table.nml td:nth-child(n+3){display:none}tr.nmrow.hkn>td,tr.nmrow>td{padding-left:12px!important}}
 </style>
 </head>
 <body>
@@ -633,14 +661,14 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
   <div class="brand">
     <div class="logo" aria-hidden="true"><img src="https://deproduceracademie.nl/wp-content/uploads/2023/02/cropped-FAV-270x270.jpg" alt="" onerror="this.remove()"><i></i></div>
     <div style="min-width:0">
-      <h1>DPAC · Marketing Dashboard <span class="v2tag">📣</span></h1>
-      <div class="sub">Ads → leads → intakes → inschrijvingen · uit de DPAC-datalaag (Supabase + Windsor) · stand <span id="gen"></span></div>
+      <h1>DPAC · Marketing</h1>
+      <div class="sub" style="display:none">stand <span id="gen"></span></div>
     </div>
   </div>
   <div class="spacer"></div>
   <div class="rfw">
     <div class="btnrow"><button class="rbtn" id="thbtn" onclick="toggleTheme()" title="Licht / donker">☾</button><button class="rbtn" id="rbtn" onclick="ververs()" title="Haalt de nieuwste stand op uit de datalaag (paar seconden)">⟳ Ververs</button></div>
-    <div class="rtxt" id="rtxt"></div>
+    <div class="rtxt" id="rtxt" style="display:none"></div>
   </div>
   <div class="dp">
     <div class="dp-field" id="dpField" onclick="dpToggle()">📅 <span id="dpLabel"></span></div>
@@ -654,17 +682,11 @@ html[data-theme="dark"] .dsum{background:#161618;border-color:#2a2a2d} html[data
 <div class="tabsrow"><div class="tabs" id="tabs"></div><div id="modebar"></div></div>
 <main>
   <div class="kpis" id="kpis"></div>
+  <div id="kpitrend" style="display:none"></div>
   <div id="treewrap" style="display:none"></div>
-  <div id="bestwrap" style="display:none"></div>
-  <div class="detail" id="detail" style="display:none"></div>
-  <div id="trendwrap" style="display:none"></div>
   <div id="advwrap" style="display:none"></div>
-  <div id="saleswrap" style="display:none"></div>
-  <div id="signwrap" style="display:none"></div>
-  <div id="datawrap" style="display:none"></div>
-  <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 </body>
 </html>
