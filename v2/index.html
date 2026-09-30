@@ -239,7 +239,10 @@
   .gatebox input{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font-size:17px;text-align:center;letter-spacing:3px;outline:none;background:var(--bg)}
   .gatebox input:focus{border-color:var(--plan);background:#fff}
   .gatebox button{width:100%;margin-top:12px;border:none;background:#0e0e0f;color:#d8d1b3;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer}
-  .gatefout{color:var(--close-tx);font-size:12px;height:16px;margin-top:8px}
+  .gatefout{color:var(--close-tx);font-size:12px;min-height:16px;margin-top:8px}
+  .gatebox.srvfout>p,.gatebox.srvfout #gcode,.gatebox.srvfout #gopen{display:none}   /* v4.3: serverfout ≠ codefout */
+  .gatebox.srvfout .gatefout{color:#3a3a3c;font-size:13px;line-height:1.5} .gatebox.srvfout .gatefout b{color:#0e0e0f}
+  .gatefout small{display:block;color:#8e8e93;font-size:11px;margin-top:8px}
 
   /* ---- 📅 Dag ---- */
   :root{--dgset:var(--blue);--dgsetbg:var(--plan-bg);--dgshow:#c99a00;--dgshowbg:var(--show-bg);--dgclose:var(--pay);--dgclosebg:var(--pay-bg)}
@@ -426,7 +429,7 @@
     <h2>DPAC · Sales Dashboard</h2>
     <p>Voer de toegangscode in</p>
     <input id="gcode" type="password" inputmode="text" autocomplete="off" placeholder="••••••" onkeydown="if(event.key==='Enter')gCheck()">
-    <button onclick="gCheck()">Openen</button>
+    <button id="gopen" onclick="gCheck()">Openen</button>
     <div class="gatefout" id="gfout"></div>
   </div>
 </div>
@@ -474,6 +477,6 @@
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=52"></script>
+<script src="app.js?v=53"></script>
 </body>
 </html>
