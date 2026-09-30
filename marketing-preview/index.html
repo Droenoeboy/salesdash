@@ -3,74 +3,109 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Preview marketingdashboard v2.16</title>
+<title>Marketingdashboard v3 — werkbare preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --ink:#0e0e0f; --sand:#d8d1b3; --bg:#0e0e0f; --card:#1a1a1c; --line:#2b2b2e;
-    --txt:#f1eee4; --mut:#a3a39e; --green:#5fd77f; --blue:#7fb3ff; --red:#ff8a7e; --yellow:#f2cd4a; --violet:#9d91ff;
-    --redbg:#3a1512; --greenbg:#0f2c1a; --bluebg:#15243b; --yellowbg:#33290c;
-  }
-  *{box-sizing:border-box} body{margin:0;color:var(--txt);font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:transparent}
-  .wrap{width:min(1180px,100%);padding:0 0 22px}
-  .top{background:var(--ink);border:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 18px;position:relative;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .top:after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,#1a9a3d 0 25%,#1f6fd8 25% 50%,#dc2a1e 50% 75%,#f2c400 75%)}
-  .logo{width:38px;height:38px;border-radius:10px;background:#222;display:grid;place-items:center;font-weight:900;color:var(--sand)}
-  h1{font-size:18px;margin:0}.sub{font-size:12px;color:var(--sand);opacity:.75}.spacer{flex:1}.btn{border:1px solid #3a3a3c;background:#232326;color:var(--sand);border-radius:10px;padding:8px 12px;font-weight:700;font-size:12px}
-  .tabs{display:flex;gap:6px;overflow:auto;padding:12px 0 0}.tab{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 15px;font-weight:700;font-size:13px;white-space:nowrap}.tab.on{background:var(--sand);color:#111;border-color:var(--sand)}
-  main{padding:14px 0 0}.workboard{display:grid;grid-template-columns:minmax(260px,1.2fr) minmax(260px,1fr) auto;gap:12px;align-items:stretch;background:linear-gradient(135deg,var(--card),rgba(31,111,216,.08));border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-bottom:12px}
-  .eyebrow{font-size:11px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:var(--mut)}.workcopy b{display:block;font-size:18px;line-height:1.25;margin:3px 0}.workcopy small{color:var(--mut)}
-  .cards{display:grid;grid-template-columns:repeat(4,minmax(72px,1fr));gap:8px}.card{background:#111113;border:1px solid var(--line);border-radius:13px;padding:9px 10px}.card b{display:block;font-size:25px;line-height:1}.card span{display:block;color:var(--mut);font-size:11px;font-weight:700;margin-top:4px}.todo b{color:var(--red)}.checked b{color:var(--yellow)}.wait b{color:var(--violet)}.ok b{color:var(--green)}
-  .actions{display:flex;flex-direction:column;gap:7px;justify-content:center;min-width:150px}.actions .btn:first-child{background:var(--sand);color:#111;border-color:var(--sand)}
-  .chips{display:flex;gap:8px;overflow:auto;margin:0 0 12px}.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 13px;font-weight:700;white-space:nowrap}.chip.on{background:var(--sand);color:#111}.n{background:rgba(255,255,255,.12);border-radius:999px;padding:1px 7px;margin-left:4px}
-  .section{margin:14px 0}.sectionhead{display:flex;align-items:center;gap:8px;padding:6px 2px}.sectionhead b{font-size:15px}.sectionhead small{color:var(--mut)}.rows{display:flex;flex-direction:column;gap:8px}.row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--red);border-radius:12px;padding:10px 14px;flex-wrap:wrap}.row.mid{border-left-color:#e08a00}.row.ok{border-left-color:#31a24c}.row.done{background:linear-gradient(90deg,rgba(49,162,76,.14),transparent 60%)}
-  input[type=checkbox]{width:17px;height:17px;accent-color:#1a9a3d}.badge{font-size:10px;font-weight:900;border-radius:999px;padding:3px 9px;text-transform:uppercase}.badge.hi{background:rgba(224,75,75,.16);color:var(--red)}.badge.mid{background:rgba(224,138,0,.16);color:#f0a23a}.badge.ok{background:rgba(49,162,76,.16);color:var(--green)}
-  .main{flex:1 1 280px;min-width:240px}.main b{display:block}.main small{color:var(--mut)}.metric{font-size:12px;color:var(--mut);font-weight:700}.note{flex:0 1 300px;min-width:210px;border:1px solid var(--line);background:#111113;color:var(--txt);border-radius:10px;padding:8px 10px;min-height:42px;font:12px/1.35 inherit;resize:vertical}.note.has{border-color:var(--blue);background:#132239}.chev{color:var(--mut);font-weight:900}
-  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;color:var(--mut);font-size:12.5px} summary{cursor:pointer;color:var(--txt);font-weight:700}
-  .track{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.2fr);gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-top:18px}.track h2{margin:2px 0;font-size:20px}.track small{color:var(--mut)}.track .card.bad b{color:var(--red)}.track .card.warn b{color:var(--yellow)}
-  @media(max-width:900px){.workboard,.track{grid-template-columns:1fr}.actions{flex-direction:row;flex-wrap:wrap}.cards{grid-template-columns:repeat(2,1fr)}.note{flex:1 1 100%}}
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#101114; --muted:#6b7280; --soft:#eef1f5; --line:#dfe4ea;
+  --brand:#2563eb; --brand2:#1d4ed8; --red:#dc2626; --amber:#d97706; --green:#16a34a; --violet:#7c3aed;
+  --redbg:#fff1f2; --amberbg:#fffbeb; --greenbg:#ecfdf5; --bluebg:#eff6ff; --violetbg:#f5f3ff;
+  --shadow:0 1px 2px rgba(16,17,20,.05),0 14px 36px rgba(16,17,20,.08);
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} button,input,textarea{font:inherit}
+.page{max-width:1280px;margin:0 auto;padding:24px}.top{display:flex;gap:16px;align-items:center;justify-content:space-between;margin-bottom:18px}.brand{display:flex;gap:12px;align-items:center}.logo{width:42px;height:42px;border-radius:12px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:800}.title h1{font-size:24px;line-height:1.1;margin:0}.title p{margin:4px 0 0;color:var(--muted);font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 13px;font-weight:700;cursor:pointer}.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}.btn:focus-visible,.field:focus-visible{outline:3px solid rgba(37,99,235,.2);outline-offset:2px}
+.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(16,17,20,.04)}.stat b{font-size:26px;display:block;letter-spacing:-.03em}.stat span{color:var(--muted);font-weight:650}.stat.red b{color:var(--red)}.stat.amber b{color:var(--amber)}.stat.green b{color:var(--green)}.stat.blue b{color:var(--brand)}
+.layout{display:grid;grid-template-columns:240px 1fr 310px;gap:16px;align-items:start}.side,.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow)}.side h2,.panel h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}.filter{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--soft);font-weight:700}.filter:last-child{border-bottom:0}.count{min-width:26px;height:24px;padding:0 8px;border-radius:999px;background:var(--soft);display:grid;place-items:center;color:#374151}.filter.on{color:var(--brand)}.filter.on .count{background:var(--bluebg);color:var(--brand)}
+.board{display:grid;grid-template-columns:1fr;gap:12px}.section{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}.section-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);background:#fbfcfd}.section-head h2{font-size:16px;margin:0}.hint{color:var(--muted);font-size:13px}.cards{display:flex;flex-direction:column;gap:10px;padding:12px}.card{display:grid;grid-template-columns:24px 1fr 190px 40px;gap:12px;align-items:center;border:1px solid var(--line);background:#fff;border-radius:14px;padding:12px}.card.urgent{border-left:5px solid var(--red)}.card.warn{border-left:5px solid var(--amber)}.card.done{border-left:5px solid var(--green);background:linear-gradient(90deg,var(--greenbg),#fff 55%)}.check{width:22px;height:22px;border:2px solid #c5ccd6;border-radius:6px;display:grid;place-items:center;color:#fff}.done .check{background:var(--green);border-color:var(--green)}.card h3{font-size:15px;margin:0 0 3px}.card p{margin:0;color:var(--muted);font-size:13px}.badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 9px;font-weight:800;font-size:11px;text-transform:uppercase}.badge.red{background:var(--redbg);color:var(--red)}.badge.amber{background:var(--amberbg);color:var(--amber)}.badge.green{background:var(--greenbg);color:var(--green)}.badge.violet{background:var(--violetbg);color:var(--violet)}.metric{text-align:right;color:#4b5563;font-weight:800;font-size:13px}.field{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#f9fafb;color:#111827;resize:vertical}.chev{color:#9ca3af;text-align:center;font-weight:900}
+.panel{position:sticky;top:18px}.ai-box{border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px;background:#fbfcfd}.ai-box strong{display:block;margin-bottom:5px}.ai-box p{margin:0;color:var(--muted);font-size:13px}.track-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.mini{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}.mini b{display:block;font-size:22px}.mini span{font-size:12px;color:var(--muted);font-weight:650}.callout{margin-top:12px;border-radius:14px;padding:12px;background:#111827;color:#fff}.callout p{margin:5px 0 0;color:#d1d5db;font-size:13px}
+.mobile-note{display:none;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:14px;padding:12px;margin-bottom:14px;font-weight:650}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}.side{display:none}.panel{position:static}.summary{grid-template-columns:repeat(2,1fr)}.mobile-note{display:block}.card{grid-template-columns:24px 1fr}.metric,.field,.chev{grid-column:2}.metric{text-align:left}.top{align-items:flex-start;flex-direction:column}}
+@media(max-width:640px){.page{padding:14px}.summary{grid-template-columns:1fr}.title h1{font-size:20px}.actions{width:100%}.btn{flex:1}.cards{padding:10px}.card{padding:10px}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="top">
-    <div class="logo">DP</div>
-    <div><h1>DPAC · Marketing Dashboard <span style="font-size:12px;background:var(--sand);color:#111;border-radius:999px;padding:2px 8px">v2.16</span></h1><div class="sub">Ads naar leads naar intakes naar inschrijvingen · preview van de nieuwe werkwijze</div></div>
-    <div class="spacer"></div><button class="btn">Ververs</button><button class="btn">Laatste 30 dagen</button>
-  </div>
+<div class="page">
+  <header class="top">
+    <div class="brand"><div class="logo">DP</div><div class="title"><h1>Marketingdashboard</h1><p>Werkbord voor Abel + Ger — alleen beslissingen, checks en opvolging.</p></div></div>
+    <div class="actions"><button class="btn">Ververs data</button><button class="btn">Laatste 30 dagen</button><button class="btn primary">AI check opmerkingen</button></div>
+  </header>
 
-  <div class="tabs">
-    <div class="tab on">Acties</div><div class="tab">AI-advies</div><div class="tab">Tracking-check</div><div class="tab">Sales × bron</div><div class="tab">Resultaten</div><div class="tab">Kanalen & ads</div><div class="tab">Beste ads</div><div class="tab">Trend</div>
-  </div>
+  <div class="mobile-note">Nieuwe v3-preview: veel rustiger, smaller, betere contrasten, geen nep-dark-mode over witte kaarten.</div>
 
-  <main>
-    <div class="workboard">
-      <div class="workcopy"><span class="eyebrow">Vandaag met Ger</span><b>Loop alleen de open punten langs. Vink af, zet jullie opmerking erbij en stuur daarna de rest naar Ger.</b><small>Opmerkingen gaan mee naar de AI en het rapport.</small></div>
-      <div class="cards"><div class="card todo"><b>5</b><span>open</span></div><div class="card checked"><b>2</b><span>afgevinkt</span></div><div class="card wait"><b>1</b><span>controle vannacht</span></div><div class="card ok"><b>7</b><span>klaar</span></div></div>
-      <div class="actions"><button class="btn">Afronden (2)</button><button class="btn">Naar Ger</button><button class="btn">AI check opmerkingen</button></div>
-    </div>
+  <section class="summary" aria-label="samenvatting">
+    <div class="stat red"><b>3</b><span>moet vandaag</span></div>
+    <div class="stat amber"><b>2</b><span>bespreken met Ger</span></div>
+    <div class="stat blue"><b>4</b><span>tracking issues</span></div>
+    <div class="stat green"><b>7</b><span>afgerond</span></div>
+  </section>
 
-    <div class="chips"><div class="chip on">Alle <span class="n">5 te doen</span></div><div class="chip">Google <span class="n">1</span></div><div class="chip">Meta <span class="n">3</span></div><div class="chip">TikTok <span class="n">1</span></div><div style="margin-left:auto;color:var(--mut);font-size:12px;align-self:center;white-space:nowrap">laatste controle: vandaag 06:25</div></div>
+  <div class="layout">
+    <aside class="side">
+      <h2>Filters</h2>
+      <div class="filter on">Alle acties <span class="count">5</span></div>
+      <div class="filter">Meta <span class="count">3</span></div>
+      <div class="filter">Google <span class="count">1</span></div>
+      <div class="filter">TikTok <span class="count">1</span></div>
+      <div class="filter">Tracking <span class="count">4</span></div>
+      <div class="filter">Afgerond <span class="count">7</span></div>
+    </aside>
 
-    <div class="section"><div class="sectionhead"><b>🔴 Nog te doen</b><span class="n">5</span><small>vink af wat je doet</small></div>
-      <div class="rows">
-        <div class="row done"><input type="checkbox" checked><span class="badge hi">Klopt niet</span><div class="main"><b>🎯 Meta UTM URL-parameters herstellen</b><small>Meta (FB/IG) · Abel DPAC - landingpage GHL - Dijs Media · Video 2 Hook 2</small></div><div class="metric">campagne/adset-id ontbreekt</div><textarea class="note has">We hebben de URL-template aangepast, maar bewust nog niet op oude ads gezet vanwege leerfase-reset.</textarea><span class="chev">⌄</span></div>
-        <div class="row done mid"><input type="checkbox" checked><span class="badge mid">Deels</span><div class="main"><b>🔻 Budget terugschroeven</b><small>Google · 4.0 PMax Producer Opleiding</small></div><div class="metric">€ 80 → € 40/dag</div><textarea class="note">Ger checkt of dit niet botst met lopende test.</textarea><span class="chev">⌄</span></div>
-        <div class="row"><input type="checkbox"><span class="badge hi">Super belangrijk</span><div class="main"><b>⚠️ TikTok-formulier telefoonnummer verplicht maken</b><small>TikTok · leadformulier 2024 new form juiste UTM</small></div><div class="metric">3 leads zonder nummer</div><textarea class="note" placeholder="opmerking: waarom anders gedaan?"></textarea><span class="chev">⌄</span></div>
-        <div class="row mid"><input type="checkbox"><span class="badge mid">Belangrijk</span><div class="main"><b>🚀 Beste Meta-adset opschalen</b><small>Meta · Video 3 · Hook 1</small></div><div class="metric">€ 45 → € 65/dag</div><textarea class="note" placeholder="opmerking: waarom anders gedaan?"></textarea><span class="chev">⌄</span></div>
+    <main class="board">
+      <section class="section">
+        <div class="section-head"><h2>Nu beslissen</h2><span class="hint">loop deze lijst samen langs</span></div>
+        <div class="cards">
+          <article class="card urgent">
+            <span class="check"></span>
+            <div><span class="badge red">Klopt niet</span><h3>Meta UTM URL-parameters herstellen</h3><p>Campagne/adset-id ontbreekt bij betaalde leads.</p></div>
+            <div class="metric">8% bron onbekend</div>
+            <textarea class="field">We hebben template aangepast, maar nog niet op oude ads gezet.</textarea>
+            <div class="chev">⌄</div>
+          </article>
+          <article class="card urgent">
+            <span class="check"></span>
+            <div><span class="badge red">Super belangrijk</span><h3>TikTok-formulier telefoonnummer verplicht maken</h3><p>3 leads zonder nummer; opvolging valt weg.</p></div>
+            <div class="metric">3 leads mist nr.</div>
+            <textarea class="field" placeholder="opmerking: waarom anders gedaan?"></textarea>
+            <div class="chev">⌄</div>
+          </article>
+          <article class="card warn">
+            <span class="check"></span>
+            <div><span class="badge amber">Belangrijk</span><h3>Beste Meta-adset opschalen</h3><p>Video 3 · Hook 1 presteert beter dan baseline.</p></div>
+            <div class="metric">€45 → €65/dag</div>
+            <textarea class="field" placeholder="opmerking: waarom anders gedaan?"></textarea>
+            <div class="chev">⌄</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><h2>Besproken / bewust anders</h2><span class="hint">gaat mee naar rapport + volgende AI-run</span></div>
+        <div class="cards">
+          <article class="card done">
+            <span class="check">✓</span>
+            <div><span class="badge green">Verwerkt</span><h3>Google 2.1 Search niet opschalen</h3><p>Bewust niet gedaan; 2.0 en 2.1 zijn zoekwoordtests.</p></div>
+            <div class="metric">met opmerking</div>
+            <textarea class="field">Niet opschalen tot test volledig is.</textarea>
+            <div class="chev">⌄</div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <aside class="panel">
+      <h2>AI controle</h2>
+      <div class="ai-box"><strong>Wat controleert AI?</strong><p>Of jullie opmerking logisch is met de data, of het advies moet wijzigen, en of tracking betrouwbaar genoeg is.</p></div>
+      <div class="ai-box"><strong>Volgende stap</strong><p>Klik na overleg op “AI check opmerkingen”. Daarna ontstaat een kort rapport voor Ger.</p></div>
+      <h2>Tracking-check</h2>
+      <div class="track-grid">
+        <div class="mini"><b style="color:var(--red)">6</b><span>campagne onbekend</span></div>
+        <div class="mini"><b style="color:var(--amber)">24</b><span>advertentie onbekend</span></div>
+        <div class="mini"><b style="color:var(--violet)">11</b><span>zachte koppeling</span></div>
+        <div class="mini"><b style="color:var(--red)">4</b><span>open tracking-acties</span></div>
       </div>
-    </div>
-
-    <div class="section"><div class="sectionhead"><b>✅ Doorgevoerd</b><span class="n">7</span><small>bevestigd of bewust anders gedaan</small></div>
-      <div class="rows"><div class="row ok"><span class="badge ok">Doorgevoerd</span><div class="main"><b>🎯 Google 2.1 Search niet opschalen</b><small>bewust niet gedaan, want 2.0 en 2.1 zijn zoekwoordtests</small></div><div class="metric">met opmerking verwerkt</div></div></div>
-    </div>
-
-    <details><summary>Hoe werkt deze werklijst?</summary><p>Vink af wat jullie doen. De rij blijft zichtbaar. Zet erbij waarom jullie afwijken. Klik aan het einde op Afronden. Vannacht om 06:25 checkt het dashboard budget en aan/uit-status in Google, Meta en TikTok. Met opmerking telt het als bewust anders gedaan en neemt de AI het mee bij de volgende run.</p></details>
-
-    <div class="track">
-      <div><span class="eyebrow">ITM/UTM-check</span><h2>Tracking vraagt aandacht</h2><small>Laatste 30 dagen betaalde leads. Dit checkt campagnekoppeling, advertentiekoppeling en zachte attributie.</small></div>
-      <div class="cards"><div class="card bad"><b>6</b><span>campagne onbekend</span><small>8%</small></div><div class="card warn"><b>24</b><span>advertentie onbekend</span><small>31%</small></div><div class="card warn"><b>11</b><span>zachte koppeling</span><small>14%</small></div><div class="card bad"><b>4</b><span>open tracking-acties</span><small>uit actiepunten</small></div></div>
-    </div>
-  </main>
+      <div class="callout"><strong>Eerlijk oordeel</strong><p>Als tracking rood is, geen budget opschalen zonder menselijke check.</p></div>
+    </aside>
+  </div>
 </div>
 </body>
 </html>
