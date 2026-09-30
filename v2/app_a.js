@@ -216,8 +216,16 @@ function slots(who,a,b,role){
     booked: AP.filter(x=> inR(x.bd,a,b) && f(x)) };
 }
 
+// ---- scroll bewaren bij opnieuw tekenen (v4.3, zelfde idee als keepScroll in het marketingdashboard) ----
+function keepScroll(w,fn){
+  const sy=window.scrollY, cl=e=>e.getAttribute&&e.getAttribute("class")||"", all=w?[...w.querySelectorAll("*")]:[], keep=[];
+  for(const e of all) if(e.scrollLeft>0||e.scrollTop>0){ const c=cl(e); keep.push([c,all.filter(x=>cl(x)===c).indexOf(e),e.scrollLeft,e.scrollTop]); }
+  fn(); window.scrollTo(0,sy);
+  if(keep.length&&w){ const all2=[...w.querySelectorAll("*")]; for(const [c,k,sl,st] of keep){ const e=all2.filter(x=>cl(x)===c)[k]; if(e){ e.scrollLeft=sl; e.scrollTop=st; } } }
+}
 // ---- state ----
 let sortSt = {ok:{c:1,d:-1}, bad:{c:1,d:-1}};
+let dSide=null;   // v4.3: detail toont één tabel op volle breedte; null = automatisch de kant waar actie nodig is (niet)
 let colF = {ok:{}, bad:{}};
 let fOpen = null, expand = {};
 let collapsed = new Set();
@@ -268,7 +276,7 @@ function unkColHtml(){
   return `<div class="fcol mini" style="cursor:default;opacity:.7" title="${esc(tip)}"><div class="ava" style="background:var(--line);color:var(--mut)">?</div><div style="writing-mode:vertical-rl;font-size:11.5px;color:var(--mut);white-space:nowrap">Overig / oude accounts · ${n}</div></div>`;
 }
 function setRange(a,b){ A=a; B=b; sel=null; dagSel=Math.min(b,TODAY); dagUur=null; weekSel=null; render(); }   // dag/week-tab volgt de datumkiezer (einddatum)
-function resetDetailState(){ chFocus=null; chStack=[]; sortSt={ok:{c:1,d:-1},bad:{c:1,d:-1}}; colF={ok:{},bad:{}}; expand={}; fClose(); }
+function resetDetailState(){ dSide=null; chFocus=null; chStack=[]; sortSt={ok:{c:1,d:-1},bad:{c:1,d:-1}}; colF={ok:{},bad:{}}; expand={}; fClose(); }
 
 // ---- tabs ----
 function drawTabs(){
@@ -493,7 +501,7 @@ function drawVandaag(){
   for(const r of rows) h+=`<tr class="g${r.grp}"><td class="dim">${r.prio}</td><td>${ghl(r.cid,r.naam)}</td><td><span class="vdg g${r.grp}">${r.grp}</span> ${esc(r.reden)}</td><td>${vdWachtHtml(r)}</td><td>${r.team?`<span class="stg" title="nog niemand toegewezen: wie het eerst belt">team</span>`:esc(r.who)}</td><td><small>${esc(r.herk||"—")}</small></td><td>${r.cid?`<a href="${ghlUrl(r.cid)}" target="_blank">GHL ↗</a>`:"—"}</td></tr>`;
   if(!rows.length) h+=`<tr><td colspan="${cols.length}" class="empty">${vdGrp?"Niets met deze reden.":"Niets dat nu op actie wacht. 👌"}</td></tr>`;
   h+=`</table></div><p class="note">Volgorde: 1 nieuwe lead nog niet gebeld (langst wachtend bovenaan; wachttijd vanaf binnenkomst, 🟠 vanaf ${S2L_AMBER} min, 🔴 vanaf ${S2L_ROOD} min), 2 intake morgen nog niet bevestigd, 3 no-show vandaag of gisteren (nog niet opnieuw ingepland), 4 na show nog geen besluit, 5 getekend maar nog niet betaald. Binnen elke reden: langst wachtend bovenaan. <b>Voor wie:</b> nieuwe leads hebben nog geen setter en staan daarom op ieders lijst ("team"); bevestigen en no-shows bij de setter, na show en betaling bij de eigenaar. Nog niet gebeld = geen menselijke actie in het CRM (taak, belpoging, afspraak of fasewissel). Klik een naam of GHL ↗ voor de contactkaart.</p>`;
-  w.innerHTML=h;
+  keepScroll(w,()=>{ w.innerHTML=h; });
 }
 
 // ---- detail ----
@@ -593,13 +601,16 @@ function drawDetail(){
   const f=funnel(who,A,B), ph=PH[sel.phase];
   const [ok,bad]=selRows(f);
   el.style.display="block";
+  keepScroll(el,()=>drawDetailIn(el,who,name,ph,ok,bad)); }
+function drawDetailIn(el,who,name,ph,ok,bad){
   const nf=Object.keys(colF.ok).length+Object.keys(colF.bad).length;
   const okF=applyColF(ok,colDefs(sel.phase,true),"ok",-1).length, badF=applyColF(bad,colDefs(sel.phase,false),"bad",-1).length;
   document.getElementById("dhead").innerHTML=`<b>${esc(name)} · ${ph.t} (${ROL(sel.phase)})</b><span>${fmtY(A)} t/m ${fmtY(B)} · ${ok.length} wel · ${bad.length} niet${nf?` · <a href="#" onclick="colF={ok:{},bad:{}};drawDetail();return false" style="color:var(--plan)">filters wissen (${nf})</a>`:""}</span>`;
   document.getElementById("dchart").innerHTML = tab==="tot" ? "" : chartWidget(who, sel.phase);   // homepage: geen grafiekblok, alleen wel/niet-kolommen
-  document.getElementById("dcols").innerHTML=
-    `<div class="dcol"><h3><span class="pill ok">${okF!==ok.length?okF+" van "+ok.length:ok.length}</span> ${ph.ok}</h3>${rowsTable(ok,sel.phase,true,"ok")}</div>
-     <div class="dcol"><h3><span class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</span> ${bad.length&&!bad.some(l=>l.open)?ph.bad.replace("(nog) ",""):ph.bad}</h3>${rowsTable(bad,sel.phase,false,"bad")}</div>`;
+  const side = dSide || (bad.length||!ok.length ? "bad" : "ok");   // standaard de kant waar actie nodig is
+  const badLab = bad.length&&!bad.some(l=>l.open)?ph.bad.replace("(nog) ",""):ph.bad;
+  const sw=`<div class="dside"><span class="${side==="bad"?"on":""}" onclick="dSide='bad';fClose();drawDetail()"><i class="pill bad">${badF!==bad.length?badF+" van "+bad.length:bad.length}</i> ${badLab}</span><span class="${side==="ok"?"on":""}" onclick="dSide='ok';fClose();drawDetail()"><i class="pill ok">${okF!==ok.length?okF+" van "+ok.length:ok.length}</i> ${ph.ok}</span></div>`;
+  document.getElementById("dcols").innerHTML = `<div class="dcol">${sw}${side==="ok"?rowsTable(ok,sel.phase,true,"ok"):rowsTable(bad,sel.phase,false,"bad")}</div>`;
 }
 
 // ---- 🏆 gewonnen ----
@@ -631,7 +642,7 @@ function drawWon(){
   const paid=rows.filter(l=>l.is_paid), som=rows.reduce((a,l)=>a+(l.paid_amount>1?l.paid_amount:0),0), def=rows.filter(l=>l.is_signed_definitive).length;
   h+=`</table><div class="wontot">${rows.length} ingeschreven · ${def} definitief (bedenktermijn ${DEFS.cooling_off_days||14} dagen voorbij) · ${paid.length} betaald${som?` · ${eur(som)} ontvangen`:""} <span class="chsub">· code v3.3 · formulierdatum bekend voor ${L.filter(x=>x.is_signed&&x.insd>=0).length}/${L.filter(x=>x.is_signed).length} getekende deals</span></div></div>
   <p class="note">Telling op inschrijfdatum (de dag waarop het inschrijfformulier is ingevuld; zelfde telling als het CRM) binnen de gekozen periode — alleen deze tab; de KPI-kaarten en rates blijven op cohort tellen. Betaald = "Betaald bedrag (DPAC)" ≥ € ${(+PAY_MIN).toLocaleString("nl-NL")}, of het ✅-vinkje. Definitief = ${DEFS.cooling_off_days||14} dagen na de laatste fasewissel naar Agreement Signed en niet verloren. Zodra Odoo gekoppeld is, komt "betaald" uit de echte betalingen.</p>`;
-  ww.innerHTML=h;
+  keepScroll(ww,()=>{ ww.innerHTML=h; });
 }
 
 // ---- 📆 afspraken (slots): twee show rates, poging-nummers, late cancels, zonder uitkomst ----
@@ -672,7 +683,7 @@ function drawApt(){
   if(!sorted.length) h+=`<tr><td colspan="${cols.length}" class="empty">Geen afspraken in deze periode.</td></tr>`;
   h+=`</table>${sorted.length>400?`<div class="more">eerste 400 van ${sorted.length} getoond — kies een kortere periode</div>`:""}</div>
   <p class="note">Rechtstreeks uit de GHL-agenda's (intakekalender). Setter = wie de afspraak boekte (createdBy), intaker = in wiens agenda hij staat. <b>Show rate per slot</b> = show ÷ (show + no-show + late cancel); een gewone annulering vooraf telt niet als gehouden slot. <b>Late cancel</b> = geannuleerd op de dag zelf. <b>Zonder uitkomst</b> = intake is geweest maar staat nog op new/confirmed — niemand heeft show of no-show geregistreerd; die tellen nergens mee tot dat gebeurt. Poging = hoeveelste intake-afspraak van deze persoon.</p>`;
-  pw.innerHTML=h;
+  keepScroll(pw,()=>{ pw.innerHTML=h; });
 }
 
 // ---- 📅 dag ----
