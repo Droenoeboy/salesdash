@@ -160,12 +160,11 @@
   .blk.c,.outN.c{background:var(--close-bg)} .blk.c .pct,.outN.c{color:var(--close-tx)} .blk.c .bar{background:var(--close)} .blk.c .lab{color:var(--close-tx)}
   .blk.b,.outN.b{background:var(--pay-bg)} .blk.b .pct,.outN.b{color:var(--pay-tx)} .blk.b .bar{background:var(--pay)} .blk.b .lab{color:var(--pay-tx)}
   /* v4.3: fases neutraal met icoon en één accent (zand); rood en groen alleen voor oordeel */
-  :root{--fase-bg:#f1efe7;--fase-acc:#8f845e} html[data-theme="dark"]{--fase-bg:#232326;--fase-acc:#d8d1b3}
-  .blk.p,.blk.h,.blk.s,.blk.i,.blk.c,.blk.b,.outN.p,.outN.h,.outN.s,.outN.i,.outN.c,.outN.b{background:var(--fase-bg)}
-  .blk.p .pct,.blk.h .pct,.blk.s .pct,.blk.i .pct,.blk.c .pct,.blk.b .pct,.outN.p,.outN.h,.outN.s,.outN.i,.outN.c,.outN.b{color:var(--txt)}
-  .blk.p .lab,.blk.h .lab,.blk.s .lab,.blk.i .lab,.blk.c .lab,.blk.b .lab{color:var(--mut)}
-  .blk.p .bar,.blk.h .bar,.blk.s .bar,.blk.i .bar,.blk.c .bar,.blk.b .bar{background:var(--fase-acc)}
-  html[data-theme="dark"] .blk.i,html[data-theme="dark"] .outN.i{background:var(--fase-bg)} html[data-theme="dark"] .blk.i .pct,html[data-theme="dark"] .outN.i{color:var(--txt)} html[data-theme="dark"] .blk.i .lab{color:var(--mut)}
+  /* v4.4: oordeel per cel t.o.v. het team (groen beter, rood slechter, minstens 2 pp) */
+  .blk.goed{box-shadow:inset 5px 0 0 #1a9a3d} .blk.slecht{box-shadow:inset 5px 0 0 #dc2a1e}
+  .vsteam{font-style:normal;font-size:11px;font-weight:800;margin-left:7px;padding:1px 6px;border-radius:99px;background:var(--bg);color:var(--mut);vertical-align:middle}
+  .vsteam.goed{background:#e5f5ea;color:#15803a} .vsteam.slecht{background:#fde9e7;color:#b91f15}
+  html[data-theme="dark"] .vsteam.goed{background:#0f2c1a;color:#5fd77f} html[data-theme="dark"] .vsteam.slecht{background:#3a1512;color:#ff8a7e}
 
   /* ---- chips, tabellen, kaarten ---- */
   .wonchips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
@@ -490,6 +489,6 @@
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=56"></script>
+<script src="app.js?v=57"></script>
 </body>
 </html>
