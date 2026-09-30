@@ -382,6 +382,16 @@
   .askpre{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center} .askpre .chip{font-size:12px}
   .askhead{display:flex;gap:10px;align-items:baseline;margin:4px 2px 10px;flex-wrap:wrap} .askhead b{font-size:15px} .askhead span{font-size:12px;color:var(--mut)}
   .advcard .cat{font-size:10.5px;color:var(--mut2);text-transform:uppercase;letter-spacing:.4px;margin-top:8px}
+  /* ---- 📞 vandaag (v4.3) ---- */
+  .vdtop{display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
+  .vdik{display:flex;align-items:center;gap:10px;font-size:14px} .vdwissel{border:1px solid var(--line);background:var(--card);color:var(--txt);border-radius:99px;padding:6px 13px;font-size:12.5px;font-weight:700;cursor:pointer} .vdwissel:hover{border-color:var(--plan);color:var(--plan-tx)}
+  .vdkies{background:var(--card);border:1px solid var(--plan);border-radius:var(--radius);padding:12px 16px} .vdkies b{font-size:15px;margin-right:8px}
+  .vdsum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px} .vdsum .chsub{margin:0}
+  .vdw{font-weight:700;white-space:nowrap} .vdsum .vdw{border-radius:99px;padding:4px 11px;font-size:12.5px}
+  .vdw.rood{color:#ff6b5e} .vdw.amber{color:#f2a33a} .vdw.ok{color:var(--mut)} .vdsum .vdw.rood{background:rgba(220,42,30,.16)} .vdsum .vdw.amber{background:rgba(242,163,58,.16)} .vdsum .vdw.ok{background:var(--card);border:1px solid var(--line)}
+  .vdtbl td{max-width:none} .vdtbl td:nth-child(3){white-space:normal;min-width:260px} .vdtbl td:nth-child(6){white-space:normal;min-width:200px;max-width:340px}
+  .vdg{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--bg);border:1px solid var(--line);font-size:11px;font-weight:800;margin-right:4px}
+  .wchip.dim{opacity:.5}
   /* ---- persoonlijke pagina ---- */
   .tab.persoon .caret{font-size:10px;opacity:.7;margin-left:2px}
   .repgrid{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:12px;align-items:start}
@@ -442,6 +452,7 @@
   <div id="lostwrap" style="display:none"></div>
   <div id="cmpwrap" style="display:none"></div>
   <div id="intwrap" style="display:none"></div>
+  <div id="vdwrap" style="display:none"></div>
   <div class="cols" id="cols"></div>
   <div class="detail" id="detail" style="display:none">
     <div class="dhead" id="dhead"></div>
@@ -451,6 +462,6 @@
   <p class="note" id="note"></p>
 </main>
 <div class="fdrop" id="fdrop" style="display:none"></div>
-<script src="app.js?v=48"></script>
+<script src="app.js?v=49"></script>
 </body>
 </html>
