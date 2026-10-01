@@ -95,13 +95,15 @@ function saiList() { return SAI.adv && SAI.adv.advice && Array.isArray(SAI.adv.a
 function saiClose() { const m = document.getElementById("saimodal"); if (m) { m.style.display = "none"; m.innerHTML = ""; } }
 
 // 🤖: wachtwoord → workflow 22 start → pollen
+const SAI_KOST = "± € 0,10 per keer (schatting, Claude-kosten)";
 function saiDoorlopen() {
   if (SAI.busy) return; SAI.err = null;
   if (SAI_LOCAL()) { SAI.busy = true; saiDraw(); setTimeout(() => { SAI.busy = false; if (SAI.adv) SAI.adv.run_at = new Date().toISOString(); saiDraw(); }, 900); return; }
   const m = document.getElementById("saimodal");
-  m.innerHTML = `<div class="box" style="width:min(380px,100%)" onclick="event.stopPropagation()"><div class="mh"><b>🤖 Adviezen doorlopen</b><span onclick="saiClose()">sluiten ✕</span></div>
+  m.innerHTML = `<div class="box" style="width:min(380px,100%)" onclick="event.stopPropagation()"><div class="mh"><b>🤖 Adviezen ophalen</b><span onclick="saiClose()">sluiten ✕</span></div>
+    <p style="font-size:12.5px;color:var(--mut);margin:0 0 10px">Dit kost geld: de AI leest alle cijfers en schrijft nieuw advies. Kosten ${SAI_KOST}.</p>
     <input id="saiww" type="password" autocomplete="off" placeholder="AI-wachtwoord" onkeydown="if(event.key==='Enter')saiStart(this.value)">
-    <div class="mf"><span class="msg" id="saiwwfout"></span><button class="saibtn pri" id="saistart" onclick="saiStart(document.getElementById('saiww').value)">Start</button></div></div>`;
+    <div class="mf"><span class="msg" id="saiwwfout"></span><button class="saibtn pri" id="saistart" onclick="saiStart(document.getElementById('saiww').value)">Ja, ophalen</button></div></div>`;
   m.style.display = "flex"; setTimeout(() => { const i = document.getElementById("saiww"); if (i) i.focus(); }, 30);
 }
 async function saiStart(ww) {
@@ -172,8 +174,8 @@ function saiDraw() {
   w.style.display = "block";
   const ls = saiList(); const todo = ls.map((a, i) => ({ a, i })).filter(x => !saiDone(x.a)); const gedaan = ls.filter(a => saiDone(a));
   const run = SAI.adv ? saiWhen(SAI.adv.run_at) : "nog nooit";
-  const tAi = `De AI (${SAI_MODEL[0]}) loopt alle salescijfers door als sales manager: grootste lek eerst, met naam en rekensom. Leest jullie vinkjes en opmerkingen mee: gedaan vervalt, blijvend krijgt 🔁. Duurt ${SAI_MODEL[1]} en vraagt het AI-wachtwoord.`;
-  let h = `<div class="saibar"><button class="saibtn pri" onclick="saiDoorlopen()" title="${esc(tAi)}" ${SAI.busy ? "disabled" : ""}>${SAI.busy ? "⏳ Bezig…" : "🤖 Adviezen doorlopen"}</button>`
+  const tAi = `De AI (${SAI_MODEL[0]}) loopt alle salescijfers door als sales manager: grootste lek eerst, met naam en rekensom. Leest jullie vinkjes en opmerkingen mee: gedaan vervalt, blijvend krijgt 🔁. Duurt ${SAI_MODEL[1]}, vraagt het AI-wachtwoord en kost ${SAI_KOST}.`;
+  let h = `<div class="saibar"><button class="saibtn pri" onclick="saiDoorlopen()" title="${esc(tAi)}" ${SAI.busy ? "disabled" : ""}>${SAI.busy ? "⏳ Bezig…" : "🤖 Adviezen ophalen"}</button>`
     + `<button class="saibtn" onclick="saiNaarDjango()" ${todo.length ? "" : "disabled"} title="Alle open adviezen als bericht naar Django (Slack). Je ziet eerst het bericht.">📨 Open adviezen naar Django</button></div>`
     + `<div class="saisub">AI-advies · laatste run ${esc(run)}${todo.length ? " · " + todo.length + " open" : ""}</div>`;
   if (SAI.busy) h += `<div class="saibusy"><i></i>De AI loopt de cijfers door. ${SAI_MODEL[1]}; je kunt gewoon verder werken.</div>`;
