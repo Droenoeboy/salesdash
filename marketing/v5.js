@@ -60,10 +60,11 @@ hkHtml=function(key){
   const D=HKDEF[key]; if(!D) return "";
   const zero=o=>key==='cpk'||key==='roas'?(o.m.sg===0&&o.m.spend>=100):(key==='spend'||key==='sg')?false:((D.den(o.m)||0)>=5&&D.num(o.m)===0);
   const all=hkGroups(key).filter(o=>(D.num(o.m)||0)>0||zero(o));
-  const PL=["meta","google","tiktok"]; const cnt={}; all.forEach(o=>{ cnt[o.plat]=(cnt[o.plat]||0)+D.num(o.m); });
+  const PL=["meta","google","tiktok","niet_betaald","onbekend"]; const cnt={}; all.forEach(o=>{ cnt[o.plat]=(cnt[o.plat]||0)+D.num(o.m); });
   const tot=all.reduce((s,o)=>s+D.num(o.m),0);
   const fmtN=v=>D.eur&&key==="spend"?eur0(v):Math.round(v);
-  let h=`<div class="hk"><div class="hkbar"><span class="${hkPlat?"":"on"}" onclick="hkP(null)">Alles<i>${fmtN(tot)}</i></span>`+PL.filter(p=>cnt[p]).map(p=>`<span class="${hkPlat===p?"on":""}" onclick="hkP('${p}')">${esc(PN(p))}<i>${fmtN(cnt[p])}</i></span>`).join("")+`</div>`;
+  // DPAC-137: Meta/Google/TikTok altijd als filter (ook bij 0); Niet betaald en Onbekend zodra ze in deze lijst voorkomen
+  let h=`<div class="hk"><div class="hkbar"><span class="${hkPlat?"":"on"}" onclick="hkP(null)">Alles<i>${fmtN(tot)}</i></span>`+PL.filter(p=>cnt[p]!=null||p===hkPlat||["meta","google","tiktok"].includes(p)).map(p=>`<span class="${hkPlat===p?"on":""}" onclick="hkP('${p}')">${esc(PN(p))}<i>${fmtN(cnt[p]||0)}</i></span>`).join("")+`</div>`;
   const rows=all.filter(o=>!hkPlat||o.plat===hkPlat);
   // totaal van de lijst = anker voor de kleur
   const sum=f=>rows.reduce((s,o)=>s+f(o.m),0);
