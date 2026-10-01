@@ -6,37 +6,46 @@
 <meta name="robots" content="noindex,nofollow">
 <title>DPAC · Dashboards</title>
 <style>
-  :root{--bg:#0e0e10;--card:#17171a;--line:#26262b;--txt:#ececf1;--mut:#8b8b94;--pink:#C927B4;--ice:#8FD8FF;--ok:#2fbf71;--warn:#e6c14d}
+  :root{--bg:#0e0e10;--card:#17171a;--line:#26262b;--txt:#ececf1;--mut:#8b8b94;--pink:#C927B4;--ok:#2fbf71;--warn:#e6c14d}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column}
-  header{padding:26px 24px 8px;text-align:center}
+  header{padding:28px 24px 8px;text-align:center}
   header h1{margin:0;font-size:22px;letter-spacing:-.3px} header p{margin:6px 0 0;color:var(--mut);font-size:13px}
-  main{padding:18px 24px 40px;max-width:980px;margin:0 auto;width:100%}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-  a.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 20px 18px;text-decoration:none;color:inherit;border-top:5px solid var(--line);transition:border-color .12s,transform .12s}
-  a.card:hover{border-color:var(--ice);transform:translateY(-2px)}
-  a.card .ic{font-size:30px;line-height:1} a.card h2{margin:10px 0 4px;font-size:18px} a.card p{margin:0;color:var(--mut);font-size:13px;min-height:38px}
-  a.card .st{margin-top:12px;font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center} .dot{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none} .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)}
-  a.card.sales{border-top-color:#4f8df9} a.card.mkt{border-top-color:var(--pink)} a.card.fin{border-top-color:var(--ok)} a.card.adm{border-top-color:var(--ice)}
-  .sec{margin-top:26px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
-  .small{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .small a{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--txt);text-decoration:none} .small a:hover{border-color:var(--ice)}
+  main{padding:16px 24px 40px;max-width:980px;margin:0 auto;width:100%}
+  .sec{margin:24px 0 10px;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+  .sec:first-child{margin-top:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+  a.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 20px 16px;text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+  a.card:hover{border-color:var(--pink);transform:translateY(-2px)}
+  a.card:active{transform:translateY(0)}
+  a.card h2{margin:0 0 4px;font-size:18px} a.card p{margin:0;color:var(--mut);font-size:13px;min-height:38px}
+  a.card .st{margin-top:12px;font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none} .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)}
+  .small{display:flex;gap:8px;flex-wrap:wrap}
+  .small a{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--txt);text-decoration:none;transition:border-color .15s}
+  .small a:hover{border-color:var(--pink)}
   footer{margin-top:auto;text-align:center;color:var(--mut);font-size:11.5px;padding:14px}
 </style>
 </head>
 <body>
 <header><h1>DPAC · Dashboards</h1><p>Eén plek voor alle cijfers. Elke knop vraagt de gebruikelijke toegangscode.</p></header>
 <main>
+  <div class="sec">Nieuw (nachtbouw 1 okt)</div>
   <div class="grid">
-    <a class="card sales" href="../v2/"><div class="ic">📞</div><h2>Sales</h2><p>Bellijst, weekcijfers, per rep, funnel en adviezen.</p><div class="st"><span class="dot ok"></span>live · v2</div></a>
-    <a class="card mkt" href="../marketing-v3/"><div class="ic">📣</div><h2>Marketing</h2><p>Advertenties, leads per kanaal, kosten per lead en per inschrijving.</p><div class="st"><span class="dot ok"></span>live · v3</div></a>
-    <a class="card fin" href="../finance/"><div class="ic">💶</div><h2>Finance</h2><p>Debiteuren uit Odoo: wie moet vandaag betalen.</p><div class="st"><span class="dot ok"></span>live</div></a>
-    <a class="card adm" href="../admin/"><div class="ic">🗂️</div><h2>Administratie</h2><p>Werklijst betalingen voor Michèle, met één knop naar Notion.</p><div class="st"><span class="dot warn"></span>nieuw · wacht op datakoppeling</div></a>
+    <a class="card" href="../v3/"><h2>Sales v3</h2><p>Startscherm Week: in één blik of het goed gaat, met alle oude tabs eronder.</p><div class="st"><span class="dot ok"></span>echte data</div></a>
+    <a class="card" href="../marketing-v5-preview/"><h2>Marketing v5</h2><p>Mock-up: rustiger, één accentkleur, kleur alleen als oordeel.</p><div class="st"><span class="dot ok"></span>echte data</div></a>
+    <a class="card" href="../admin/?local=1"><h2>Administratie</h2><p>Werklijst betalingen voor Michèle, met één knop naar Notion.</p><div class="st"><span class="dot warn"></span>demo, koppeling volgt</div></a>
   </div>
-  <div class="sec">Nieuw, nog niet live</div>
-  <div class="small"><a href="../v3/">Sales v3 · startscherm Week</a><a href="../admin/?local=1">Administratie · demo met fictieve data</a></div>
+  <div class="sec">Nu in gebruik</div>
+  <div class="grid">
+    <a class="card" href="../v2/"><h2>Sales</h2><p>Bellijst, weekcijfers, per rep, funnel en adviezen.</p><div class="st"><span class="dot ok"></span>live · v2</div></a>
+    <a class="card" href="../marketing/"><h2>Marketing</h2><p>Cijfers en advies: advertenties, leads, kosten per klant.</p><div class="st"><span class="dot ok"></span>live · v4</div></a>
+    <a class="card" href="../finance/"><h2>Finance</h2><p>Debiteuren uit Odoo: wie moet vandaag betalen.</p><div class="st"><span class="dot ok"></span>live</div></a>
+  </div>
+  <div class="sec">Demo zonder code (fictieve data)</div>
+  <div class="small"><a href="../v3/?local=1">Sales v3</a><a href="../marketing-v5-preview/?local=1">Marketing v5</a><a href="../admin/?local=1">Administratie</a></div>
   <div class="sec">Ouder</div>
-  <div class="small"><a href="../">Sales v1</a><a href="../marketing/">Marketing v2</a><a href="../marketing-preview/">Marketing mock-up</a></div>
+  <div class="small"><a href="../">Sales v1</a><a href="../marketing-v3/">Marketing v3</a><a href="../marketing-preview/">Marketing mock-up (oud)</a></div>
 </main>
 <footer>DPAC · definities staan in dpac-brain · deze pagina bevat geen data</footer>
 </body>
