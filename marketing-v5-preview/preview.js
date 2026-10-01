@@ -30,7 +30,7 @@
   .arow.al{opacity:.6;border-left-color:var(--line)!important;background:transparent} .arow.al .amk{display:none} .arow.al .abud.uitz{display:none}
   .tabs{justify-content:center} .abar{justify-content:center} .abtns{justify-content:center;width:100%}
   /* logo uit brand-assets (currentColor-mask, wit op donker) */
-  .top .logo img{display:none} .top .logo{width:34px;height:40px;background:currentColor;color:#fff;-webkit-mask:url(dpac-logo.svg) no-repeat center/contain;mask:url(dpac-logo.svg) no-repeat center/contain;border-radius:0;flex:none}
+  .top .logo img,.top .logo i{display:none!important} .top .logo{width:32px;height:38px;margin-right:4px;border:0!important;box-shadow:none;overflow:visible;background:#fff!important;color:#fff;-webkit-mask:url(dpac-logo.svg) no-repeat center/contain;mask:url(dpac-logo.svg) no-repeat center/contain;border-radius:0;flex:none}
   /* 8. mobiel: kolomkop niet breken */
   .hkt th{white-space:nowrap}
   /* ronde 2: kalender-emoji weg, grijze balk 'lopende week' in de grafiek weg, lege Advies-staat toont alleen de regel */
