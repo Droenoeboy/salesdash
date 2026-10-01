@@ -118,7 +118,42 @@ drawAdviceInner=function(){
   // knoppen: emoji weg
 };
 // 13. startstand: tegel Klanten open én tabel op Klanten gesorteerd
-if(typeof kpiTrend!=="undefined"){ kpiTrend="sg"; sortKey="sg"; sortDir=-1; }
+const _memHad=()=>{ try{ return !!localStorage.dpacMktStand; }catch(e){ return false; } };   // punt 15: onthouden stand gaat voor
+if(typeof kpiTrend!=="undefined"&&!_memHad()){ kpiTrend="sg"; sortKey="sg"; sortDir=-1; }
 const _initApp5=initApp;
-initApp=function(){ _initApp5(); kpiTrend="sg"; sortKey="sg"; sortDir=-1; render(); };
-if(typeof D!=="undefined"&&D){ kpiTrend="sg"; sortKey="sg"; sortDir=-1; render(); }
+initApp=function(){ _initApp5(); if(!_memHad()){ kpiTrend="sg"; sortKey="sg"; sortDir=-1; } render(); };
+if(typeof D!=="undefined"&&D&&!_memHad()){ kpiTrend="sg"; sortKey="sg"; sortDir=-1; render(); }
+
+// 14. (Abel 1 okt, avond) elke sortering omkeerbaar: ook de lijst onder een open tegel (hkt). Tweede klik op dezelfde kop = andersom.
+let hkDir=1;   // 1 = zoals altijd (beste/grootste bovenaan), -1 = omgekeerd (slechtste bovenaan)
+hkS=function(s){ if(hkSort===s) hkDir=-hkDir; else { hkSort=s; hkDir=1; } hkDraw(); };
+const _kpiTog14=kpiTog; kpiTog=function(k){ hkDir=1; _kpiTog14(k); };
+const _hkHtml14=hkHtml;
+hkHtml=function(key){
+  let h=_hkHtml14(key);
+  // pijl in de kop laat de richting zien
+  h=h.replace(/(hkS\('n'\)">[^<]*?)( ▼)?<\/th>/, (m,a,b)=> b? `${a}${hkDir>0?" ▼":" ▲"}</th>` : m)
+     .replace(/(hkS\('r'\)"[^>]*>[^<]*?)( ▼)?<\/th>/, (m,a,b)=> b? `${a}${hkDir>0?" ▼":" ▲"}</th>` : m);
+  if(hkDir<0){   // rijen (zonder de namen-regels) omdraaien; de kop blijft staan
+    const i=h.indexOf('<table class="hkt">'); const j=h.indexOf('</table>',i); if(i<0||j<0) return h;
+    const tbl=h.slice(i,j); const rows=tbl.split(/(?=<tr)/); const head=rows.slice(0,2).join(""); let body=rows.slice(2);
+    const grp=[]; for(const r of body){ if(r.startsWith('<tr class="nmrow')&&grp.length) grp[grp.length-1]+=r; else grp.push(r); }
+    h=h.slice(0,i)+head+grp.reverse().join("")+h.slice(j);
+  }
+  return h;
+};
+
+// 15. (Abel 1 okt, avond) onthouden: welke rijen in de boomtabel open staan, de sortering en de open tegel. Start zoals je het achterliet.
+const MEM_KEY="dpacMktStand";
+function memSave(){ try{ localStorage[MEM_KEY]=JSON.stringify({open:[...open],sortKey,sortDir,kpiTrend}); }catch(e){} }
+(function(){ let m=null; try{ m=JSON.parse(localStorage[MEM_KEY]||"null"); }catch(e){}
+  if(m){ open=new Set(m.open||[]); if(m.sortKey) sortKey=m.sortKey; if(m.sortDir) sortDir=m.sortDir; kpiTrend=m.kpiTrend===undefined?kpiTrend:m.kpiTrend; }
+  else { open=new Set(["p:meta","p:google","p:tiktok"]); }   // eerste keer: platforms uitgeklapt (wens Abel)
+})();
+const _toggleNode15=toggleNode; toggleNode=function(k){ _toggleNode15(k); memSave(); };
+const _setSort15=setSort; setSort=function(k){ _setSort15(k); memSave(); };
+const _treeOpenAll15=treeOpenAll; treeOpenAll=function(){ _treeOpenAll15(); memSave(); };
+const _treeCloseAll15=treeCloseAll; treeCloseAll=function(){ _treeCloseAll15(); memSave(); };
+const _kpiTog15=kpiTog; kpiTog=function(k){ _kpiTog15(k); memSave(); };
+// na het laden van de data de onthouden stand opnieuw toepassen (initApp zet eigen defaults)
+const _initApp15=initApp; initApp=function(){ _initApp15(); let m=null; try{ m=JSON.parse(localStorage[MEM_KEY]||"null"); }catch(e){} if(m){ open=new Set(m.open||[]); if(m.sortKey) sortKey=m.sortKey; if(m.sortDir) sortDir=m.sortDir; kpiTrend=m.kpiTrend===undefined?kpiTrend:m.kpiTrend; render(); } };
