@@ -76,7 +76,7 @@ async function saiLaad(force) {
     if (SAI_LOCAL()) j = await (await fetch("sales_ai_demo.json")).json();
     else { if (!GCODE) { SAI.laadt = false; return; } const x = await saiPost(SAI_DATA, { code: GCODE, action: "get" }); if (!x.r.ok || !x.j || !x.j.ok) throw new Error("laden mislukt (" + x.r.status + ")"); j = x.j; }
     SAI.adv = j.ai_advice || null; SAI.fout = j.laatste_fout || null; SAI.fol = {}; for (const f of j.followups || []) SAI.fol[f.key] = f; SAI.loaded = true; SAI.err = null;
-  } catch (e) { SAI.err = "AI-advies niet geladen: " + (e.message || e); }
+  } catch (e) { SAI.err = /fetch|laden mislukt \(404\)/i.test(e.message || "") ? "AI-advies nog niet aangesloten (n8n-workflow 22 ontbreekt)." : "AI-advies niet geladen: " + (e.message || e); }
   SAI.laadt = false; saiDraw();
 }
 let SAI_Q = new Set(), SAI_T = null;
