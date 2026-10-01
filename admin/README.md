@@ -28,3 +28,31 @@ Kolommen (`student_cols`, volgorde vrij): `id` (Notion page id), `naam`, `klas`,
 
 Bron: Notion-database Leerlingen (`2a14a076-0bf7-4b5e-b410-a440e012265c`) + Odoo (bestaande finance-datalaag).
 Bouwen als n8n-workflow naast wf-finance: Notion query (alle rijen, pagineren) → Odoo-match op e-mail → samenvoegen → JSON.
+
+## n8n-workflow bouwen
+
+Nieuwe workflow naast wf-finance, tag `dashboard`. Stappen:
+
+1. **Webhook** (POST, path `dpac-admin-data`) — ontvangt `{"code":"…"}`.
+2. **Code-node "Check access code"** — vergelijkt `body.code` met de vaste
+   toegangscode (zelfde patroon als wf13/wf14: code staat alleen in deze
+   node, nooit in het brein); bij mismatch meteen `Respond to Webhook` met
+   401 `{"error":"unauthorized"}`.
+3. **HTTP Request "Notion: query Leerlingen"** — POST naar de Notion
+   database-query van database-id `2a14a076-0bf7-4b5e-b410-a440e012265c`,
+   credential "Notion account", header `Notion-Version: 2022-06-28`, geen
+   filter (alle rijen), `page_size` 100.
+4. **IF "has_more"** → **Code-node "Zet start_cursor"** → terug naar stap 3
+   (paginatielus, zelfde patroon als wf36/wf40).
+5. **Code-node "Verzamel Notion-rijen"** — leest alle paginatie-runs
+   (`$('Notion: query Leerlingen').all(0, runIndex)`) tot één platte lijst.
+6. **HTTP Request / Postgres "Odoo-data"** — hergebruikt de bestaande
+   finance-datalaag (`fin_invoices`/`fin_bank_lines`) voor betaald/openstaand.
+7. **Code-node "Match op e-mail"** — koppelt elke Notion-rij aan zijn
+   Odoo-regel via e-mailadres; zet `bron` op `odoo` bij match, anders
+   `moneybird` (Notion blijft leidend bij geen match).
+8. **Code-node "Map naar contract"** — zet de Notion-properties plus de
+   Odoo-match om naar `student_cols`/`students` (zie datacontract hierboven)
+   en zet `gen` op de huidige ISO-timestamp.
+9. **Respond to Webhook** (`respondWith: json`) — stuurt
+   `{"gen":…, "student_cols":…, "students":…}` terug.
