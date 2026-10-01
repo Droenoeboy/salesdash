@@ -11,3 +11,11 @@ Laag bovenop de v2-motor. `engine_a.js` en `engine_b.js` zijn byte-identieke kop
 
 Lokaal testen: `?local=1` met `dashboard_data.json` (fixture: `tools/gen_sales_fixture.py`, fictieve namen).
 Cache-bust: `index.html?v=` op de drie scripts.
+
+## 🤖 Sales-AI-adviseur (1 okt 2026)
+Laag `ai.js` (uit te zetten door de script-tag te verwijderen). Tab **Advies**: bovenaan het AI-advies, daaronder het bestaande rekenadvies.
+- 🤖 **Adviezen doorlopen**: AI-wachtwoord → `POST /webhook/dpac-sales-ai-adviseur` `{code, ww, model}` (401 = wachtwoord fout) → n8n **22 · Sales · AI adviseur** (`hV9K7f9mJ9oSHIm3`) → Claude → `dpac.sales_ai_advice`. Dashboard pollt elke 15 s.
+- Per advies: afvinken, opmerking, 📨 **Naar Django** (Slack-DM via de bot; eerst voorbeeld). Opslag: `dpac.sales_followups` via `POST /webhook/dpac-sales-ai-data` `{code, action: get|sync|send}`.
+- Vaste punten: `dpac.sales_ai_vaste_punten` (bel binnen 5 min, intake binnen 48 uur, bevestigen, 7 contactmomenten).
+- Prompt v1.1 = v1 van Abel + Django als lezer/doorsturer, rollen uit het brein, alleen actieve mensen, sluiten op wie de intake deed, geen gedachtestreepjes.
+- Demo: `?local=1` leest `sales_ai_demo.json` (geanonimiseerd).
