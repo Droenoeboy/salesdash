@@ -32,7 +32,7 @@ const SAI_KANT = { sales: "sales", marketing: "marketing", abel: "Abel beslist" 
   .sairow .eur{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;font-size:14px}
   .sairow .eur small{display:block;font-size:10.5px;font-weight:500;color:var(--mut)}
   .sairow .chev{flex:none}
-  .sairow.af .tt b{text-decoration:line-through;color:var(--mut)}
+  .sairow.af{opacity:.75} .sairow.af .tt b{text-decoration:line-through;color:var(--mut)}
   .sairow .tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--mut);margin-right:4px}
   .sairow .tag.sent{border-color:var(--plan);color:var(--plan-tx)} .sairow .tag.ok{border-color:var(--green);color:var(--sign-tx)}
   .sairow .bd{margin:10px 0 2px 46px;font-size:13.5px;line-height:1.5}
@@ -159,6 +159,7 @@ function saiRow(a, i) {
     + `<span class="nr">${i + 1}</span><input type="checkbox" ${af ? "checked" : ""} title="afvinken: gedaan" onclick="event.stopPropagation();saiCheck(${jk},this.checked)">`
     + `<span class="tt"><b>${esc(a.titel || "")}</b><span>${sub}</span></span>`
     + `<span class="eur">${a.euro_per_maand ? "€ " + Math.round(a.euro_per_maand).toLocaleString("nl-NL") + "<small>per maand</small>" : ""}</span><i class="chev${opn ? " open" : ""}"></i></div>`;
+  if (af && !opn) h += `<div class="acts" style="margin:8px 0 0 46px"><input placeholder="Opmerking (bijv. anders gedaan, en waarom)" value="${esc(F.note || "")}" onclick="event.stopPropagation()" onchange="saiNote(${jk},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>`;
   if (opn) h += `<div class="bd">`
     + (a.doen ? `<p class="doen">👉 ${esc(a.doen)}</p>` : "")
     + (a.waarom ? `<p><span class="lb">Waarom</span>${esc(a.waarom)}</p>` : "")
@@ -182,8 +183,9 @@ function saiDraw() {
   if (SAI.err) h += `<div class="saierr">${esc(SAI.err)}</div>`;
   if (SAI.adv && SAI.adv.advice && SAI.adv.advice.samenvatting) h += `<div class="saisum">${esc(SAI.adv.advice.samenvatting)}</div>`;
   if (!SAI.loaded && SAI.laadt) h += `<div class="saiempty">AI-advies laden…</div>`;
-  else if (SAI.loaded) h += `<div class="sairows">` + (todo.length ? todo.map(x => saiRow(x.a, x.i)).join("") : `<div class="saiempty">${ls.length ? "Alles afgevinkt." : "Nog geen AI-advies. Druk op 🤖."}</div>`) + `</div>`;
-  if (gedaan.length) h += `<div class="saidone" onclick="SAI.doneOpen=!SAI.doneOpen;saiDraw()"><i class="chev${SAI.doneOpen ? " open" : ""}"></i>Afgevinkt · ${gedaan.length}</div>` + (SAI.doneOpen ? `<div class="sairows">${gedaan.map(a => saiRow(a, ls.indexOf(a))).join("")}</div>` : "");
+  // zoals marketing: afgevinkt blijft op zijn plek staan (doorgestreept, terug te klikken) tot de volgende AI-run; daarna vervalt het
+  else if (SAI.loaded) h += `<div class="sairows">` + (ls.length ? ls.map((a, i) => saiRow(a, i)).join("") : `<div class="saiempty">Nog geen AI-advies. Druk op 🤖.</div>`) + `</div>`
+    + (gedaan.length ? `<div class="saiempty" style="text-align:left;padding:8px 2px 0">Afgevinkt · ${gedaan.length} · blijft staan tot de volgende AI-run; klik het vinkje weg om terug te zetten.</div>` : "");
   h += `<div class="saisep">Rekenadvies van het dashboard</div>`;
   w.innerHTML = h;
 }
