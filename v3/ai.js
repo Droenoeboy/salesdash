@@ -24,7 +24,8 @@ const SAI_KANT = { sales: "sales", marketing: "marketing", abel: "Abel beslist" 
   .saibusy i:before{content:'';position:absolute;left:-40%;width:40%;height:100%;background:var(--txt);animation:saib 1.4s ease-in-out infinite} @keyframes saib{to{left:100%}}
   .sairows{display:flex;flex-direction:column;gap:8px}
   .sairow{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;transition:border-color .15s}
-  .sairow:hover{border-color:var(--mut2)} .sairow.vast{background:transparent}
+  .sairow{border-left:5px solid var(--line)} .sairow.hi{border-left-color:#e04b4b} .sairow.mid{border-left-color:#e08a00} .sairow.lo{border-left-color:#c9b94a} .sairow.eig{border-left-color:#8e8e93}
+  .sairow:hover{border-top-color:var(--mut2);border-right-color:var(--mut2);border-bottom-color:var(--mut2)} .sairow.vast{background:transparent}
   .sairow .hd{display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer}
   .sairow .nr{font-size:12px;color:var(--mut);min-width:16px;text-align:right;font-variant-numeric:tabular-nums}
   .sairow input[type=checkbox]{width:20px;height:20px;flex:none;cursor:pointer;accent-color:var(--green);margin:0}
@@ -150,22 +151,23 @@ async function saiVerstuur() {
 // ---- tekenen ----
 function saiWhen(s) { const t = Date.parse(s); if (!t) return "nog nooit"; const d = new Date(t); const dag = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(t).setHours(0, 0, 0, 0)) / 864e5);
   return (dag === 0 ? "vandaag" : dag === 1 ? "gisteren" : d.getDate() + "-" + (d.getMonth() + 1)) + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
-function saiRow(a, i) {
+// eerste zin, zonder haakjes-uitleg, max n tekens
+function saiZin(t, n = 140) { t = String(t || "").replace(/\s*\([^)]*\)/g, "").replace(/\s+/g, " ").trim(); const m = t.match(/^.+?[.!?](\s|$)/); t = (m ? m[0] : t).trim(); return t.length > n ? t.slice(0, n - 1).replace(/[\s,;:]+\S*$/, "") + "…" : t; }
+function saiRow(a, i, cls) {
   const k = saiKey(a), F = saiFol(k), af = saiDone(a), opn = SAI.open.has(k), jk = JSON.stringify(k).replace(/"/g, "&quot;");
   const wie = a.persoon || (a.campagne ? a.campagne + (a.adset ? " › " + a.adset : "") : "team");
   const sent = F.sent_at ? `<span class="tag sent" title="doorgestuurd naar Django">📨 ${saiWhen(F.sent_at)}</span>` : "";
-  const sub = `${a.vast_punt ? '<span class="tag">vast punt</span>' : ""}${a.ref && !a.vast_punt ? '<span class="tag" title="stond er vorige keer ook">🔁</span>' : ""}${sent}${esc(wie)} · ${esc(SAI_ACT[a.actie] || a.actie || "")}${a.kant && a.kant !== "sales" ? " · " + esc(SAI_KANT[a.kant] || a.kant) : ""}`;
-  let h = `<div class="sairow${af ? " af" : ""}${a.vast_punt ? " vast" : ""}"><div class="hd" onclick="saiTog(${jk})">`
+  const sub = `${a.vast_punt ? '<span class="tag">vast punt</span>' : ""}${a.ref && !a.vast_punt ? '<span class="tag" title="stond er vorige keer ook">🔁</span>' : ""}${sent}${esc(wie)}`;
+  let h = `<div class="sairow ${cls || ""}${af ? " af" : ""}${a.vast_punt ? " vast" : ""}"><div class="hd" onclick="saiTog(${jk})">`
     + `<span class="nr">${i + 1}</span><input type="checkbox" ${af ? "checked" : ""} title="afvinken: gedaan" onclick="event.stopPropagation();saiCheck(${jk},this.checked)">`
     + `<span class="tt"><b>${esc(a.titel || "")}</b><span>${sub}</span></span>`
     + `<span class="eur">${a.euro_per_maand ? "€ " + Math.round(a.euro_per_maand).toLocaleString("nl-NL") + "<small>per maand</small>" : ""}</span><i class="chev${opn ? " open" : ""}"></i></div>`;
   if (af && !opn) h += `<div class="acts" style="margin:8px 0 0 46px"><input placeholder="Opmerking (bijv. anders gedaan, en waarom)" value="${esc(F.note || "")}" onclick="event.stopPropagation()" onchange="saiNote(${jk},this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>`;
+  // kort, zoals marketing: één zin wat te doen + één regel toets; waarom/verwacht weg (te lang)
   if (opn) h += `<div class="bd">`
-    + (a.doen ? `<p class="doen">👉 ${esc(a.doen)}</p>` : "")
-    + (a.waarom ? `<p><span class="lb">Waarom</span>${esc(a.waarom)}</p>` : "")
-    + (a.meetpunt && a.meetpunt.criterium ? `<p><span class="lb">Meetpunt${a.meetpunt.datum ? " · " + esc(a.meetpunt.datum) : ""}</span>${esc(a.meetpunt.criterium)}</p>` : "")
-    + (a.verwacht ? `<p><span class="lb">Verwacht</span>${esc(a.verwacht)}</p>` : "")
-    + (a.opmerking_team ? `<p>📝 ${esc(a.opmerking_team)}</p>` : "") + (a.reactie ? `<p class="ai">🔁 ${esc(a.reactie)}</p>` : "")
+    + (a.doen ? `<p class="doen">👉 ${esc(saiZin(a.doen))}</p>` : "")
+    + (a.meetpunt && a.meetpunt.criterium ? `<p class="ai">Toets${a.meetpunt.datum ? " " + esc(a.meetpunt.datum) : ""}: ${esc(saiZin(a.meetpunt.criterium, 110))}</p>` : "")
+    + (a.reactie ? `<p class="ai">🔁 ${esc(saiZin(a.reactie, 110))}</p>` : "")
     + `<div class="acts"><input placeholder="Opmerking (bijv. anders gedaan, en waarom)" value="${esc(F.note || "")}" onchange="saiNote(${jk},this.value)"><button onclick="saiNaarDjango(${jk})">📨 Naar Django</button></div></div>`;
   return h + `</div>`;
 }
@@ -184,7 +186,7 @@ function saiDraw() {
   if (SAI.adv && SAI.adv.advice && SAI.adv.advice.samenvatting) h += `<div class="saisum">${esc(SAI.adv.advice.samenvatting)}</div>`;
   if (!SAI.loaded && SAI.laadt) h += `<div class="saiempty">AI-advies laden…</div>`;
   // zoals marketing: afgevinkt blijft op zijn plek staan (doorgestreept, terug te klikken) tot de volgende AI-run; daarna vervalt het
-  else if (SAI.loaded) h += `<div class="sairows">` + (ls.length ? ls.map((a, i) => saiRow(a, i)).join("") : `<div class="saiempty">Nog geen AI-advies. Druk op 🤖.</div>`) + `</div>`
+  else if (SAI.loaded) h += `<div class="sairows">` + (ls.length ? (() => { let ri = 0; return ls.map((a, i) => { const grijs = a.vast_punt || saiDone(a); const c = grijs ? "eig" : ri < 3 ? "hi" : ri < 6 ? "mid" : "lo"; if (!grijs) ri++; return saiRow(a, i, c); }).join(""); })() : `<div class="saiempty">Nog geen AI-advies. Druk op 🤖.</div>`) + `</div>`
     + (gedaan.length ? `<div class="saiempty" style="text-align:left;padding:8px 2px 0">Afgevinkt · ${gedaan.length} · blijft staan tot de volgende AI-run; klik het vinkje weg om terug te zetten.</div>` : "");
   h += `<div class="saisep">Rekenadvies van het dashboard</div>`;
   w.innerHTML = h;
