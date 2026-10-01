@@ -55,6 +55,45 @@ kpiTrendHtml=function(key){
   let h=_kpiTrendHtml5(key);
   return h;
 };
+// 13. kleurregel kleine aantallen (Abel 1 okt): hkHtml opnieuw gedefinieerd, kopie van app.js 1291-1316 met andere cls/sort/tooltip
+hkHtml=function(key){
+  const D=HKDEF[key]; if(!D) return "";
+  const zero=o=>key==='cpk'||key==='roas'?(o.m.sg===0&&o.m.spend>=100):(key==='spend'||key==='sg')?false:((D.den(o.m)||0)>=5&&D.num(o.m)===0);
+  const all=hkGroups(key).filter(o=>(D.num(o.m)||0)>0||zero(o));
+  const PL=["meta","google","tiktok"]; const cnt={}; all.forEach(o=>{ cnt[o.plat]=(cnt[o.plat]||0)+D.num(o.m); });
+  const tot=all.reduce((s,o)=>s+D.num(o.m),0);
+  const fmtN=v=>D.eur&&key==="spend"?eur0(v):Math.round(v);
+  let h=`<div class="hk"><div class="hkbar"><span class="${hkPlat?"":"on"}" onclick="hkP(null)">Alles<i>${fmtN(tot)}</i></span>`+PL.filter(p=>cnt[p]).map(p=>`<span class="${hkPlat===p?"on":""}" onclick="hkP('${p}')">${esc(PN(p))}<i>${fmtN(cnt[p])}</i></span>`).join("")+`</div>`;
+  const rows=all.filter(o=>!hkPlat||o.plat===hkPlat);
+  // totaal van de lijst = anker voor de kleur
+  const sum=f=>rows.reduce((s,o)=>s+f(o.m),0);
+  const T={spend:sum(m=>m.spend),n:sum(m=>m.n),g:sum(m=>m.g),i:sum(m=>m.i),sh:sum(m=>m.sh),sg:sum(m=>m.sg)};
+  const tRate={spend:T.n?T.spend/T.n:null,plan:T.n?T.g/T.n*100:null,show:T.i?T.sh/T.i*100:null,sg:T.n?T.sg/T.n*100:null,cpk:T.sg?T.spend/T.sg:null,roas:T.sg?T.spend/T.sg:null}[key];
+  const CPKT=key==='cpk'||key==='roas';
+  // v5 (Abel, 1 okt): snel belonen, langzaam straffen. Wilson-interval: groen als ondergrens (80%) boven totaal, rood als bovengrens (90%) eronder.
+  const wil=(k,n,z)=>{ if(!n) return null; const p=k/n, z2=z*z, d=1+z2/n, c=(p+z2/(2*n))/d, h=z/d*Math.sqrt(p*(1-p)/n+z2/(4*n*n)); return [Math.max(0,c-h)*100, Math.min(1,c+h)*100]; };
+  const grey=o=>CPKT?(o.m.sg===0?o.m.spend<100:false):D.eur?((D.den(o.m)||0)<5||D.rate(o.m)==null):D.rate(o.m)==null;
+  const V5={};
+  const cls=o=>{ if(CPKT){ if(o.m.sg===0) return o.m.spend>=400?'bad':o.m.spend>=100?'warn':'nd'; const v=o.m.cpk; return v==null?'nd':v<=MAXCPK()*0.85?'good':v>MAXCPK()*1.25?'bad':'warn'; }
+    if(D.eur){ if(grey(o)||tRate==null) return "nd"; const v=D.rate(o.m); return v<=tRate*0.9?"good":v>=tRate*1.1?"bad":""; }
+    if(grey(o)||tRate==null) return "nd"; const k=D.num(o.m)||0, n=D.den(o.m)||0; if(!n) return "nd";
+    const lo=wil(k,n,1.28)[0], hi=wil(k,n,1.645)[1]; V5[o.k]={k,n,lo,hi};
+    if(k===n && k>=2) return "good";                                   // foutloos met minstens 2: altijd groen (Abel)
+    if(lo>tRate && (k>=2 || key==="sg" || o.m.spend<150)) return "good"; // 1 van 1 alleen bij klanten of als het weinig kostte
+    if(hi<tRate) return "bad"; return ""; };
+  const why=o=>{ const w=V5[o.k]; if(!w) return ""; const c=cls(o); if(c==="good") return w.k===w.n?`${w.k} van ${w.n} · foutloos (totaal ${r1(tRate)}%)`:`${w.k} van ${w.n} · ook met pech boven ${r1(w.lo)}% (totaal ${r1(tRate)}%)`; if(c==="bad") return `${w.k} van ${w.n} · zelfs met geluk onder ${r1(w.hi)}% (totaal ${r1(tRate)}%)`; return `${w.k} van ${w.n} · nog niet te onderscheiden van het totaal (${r1(tRate)}%)`; };
+  const nul=o=>D.rate(o.m)==null&&!(CPKT&&o.m.sg===0);
+  rows.sort((x,y)=> hkSort==="r" ? ((nul(x)?1:0)-(nul(y)?1:0) || (D.low?1:-1)*(((CPKT&&x.m.sg===0)?x.m.spend*9:(D.rate(x.m)??0))-((CPKT&&y.m.sg===0)?y.m.spend*9:(D.rate(y.m)??0))) || D.num(y.m)-D.num(x.m)) : (D.num(y.m)-D.num(x.m) || y.m.n-x.m.n));
+  const CAP=10; const shown=rows.filter((o,i)=>hkAll||i<CAP||cls(o)==="bad"||cls(o)==="warn");
+  const rf=v=>v==null?"—":D.eur?eur0(v):r1(v)+"%";
+  h+=`<table class="hkt"><tr><th class="num" onclick="hkS('n')">${D.n}${hkSort==="n"?" ▼":""}</th><th class="num" onclick="hkS('r')" title="${D.low?"lager is beter":"hoger is beter"} · gekleurd tegen het totaal van deze lijst (${rf(tRate)}) · grijs bij minder dan 5">${D.r}${hkSort==="r"?" ▼":""}</th><th>Advertentie / zoekwoord</th></tr>`;
+  for(const o of shown){ const v=D.num(o.m); const nk="hk:"+o.k; const namen=key==="spend"?o.m.S.nieuw:o.m.S[D.set]; const kan=namen&&namen.length;
+    h+=`<tr><td class="num${kan?" clk":""}"${kan?` onclick="nmTog(${jq(nk)})"`:""} title="${esc(kan?"klik voor de namen":"")}"><b>${fmtN(v)}</b></td><td class="num ${cls(o)}" title="${esc(CPKT&&o.m.sg===0?eur0(o.m.spend)+' uitgegeven zonder klant':(!D.eur&&!CPKT&&why(o))||D.tip(o.m))}"><b>${CPKT&&o.m.sg===0?eur0(o.m.spend)+' · 0':rf(D.rate(o.m))}</b></td><td class="nm"><span class="dot" style="background:${PC(o.plat)}"></span>${esc(o.lab)}<small>${esc(o.sub||"")}</small></td></tr>`;
+    if(NMOPEN.has(nk)) h+=`<tr class="nmrow hkn"><td colspan="3">${namesHtml(namen,nk)}</td></tr>`; }
+  if(hkAll?rows.length>CAP:rows.length>shown.length) h+=`<tr class="more"><td colspan="3" onclick="hkAll=!hkAll;hkDraw()">${hkAll?"minder":"nog "+(rows.length-shown.length)+" meer"}</td></tr>`;
+  if(!rows.length) h+=`<tr><td colspan="3" class="nd">Niets in deze periode.</td></tr>`;
+  return h+`</table></div>`;
+};
 // 11. 'Onbekend' (bron onbekend) niet als lijstrij maar als grijze controle-regel onderaan de advertentielijst
 const _hkHtml5=hkHtml;
 hkHtml=function(key){
