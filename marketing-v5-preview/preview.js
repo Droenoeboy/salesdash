@@ -9,8 +9,8 @@
   .kpi.on{box-shadow:inset 0 0 0 2px var(--roze,#C927B4)!important}
   .hkbar span.on{border-color:var(--roze,#C927B4)!important;color:inherit!important}
   /* 3. kleur alleen als oordeel: tegelgetallen wit, kolom Kosten/klant wit tenzij bad/good-oordeel */
-  .kpi.good b,.kpi.warn b{color:var(--txt)!important} .kpi.bad b{color:#ff8a8e!important}
-  .kpi.good,.kpi.warn,.kpi.bad{box-shadow:var(--shadow)!important} .kpi.bad{box-shadow:inset 0 0 0 1px rgba(255,123,123,.6)!important}
+  .kpi.good b{color:#5fd38d!important} .kpi.warn b{color:#e6c14d!important} .kpi.bad b{color:#ff8a8e!important}
+  .kpi.good,.kpi.warn,.kpi.bad{box-shadow:var(--shadow)!important}
   /* 4. stippellijn onder klikbare getallen weg (hover toont hand) */
   .hkt td.clk b,table.tree td.clk,table.tree td.clk b,.hkt td.clk{text-decoration:none!important;border-bottom:none!important}
   /* 5. hints en ondertitels weg */
@@ -19,8 +19,8 @@
   .kpitrend .chhead{display:none}
   /* 6. getallen recht onder elkaar: delta op vaste breedte onder het getal, alles rechts */
   table.tree td>small{display:block;font-size:10.5px;line-height:1;margin:2px 0 0;opacity:.8}
-  table.tree td.good,table.tree td.warn{color:inherit!important} table.tree td.good b,table.tree td.warn b{color:inherit!important} table.tree td.bad b{color:#ff8a8e}
-  .hkt td.good,.hkt td.good b{color:inherit!important} .hkt td.bad b{color:#ff8a8e}
+  table.tree td.good b{color:#5fd38d} table.tree td.warn b{color:#e6c14d} table.tree td.bad b{color:#ff8a8e}
+  .hkt td.good b{color:#5fd38d} .hkt td.warn b{color:#e6c14d} .hkt td.bad b{color:#ff8a8e}
   .btnrow{opacity:.35;transition:opacity .15s} .top:hover .btnrow{opacity:1}
   table.tree td,table.tree th{text-align:right!important}
   table.tree td.nm,table.tree th.nm{text-align:left!important}
@@ -28,7 +28,9 @@
   .rbtn.big{text-transform:none!important;letter-spacing:0!important}
   .abtns .rbtn.big:not(.pri){background:transparent;border-color:var(--line);color:var(--mut);font-weight:600}
   .arow.al{opacity:.6;border-left-color:var(--line)!important;background:transparent} .arow.al .amk{display:none} .arow.al .abud.uitz{display:none}
-  .tabs .tab,.rbtn.big,#dpbtn{font-variant-emoji:text}
+  .tabs{justify-content:center} .abar{justify-content:center} .abtns{justify-content:center;width:100%}
+  /* logo uit brand-assets (currentColor-mask, wit op donker) */
+  .top .logo img{display:none} .top .logo{width:34px;height:40px;background:currentColor;color:#fff;-webkit-mask:url(dpac-logo.svg) no-repeat center/contain;mask:url(dpac-logo.svg) no-repeat center/contain;border-radius:0;flex:none}
   /* 8. mobiel: kolomkop niet breken */
   .hkt th{white-space:nowrap}
   /* ronde 2: kalender-emoji weg, grijze balk 'lopende week' in de grafiek weg, lege Advies-staat toont alleen de regel */
@@ -41,7 +43,7 @@
 // emoji's uit tabs en knoppen (tekst blijft)
 const _v5strip=s=>s.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]\uFE0F?\s*/gu,"").trim();
 const _drawTabs5=drawTabs;
-drawTabs=function(){ _drawTabs5(); document.querySelectorAll("#tabs .tab").forEach(t=>{ t.textContent=_v5strip(t.textContent); }); const f=document.getElementById("dpField"); if(f){ for(const n of f.childNodes) if(n.nodeType===3) n.textContent=""; } };
+drawTabs=function(){ _drawTabs5(); const f=document.getElementById("dpField"); if(f){ for(const n of f.childNodes) if(n.nodeType===3) n.textContent=""; } };
 // 9. één klik, twee antwoorden: de open tegel sorteert ook de boomtabel op die maat
 const _kpiTog5=kpiTog;
 kpiTog=function(k){ _kpiTog5(k); if(kpiTrend){ const map={spend:"spend",plan:"plan",show:"show",sg:"sg",cpk:"cpk",roas:"cpk"}; sortKey=map[kpiTrend]||"sg"; sortDir=(kpiTrend==="cpk"||kpiTrend==="roas"||kpiTrend==="spend")?(kpiTrend==="spend"?-1:1):-1; drawTree(); } };
@@ -62,7 +64,7 @@ hkHtml=function(key){
   const onb=rows.filter(r=>/bron onbekend|organisch of direct/.test(r.textContent)&&!r.classList.contains("nmrow"));
   const tbl=tmp.querySelector("table.hkt");
   for(const r of rows){ const nm=r.querySelector("td.nm"); if(!nm) continue; const sm=nm.querySelector("small"); if(sm&&/zoekwoord onbekend|PMax/.test(nm.textContent)){ const kw=nm.childNodes; let lab=""; for(const n of kw){ if(n.nodeType===3) lab+=n.textContent; } const dot=nm.querySelector(".dot"); const camp=sm.textContent; sm.remove(); nm.innerHTML=(dot?dot.outerHTML:"")+esc(camp.trim())+`<br><span class="v5kw">${esc(lab.trim())}</span>`; } }
-  for(const r of onb){ r.classList.add("v5onb"); r.style.opacity=".55"; const nm=r.querySelector("td.nm"); if(nm){ nm.innerHTML=nm.innerHTML.replace(/<small[^>]*>.*?<\/small>/,"")+` <small style="color:var(--mut)">· zonder advertentie</small>`; } const more=tbl.querySelector("tr.more"); tbl.insertBefore(r, more||null); }
+  for(const r of onb){ r.classList.add("v5onb"); r.style.opacity=".55"; const nm=r.querySelector("td.nm"); if(nm){ nm.innerHTML=nm.innerHTML.replace(/<small[^>]*>.*?<\/small>/,"")+` <small style="color:var(--mut)">· zonder advertentie</small>`; } const more=tbl.querySelector("tr.more"); const parent=(more&&more.parentNode)||r.parentNode||tbl; parent.insertBefore(r, (more&&more.parentNode===parent)?more:null); }
   return tmp.innerHTML;
 };
 // 12. Advies: alarmen onderaan en één regel lege staat
@@ -75,7 +77,6 @@ drawAdviceInner=function(){
   w.classList.toggle("v5leeg",!real.length);
   if(!real.length){ const e=document.createElement("div"); e.className="aempty"; e.textContent="Niets te doen. Volgend advies donderdag."; rows.insertBefore(e,rows.firstChild); const old=[...rows.querySelectorAll(".aempty")].slice(1); old.forEach(x=>x.remove()); }
   // knoppen: emoji weg
-  w.querySelectorAll(".rbtn.big").forEach(b=>{ b.textContent=_v5strip(b.textContent); });
 };
 // 13. startstand: tegel Klanten open én tabel op Klanten gesorteerd
 if(typeof kpiTrend!=="undefined"){ kpiTrend="sg"; sortKey="sg"; sortDir=-1; }

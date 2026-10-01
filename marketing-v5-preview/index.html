@@ -17,7 +17,7 @@
   document.body.className=doc.body.className; document.body.innerHTML=doc.body.innerHTML;
   const load=src=>new Promise((ok,err)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=err; document.body.appendChild(s); });
   const v=(doc.querySelector('script[src^="app.js"]')||{}).getAttribute?.("src")||"app.js";
-  await load(base+v); await load("preview.js?v=1");
+  await load(base+v); await load("preview.js?v=2");
 })();
 </script>
 </body>
