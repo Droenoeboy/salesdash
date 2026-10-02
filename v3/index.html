@@ -431,7 +431,7 @@
   <div class="gatebox">
     <h2>DPAC · Sales Dashboard</h2>
     <p>Voer de toegangscode in</p>
-    <input id="gcode" type="password" inputmode="text" autocomplete="off" placeholder="••••••" onkeydown="if(event.key==='Enter')gCheck()">
+    <input id="gcode" type="text" style="-webkit-text-security:disc;text-security:disc" spellcheck="false" autocapitalize="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" inputmode="text" autocomplete="off" name="x1nofill" placeholder="••••••" onkeydown="if(event.key==='Enter')gCheck()">
     <button id="gopen" onclick="gCheck()">Openen</button>
     <div class="gatefout" id="gfout"></div>
   </div>

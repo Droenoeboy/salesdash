@@ -50,7 +50,7 @@ async function gTry(code, stil){
     let data;
     if(location.search.indexOf("local=1")>=0){ data=await (await fetch("mkt_data.json")).json(); }
     else data=await laad(code);
-    GCODE=code; try{sessionStorage.dpacMktCode=code;}catch(e){}
+    GCODE=code; try{sessionStorage.removeItem("dpacMktCode");}catch(e){}
     document.getElementById("gate").style.display="none";
     D=data; initApp(); return true;
   }catch(e){
@@ -1042,7 +1042,7 @@ function advDoorvoeren(){
   if(LOCAL()){ advBusy="ai"; drawAdvice(); setTimeout(()=>{ advBusy=null; D.status_at=new Date().toISOString(); herlaad(D); },800); return; }
   const m=folModal();
   m.innerHTML=`<div class="modalbox" style="width:min(380px,100%)" onclick="event.stopPropagation()"><div class="modalhd"><b>Adviezen doorvoeren</b><span class="sm" onclick="folReportClose()">sluiten ✕</span></div>
-    <input id="aiww" class="anote" style="width:100%;max-width:none" type="password" autocomplete="off" placeholder="AI-wachtwoord" onkeydown="if(event.key==='Enter'){aiStart(this.value)}">
+    <input id="aiww" class="anote" style="width:100%;max-width:none" type="text" style="-webkit-text-security:disc;text-security:disc" spellcheck="false" autocapitalize="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" autocomplete="off" name="x1nofill" placeholder="AI-wachtwoord" onkeydown="if(event.key==='Enter'){aiStart(this.value)}">
     <div class="aierr" id="aiwwfout" style="margin:8px 0 0;min-height:16px"></div>
     <div class="modalft"><button class="rbtn sm2 pri" id="aistartbtn" onclick="aiStart(document.getElementById('aiww').value)">Start</button></div></div>`;
   m.style.display="flex"; m.onclick=folReportClose; setTimeout(()=>{ const i=document.getElementById("aiww"); if(i) i.focus(); },30);
@@ -1260,7 +1260,7 @@ function render(){
 const jq = s => JSON.stringify(s).replace(/"/g,"&quot;");
 let _rz=null; window.addEventListener("resize",()=>{ if(!D) return; clearTimeout(_rz); _rz=setTimeout(()=>{ if(tab==="trend") drawTrend(); },250); });
 setTimeout(()=>{ const g=document.getElementById("gcode"); if(g && document.getElementById("gate").style.display!=="none") g.focus(); },50);
-try{ const c=sessionStorage.dpacMktCode; if(c) gTry(c, true); else if(location.search.indexOf("local=1")>=0) gTry("", true); }catch(e){}
+try{ sessionStorage.removeItem("dpacMktCode"); if(location.search.indexOf("local=1")>=0) gTry("", true); }catch(e){}
 
 // ================= v4: herkomstlijst onder de weeklijn (Alles · Meta · Google · TikTok), namen onder de rij, directe tooltip =================
 let hkPlat=null, hkSort="n", hkAll=false, NMOPEN=new Set(), NMALL=new Set();

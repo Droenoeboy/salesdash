@@ -59,7 +59,7 @@ async function gTry(code, stil){
     let data;
     if(location.search.indexOf("local=1")>=0){ data=await (await fetch("dashboard_data.json")).json(); }
     else data=await laad(code);
-    GCODE=code; try{ sessionStorage.dpacSalesCode=code; if(code) localStorage.dpacSalesCode=JSON.stringify({c:code,t:Date.now()}); }catch(e){}   // v4.1: 30 dagen onthouden op dit apparaat
+    GCODE=code; try{ sessionStorage.removeItem("dpacSalesCode"); localStorage.removeItem("dpacSalesCode"); }catch(e){}   // 1 okt: code nooit meer onthouden (Abel)
     gBusy(false); document.getElementById("gate").style.display="none";
     D=data; initApp(); return true;
   }catch(e){
