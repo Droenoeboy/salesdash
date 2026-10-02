@@ -619,4 +619,4 @@ function render(){
 }
 let _rz=null; window.addEventListener("resize",()=>{ if(!D) return; clearTimeout(_rz); _rz=setTimeout(()=>{ if(["trend","lost"].includes(tab)) drawCols(); if(sel) drawDetail(); },250); });
 setTimeout(()=>{ const g=document.getElementById("gcode"); if(g && document.getElementById("gate").style.display!=="none") g.focus(); },50);
-try{ let c=sessionStorage.dpacSalesCode; if(!c){ const r=JSON.parse(localStorage.dpacSalesCode||"null"); if(r&&r.c&&Date.now()-r.t<30*864e5) c=r.c; } if(c) gTry(c, true); else if(location.search.indexOf("local=1")>=0) gTry("", true); }catch(e){}   // v4.1: code 30 dagen onthouden
+try{ sessionStorage.removeItem("dpacSalesCode"); localStorage.removeItem("dpacSalesCode"); if(location.search.indexOf("local=1")>=0) gTry("", true); }catch(e){}   // 2 okt: nooit automatisch inloggen (Abel)
