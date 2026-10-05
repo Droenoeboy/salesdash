@@ -367,10 +367,9 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&PN) sluitPaneel();
 const ODOO="https://audio-dojo1.odoo.com";
 const RECON_URL=ODOO+"/odoo/accounting/13/reconciliation";   // Bankaflettering-view (dagboek Bank)
 const MOLLIE_URL="https://my.mollie.com/dashboard/";
-const ACT_URL="https://dpac.app.n8n.cloud/webhook/dpac-finance-actions";
 const JID_PA=8;
 const olink=(model,id,txt)=>id?`<a href="${ODOO}/web#id=${id}&model=${model}&view_type=form" target="_blank" title="openen in Odoo" onclick="event.stopPropagation()">${txt}</a>`:txt;
-let INV=[], BANK=[], IBANMAP=new Map(), AFL=null, afOpen=new Set(), afAll=false, busySet=new Set();
+let INV=[], BANK=[], IBANMAP=new Map(), AFL=null, afOpen=new Set(), afAll=false;   // alleen lezen: het dashboard schrijft niets naar Odoo
 const IBAN_RE=/\b[A-Z]{2}\d{2}[A-Z]{4}[0-9A-Z]{6,}\b/;
 const norm=s=>String(s||"").toLowerCase();
 const nrmS=s=>String(s||"").toLowerCase().replace(/[^a-zÀ-ɏ]+/gi," ").replace(/\s+/g," ").trim(); // woorden met spaties, voor woordgrens-matching
@@ -388,22 +387,16 @@ function calcDebs(list){
   for(const i of list){ const k=i.pid||("x"+i.pname); if(!byP.has(k)) byP.set(k,{pid:i.pid,nm:i.pname||"(onbekend)",inv:[]}); byP.get(k).inv.push(i); }
   return [...byP.values()].map(d=>{ d.open=d.inv.reduce((s,i)=>s+i.open,0); return d; });
 }
-function reconGo(term){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(term).catch(()=>{}); }catch(e){} window.open(RECON_URL,"_blank"); }
+function reconGo(term,el){   // link opent de Bankaflettering zelf; hier alleen de naam naar het klembord + inline bevestiging
+  try{ if(term&&navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(term).catch(()=>{}); }catch(e){}
+  if(!term||!el) return;
+  const box=el.parentNode; let ok=box.querySelector(".cpy");
+  if(!ok){ ok=document.createElement("span"); ok.className="cpy"; box.insertBefore(ok,el.nextSibling); }
+  ok.textContent="gekopieerd ✓"; clearTimeout(ok._t); ok._t=setTimeout(()=>ok.remove(),2500);
+}
 function ibanHist(t){
   if(!t.iban) return [];
   return BANK.filter(b=>b.id!==t.id&&b.iban===t.iban).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5);
-}
-async function setPartner(lineId,pid,ev){
-  if(ev) ev.stopPropagation();
-  if(busySet.has(lineId)) return; busySet.add(lineId); render();
-  try{
-    let j;
-    if(LOCAL()) j={ok:true,partner:(INV.find(i=>i.pid===pid)||{}).pname};   // demo: niets versturen
-    else{ const r=await fetch(ACT_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,action:"set_partner",line_id:lineId,partner_id:pid})}); j=await r.json(); }
-    if(j&&j.ok){ const t=BANK.find(b=>b.id===lineId); if(t){ t.pid=pid; t.pname=j.partner||t.pname; } AFL=null; }
-    else alert("Partner zetten mislukt: "+((j&&j.error)||"onbekende fout"));
-  }catch(e){ alert("Partner zetten mislukt (netwerk)"); }
-  busySet.delete(lineId); render();
 }
 function psPill(i){ const ps=i.ps; const lab=ps==="paid"?"betaald":ps==="partial"?"deels betaald":ps==="in_payment"?"in behandeling":ps==="reversed"?"gecrediteerd":"open"; const cls=ps==="paid"?"win":i.late>0?"lost":"warn"; return `<span class="stg ${cls}">${lab}</span>`; }
 const achternaam=nm=>String(nm||"").trim().split(" ").slice(-1)[0]||"";
@@ -433,7 +426,7 @@ function payCands(pid,pname){
   out.sort((a,b)=>b.sc-a.sc);
   return out;
 }
-function aflData(){   // rekenwerk één keer per stand (en na set_partner), niet bij elke render
+function aflData(){   // rekenwerk één keer per stand, niet bij elke render
   if(AFL) return AFL;
   const cards=calcDebs(INV.filter(i=>i.jid===JID_PA)).map(d=>({d,cand:payCands(d.pid,d.nm)}));
   const withPay=cards.filter(c=>c.cand.length).sort((a,b)=>b.d.open-a.d.open);
@@ -454,7 +447,7 @@ function afletHtml(){
         <span class="wlamt">${eur0(d.open)}</span>
         <span class="wlmeta"><span>${c.cand.length} betaling${c.cand.length===1?"":"en"}</span></span>
       </div>
-      ${opn?`<div class="why">${c.cand.length} mogelijke betaling${c.cand.length===1?"":"en"} gevonden (samen ${eur0(som)}) — als die kloppen is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)}.</div><div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>{ const h2=ibanHist(x.t); const tt=(x.t.ref||"")+(h2.length?"  |  eerder via deze rekening: "+h2.map(v=>eur0(v.amount)+" op "+fmt(v.date)+(v.rec?" (afgeletterd"+(v.pname?" op "+v.pname:"")+")":" (nog open)")).join(", "):""); return `<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span title="${esc(tt)}"><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${payNaam(x.t)?` · van ${esc(payNaam(x.t))}`:""}${x.t.pid===d.pid&&d.pid?' · <span class="stg win">naam staat al op de betaling</span>':""}<br><span class="chsub">${x.why.map(shortWhy).join(" · ")}${h2.length?` · 🔎 ${h2.length} eerdere betaling${h2.length===1?"":"en"} via deze rekening`:""}</span></span><span class="act">${d.pid&&x.t.pid!==d.pid?`<button class="okbtn"${busySet.has(x.t.id)?" disabled":""} onclick="setPartner(${+x.t.id},${+d.pid},event)" title="Zet ${esc(d.nm)} als klant op deze bankregel in Odoo (set_partner)">${busySet.has(x.t.id)?"bezig…":"👤 Klant op betaling"}</button>`:""}<span class="okbtn" onclick="event.stopPropagation();reconGo(${jq(payNaam(x.t)||achternaam(d.nm))})" title="Opent de bankaflettering in Odoo; de naam van de betaler staat op je klembord. Plak die in het zoekveld en klik daar Afletteren.">🔗 Bekijk in Odoo</span></span></div>`; }).join("")}</div>
+      ${opn?`<div class="why">${c.cand.length} mogelijke betaling${c.cand.length===1?"":"en"} gevonden (samen ${eur0(som)}) — als die kloppen is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)}.</div><div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>{ const h2=ibanHist(x.t); const tt=(x.t.ref||"")+(h2.length?"  |  eerder via deze rekening: "+h2.map(v=>eur0(v.amount)+" op "+fmt(v.date)+(v.rec?" (afgeletterd"+(v.pname?" op "+v.pname:"")+")":" (nog open)")).join(", "):""); return `<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span title="${esc(tt)}"><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${payNaam(x.t)?` · van ${esc(payNaam(x.t))}`:""}${x.t.pid===d.pid&&d.pid?' · <span class="stg win">naam staat al op de betaling</span>':""}<br><span class="chsub">${x.why.map(shortWhy).join(" · ")}${h2.length?` · 🔎 ${h2.length} eerdere betaling${h2.length===1?"":"en"} via deze rekening`:""}</span></span><span class="act"><a class="okbtn" href="${RECON_URL}" target="_blank" rel="noopener" onclick="event.stopPropagation();reconGo(${jq(payNaam(x.t)||achternaam(d.nm))},this)" title="Opent de bankaflettering in Odoo; de naam van de betaler staat op je klembord. Plak die in het zoekveld en klik daar Afletteren.">🔗 Bekijk in Odoo</a></span></div>`; }).join("")}</div>
       <div><h4>Facturen van ${esc(d.nm)}</h4><div class="tblwrap"><table><tr><th>Nr</th><th>Bedrag</th><th>Open</th><th>Status</th></tr>${d.inv.map(i=>`<tr><td>${olink("account.move",i.id,esc(i.name||"—"))}</td><td>${eur0(i.total)}</td><td><b>${i.open>0?eur0(i.open):"✓"}</b></td><td>${psPill(i)}</td></tr>`).join("")}</table></div></div></div>`:""}
     </div>`;
   }).join("")+`</div></div>`;
@@ -462,7 +455,7 @@ function afletHtml(){
     ${mollie.slice(0,10).map(t=>`<div class="lr"><span>${eur0(t.amount)} · ${fmt(t.date)} · <span class="chsub">${esc(String(t.ref||"").match(/REF [^ ]+/)?.[0]||"Mollie")}</span></span></div>`).join("")}${mollie.length>10?`<div class="chsub" style="margin:4px 0 8px">… en ${mollie.length-10} meer</div>`:""}
     <div style="margin-top:8px"><a class="okbtn" style="text-decoration:none" href="${MOLLIE_URL}" target="_blank">🔗 Open Mollie-dashboard</a></div></div>`;
   h+=`<div class="cmp"><h3>❓ Overige niet-afgeletterde betalingen · ${rest.length} <span class="chsub">geen leerling herkend — handmatig bekijken</span></h3>
-    ${rest.slice(0,afAll?rest.length:25).map(t=>`<div class="mtch"><span class="conf lo">onbekend</span><span class="mtxt"><b>${eur0(t.amount)}</b> · ${fmt(t.date)}<br><span class="chsub rref" title="${esc(t.ref||"")}">"${esc(t.ref||"—")}"</span></span><span class="act"><span class="okbtn" onclick="reconGo(${jq(String((norm(t.ref).match(/naam: ([^o]+?) (?:omschrijving|kenmerk)/)||[])[1]||"").trim().split(" ").slice(-1)[0]||"")})">🔗 Bankaflettering</span></span></div>`).join("")}
+    ${rest.slice(0,afAll?rest.length:25).map(t=>`<div class="mtch"><span class="conf lo">onbekend</span><span class="mtxt"><b>${eur0(t.amount)}</b> · ${fmt(t.date)}<br><span class="chsub rref" title="${esc(t.ref||"")}">"${esc(t.ref||"—")}"</span></span><span class="act"><a class="okbtn" href="${RECON_URL}" target="_blank" rel="noopener" onclick="event.stopPropagation();reconGo(${jq(String((norm(t.ref).match(/naam: ([^o]+?) (?:omschrijving|kenmerk)/)||[])[1]||"").trim().split(" ").slice(-1)[0]||"")},this)">🔗 Bankaflettering</a></span></div>`).join("")}
     ${rest.length>25&&!afAll?`<div style="text-align:center;margin:10px 0"><span class="wchip" style="display:inline-flex" onclick="afAll=true;render()">Toon alle ${rest.length}</span></div>`:""}</div>`;
   return h;
 }

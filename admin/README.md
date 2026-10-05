@@ -24,8 +24,8 @@ Michèle vult per leerling in via het zijpaneel; dat schrijft direct naar Notion
 - 🔗 **Afletteren** — overgenomen uit `finance/app.js` (geen iframe):
   - onafgeletterde bankbetalingen per leerling, met het score-model (partner, IBAN-historie, achternaam/voornaam, factuurnummer, bedrag)
   - Mollie-bundels en overige betalingen
-  - "🔗 Bekijk in Odoo" opent de bankaflettering met de zoekterm op het klembord
-  - "👤 Klant op betaling" zet via `set_partner` de klant op de bankregel in Odoo
+  - "🔗 Bekijk in Odoo" is een link naar de Bankaflettering-view in Odoo en zet de naam van de betaler op het klembord (inline "gekopieerd ✓"); afletteren zelf gebeurt in Odoo
+  - het dashboard schrijft **niets** naar Odoo (geen `set_partner`, regel Abel 27-08-2026)
 
   Hiermee kan `finance/` weg.
 
@@ -78,6 +78,6 @@ Een foute code geeft `{"error":"unauthorized"}` (HTTP 200).
 - `termijnen` is één regel per termijn: `YYYY-MM-DD|bedrag|open` of `YYYY-MM-DD|bedrag|binnen`, bedrag met punt-decimaal.
 - De parser is tolerant: lege regels, spaties, komma-decimaal, `€`, duizendtal-punten en `DD-MM-JJJJ` worden allemaal geaccepteerd.
 
-**Afletteren-actie:** `POST https://dpac.app.n8n.cloud/webhook/dpac-finance-actions`, body `{code, action:"set_partner", line_id, partner_id}`, geeft `{"ok":true,"partner":"…"}`.
+**Afletteren:** alleen lezen. Er is geen schrijf-actie naar Odoo; "Bekijk in Odoo" opent `https://audio-dojo1.odoo.com/odoo/accounting/13/reconciliation`.
 
 **Bronnen:** Notion-database Leerlingen (`2a14a076-0bf7-4b5e-b410-a440e012265c`) + Odoo (bestaande finance-datalaag `fin_invoices`/`fin_bank_lines`).

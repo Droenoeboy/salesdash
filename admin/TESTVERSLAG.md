@@ -64,18 +64,20 @@ shot shots/admin315-3-rij-labels.png errors: none
 - **Notitie:** na 500 ms is er nog niets opgeslagen, na 1000 ms wel (debounce van 800 ms). Blur slaat direct op (t9).
 - **Betaalafspraak tot in de toekomst:** de leerling gaat direct van de werklijst af en verschijnt bij Afspraken (t9: `opWlVoor:true, opWlNa:false, inAfspraken:true`).
 
-## 4. Tab Afletteren (desktop) — OK
-Screenshots: `admin315-4-afletteren-desktop.png`, `admin315-4-afletteren-mobiel.png` · script `admin315/t4_afletteren.js`
+## 4. Tab Afletteren (desktop) — OK, schrijft niets naar Odoo
+Screenshots: `admin315-4-afletteren-desktop.png` (opnieuw gemaakt, met "gekopieerd ✓" in beeld), `admin315-4-afletteren-mobiel.png` · script `admin315/t4_afletteren.js`
 ```
 EVAL: {"tabs":[…,"📊 Overzicht","🔗 Afletteren35"],"laatsteTab":"afl","kaarten":35,
- "kandidaten":["zeker € 995 · 5 okt · naam staat al op de betaling …","waarschijnlijk € 2.899 · 2 sep · van Zoë Jansen zelfde achternaam · bedrag = openstaand saldo 👤 Klant op betaling 🔗 Bekijk in Odoo"],
- "knopVoor":true,"setPartner":{"lijn":2500,"pid":1042,"bankregelHeeftNuPid":true,"knopNaKlik":false},"paneelViaNaam":"Zoë Jansen",
+ "kandidaten":["zeker € 995 · 5 okt · naam staat al op de betaling klant staat al op de betaling · zelfde achternaam 🔗 Bekijk in Odoo","waarschijnlijk € 2.899 · 2 sep · van Zoë Jansen zelfde achternaam · bedrag = openstaand saldo 🔗 Bekijk in Odoo"],
+ "bekijk":{"tag":"A","href":"https://audio-dojo1.odoo.com/odoo/accounting/13/reconciliation","target":"_blank","klembord":["Zoë Jansen","Zoë Jansen"],"inline":"gekopieerd ✓","alerts":[],"fetchesNaKlik":[]},
+ "geenSchrijfactie":{"knopKlantOpBetaling":false,"setPartner":"undefined","ACT_URL":"undefined","bankregelPid":null},"paneelViaNaam":"Zoë Jansen",
  "mollie":"🟣 Mollie-uitbetalingen (bundels) · 0 · € 0 …","overige":"❓ Overige niet-afgeletterde betalingen · 103 …","sw":1440,"iw":1440}
 shot shots/admin315-4-afletteren-desktop.png errors: none
 ```
 - **Plek en stijl:** laatste tab, in de bestaande tabs-stijl.
-- **Logica:** `payCands`, `calcDebs`, IBAN-historie, `reconGo`, `psPill` en `setPartner` komen uit `finance/app.js`. Er wordt gerekend op `invoices`/`bank` uit hetzelfde admin-antwoord.
-- **Testdata aangepast:** de testdata heeft geen namen in de bank-omschrijvingen. Het script zet daarom één bankregel op "naam: Zoë Jansen …" met bedrag = openstaand, zodat de naam-match en de knop "Klant op betaling" (set_partner) te zien zijn. In local-modus wordt set_partner nagebootst; er gaat geen netwerkverkeer uit.
+- **Logica:** `payCands`, `calcDebs`, IBAN-historie, `reconGo` en `psPill` komen uit `finance/app.js`. Er wordt gerekend op `invoices`/`bank` uit hetzelfde admin-antwoord.
+- **Geen set_partner (regel Abel, 27 aug 2026):** de knop "Klant op betaling", `setPartner` en `ACT_URL` (`dpac-finance-actions`) zijn weg. Er is alleen "🔗 Bekijk in Odoo": een gewone link (`<a target="_blank">`) naar de Bankaflettering-view. De link zet de naam van de betaler op het klembord en toont ernaast "gekopieerd ✓" (geen alert, verdwijnt na 2,5 s). Een klik geeft 0 fetch-calls, en de bankregel houdt `pid:null`. Afletteren zelf gebeurt in Odoo. In de test is het openen van het tabblad tegengehouden (`preventDefault`) en is het klembord nagebootst.
+- **Testdata aangepast:** de testdata heeft geen namen in de bank-omschrijvingen. Het script zet daarom één bankregel op "naam: Zoë Jansen …" met bedrag = openstaand, zodat de naam-match en de betaler-naam voor het klembord te zien zijn.
 - **Naam:** de naam van een leerling opent het zijpaneel (koppeling via `odoo_partner_id`). Het Odoo-linkje staat ernaast als "Odoo ↗".
 
 ## 5. Herladen: herinnering, termijnen en schuldhulp blijven staan — OK
@@ -114,7 +116,7 @@ Er is geen bestaand klikbaar element verdwenen.
   - **Opslag van de code:** `localStorage.dpacAdminCode` blijft `null`; alleen `sessionStorage.dpacAdminCode` wordt gezet.
   - **Schrijven:** body `{"code":"GOED","actie":"schrijf","page_id":"n0081","herinnering":"2026-10-05"}` met `Content-Type: text/plain`. "Wissen" stuurt `"herinnering":null`.
   - **Fout bij schrijven:** het paneel toont "Niet opgeslagen (Notion gaf 500)". De waarde in S en het veld gaan terug naar leeg en er verschijnt geen label in de rij.
-  - **set_partner:** body `{"code":"GOED","action":"set_partner","line_id":2500,"partner_id":1042}` naar `dpac-finance-actions`.
+  - **Afletteren:** geen knop "Klant op betaling". Een klik op "Bekijk in Odoo" geeft 0 verzoeken en 0 calls naar `dpac-finance-actions` (`"afletteren":{"knopKlantOpBetaling":false,"verzoekenNaKlik":[],"financeActions":0}`).
 - **Gate** (`admin315/t9_gate.js`):
   - Een oude `localStorage.dpacAdminCode` vóór het laden geeft geen automatisch inloggen (0 fetch-calls) en de sleutel wordt opgeruimd.
   - Een code in `sessionStorage` (verversen in hetzelfde tabblad) logt wel automatisch in (71 rijen).
@@ -141,11 +143,11 @@ EVAL 1440: {"kpi":{"aantal":7,"rijen":1,"eerste":"chkbtn","labels":["Openstaand 
  "datumTekst":{"herinneringLeeg":{"tekst":"","zichtbaar":false},"herinneringVandaag":"05-10-2026","naastVeld":true,"betaalafspraakTot":"20-10-2026","betaalafspraakNaWissen":"","aanmaning":"03-10-2026"},
  "melding":{"tekst":"Opgeslagen ✓","kleur":"rgb(95, 215, 154)","okTx":"#5fd79a","ruimteTotX":8,"linksVanX":true,"verticaalGecentreerd":true},
  "termijnRij":{"hoogtes":[36,36,36],"midden":[336,336,336],"datumTekst":["05-09-2026","05-10-2026","04-11-2026","04-12-2026"],"naWijzigen":"24-12-2026"},
- "sw":1440,"iw":1440,"afletteren":{"tab":"🔗 Afletteren35","knoppen":["🔗 Bekijk in Odoo:30","👤 Klant op betaling:27","🔗 Bekijk in Odoo:30"]}}
+ "sw":1440,"iw":1440,"afletteren":{"tab":"🔗 Afletteren35","knoppen":["🔗 Bekijk in Odoo:30","🔗 Bekijk in Odoo:30"]}}
 shot shots/admin315-10-polijst-desktop.png errors: none
 EVAL 390:  {"kpi":{"aantal":7,"rijen":3,"eerste":"chkbtn","kopTotOnderKpis":595, …}, "labelAfstand":[6], "melding":{"ruimteTotX":8, …},
  "termijnRij":{"hoogtes":[36,36,36],"midden":[357,357,357], …},"sw":390,"iw":390,
- "afletteren":{"tab":"🔗 Afletteren35","knoppen":["🔗 Bekijk in Odoo:40","👤 Klant op betaling:40","🔗 Bekijk in Odoo:40"],"swAfl":390}}
+ "afletteren":{"tab":"🔗 Afletteren35","knoppen":["🔗 Bekijk in Odoo:40","🔗 Bekijk in Odoo:40"],"swAfl":390}}
 shot shots/admin315-10-polijst-mobiel.png errors: none
 ```
 1. **KPI-rij:**
@@ -167,14 +169,22 @@ shot shots/admin315-10-polijst-mobiel.png errors: none
    - De labelrij staat op alle rijen 6 px onder de subregel (was 5).
 5. **Afletteren:**
    - De teller in de tab is ongewijzigd (35).
-   - Op 390 px zijn "👤 Klant op betaling" en "🔗 Bekijk in Odoo" 40 px hoog. Op desktop zijn ze 27–30 px; daar is geen eis.
+   - Op 390 px is "🔗 Bekijk in Odoo" 40 px hoog (ook als link). Op desktop is hij 30 px; daar is geen eis. "Klant op betaling" bestaat niet meer (punt 7).
 6. **Overige gevolgen:**
    - Klikbare elementen op de Werklijst: 245 (was 246): 7 KPI-tegels inclusief checkknop, in plaats van 8.
-   - De mobiele audit (t8) meldt nu bewust 36 px voor de termijninputs en ×, zoals POLIJST vraagt. De rest blijft ≥ 40 px.
+   - De mobiele audit (t8) meldt nu bewust 36 px voor de termijninputs en ×, zoals de polijstronde vraagt. De rest blijft ≥ 40 px.
    - `app.js?v=3` (cache-bust).
 
+## Punt 7: set_partner weg (regel Abel, 27 aug 2026)
+Getest op 5 okt 2026. Het dashboard schrijft niets meer naar Odoo:
+- `setPartner`, `busySet`, `ACT_URL` en de knop "👤 Klant op betaling" zijn uit `admin/app.js` gehaald. README zegt nu "alleen lezen".
+- "🔗 Bekijk in Odoo" en "🔗 Bankaflettering" zijn `<a>`-links naar `https://audio-dojo1.odoo.com/odoo/accounting/13/reconciliation`. Ze kopiëren de betaler-naam en tonen inline "gekopieerd ✓" in `--ok-tx`.
+- `app.js?v=4` (cache-bust).
+- `run_all.js`: alles zonder errors, behalve `admin315-6-voor.png`: de server voor de oude versie (:8788) draaide niet. Die meting staat hierboven en hangt niet af van deze wijziging. `admin315-6-na`: 245 klikbare elementen, zoals na de polijstronde (de links tellen als `a`, de oude knoppen als `[onclick]`; op de Werklijst staan ze niet).
+- `flow_admin.js`: 36 PASS, 0 FAIL (ook los gedraaid).
+
 ## Open punten / niet getest
-- **Endpoint niet live getest.** Schrijven en set_partner zijn niet tegen de echte endpoints getest, alleen met een nagebootste `fetch` (bewust: geen testwijzigingen in echte Notion- of Odoo-data). Het contract zegt "al live getest".
+- **Endpoint niet live getest.** Schrijven is niet tegen de echte endpoints getest, alleen met een nagebootste `fetch` (bewust: geen testwijzigingen in echte Notion- of Odoo-data). Het contract zegt "al live getest".
 - **Datumvelden in headless Chrome:** de native `<input type="date">` toont daar `mm/dd/yyyy` (en-US). In een Nederlandse browser is dat `dd-mm-jjjj`. Alle labels gebruiken zelf `DD-MM-JJJJ`, en sinds de polijstronde staat die tekst ook naast elk datumveld in het paneel.
 - **Mobiele kop:** zelfs met één tegel minder neemt de kop op 390 px veel ruimte in: Ververs op een eigen regel en 7 tabs over 4 regels. Viel buiten de polijstronde.
 - **Mollie-bundels:** zoals in finance/ herkent `isMollie` die aan "mollie" in omschrijving of partnernaam. In de testdata staan 68 regels met `journal:"Mollie"` zonder dat woord; die vallen onder "Overige" (103). Met echte data controleren of de `journal`-kolom mee moet tellen.
