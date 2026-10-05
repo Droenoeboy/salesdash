@@ -6,11 +6,11 @@ Michèle vult per leerling in via het zijpaneel; dat schrijft direct naar Notion
 - **Geschiedenis:** nachtbouw 30 sep 2026, Hermes. Uitgebreid in DPAC-315 (okt 2026): zijpaneel met schrijven naar Notion, "Vandaag betaling checken", labels in de werklijst en tab Afletteren (uit finance/).
 - **Status:** frontend klaar en getest (zie `TESTVERSLAG.md`). Het endpoint draait (lezen + schrijven).
 - **Lokaal bekijken:** `admin/?local=1` laadt `admin_data.json` (fictief, generator `tools/gen_admin_fixture.py`). Schrijven gebeurt dan alleen in deze browser (`localStorage.dpacAdminLocalEdits`), met de TESTDATA-balk en een "demo"-label in het paneel.
-- **Tests:** `node tools/admin315/run_all.js` (servers op 8787/8788, zie TESTVERSLAG).
+- **Tests:** `node tools/admin315/run_all.js` (servers op 8787/8788, zie TESTVERSLAG; de polijstronde zit in `t10_polijst.js`).
 
 ## Tabbladen
 - 📞 **Werklijst** — Notion-formule "Op betaallijst": Loopt ernstig achter → Loopt achter → Nog niets → Checken; hoogste openstaand eerst. Een lopende betaalafspraak staat niet op de lijst en komt de dag erna vanzelf terug. Het vinkje "gedaan" geldt alleen voor vandaag op dit apparaat.
-  - **Knop "Vandaag betaling checken · N"** (eerste tegel naast de KPI's): leerlingen met `betaalafspraak_tot` = vandaag. Klik geeft een inline lijst met een vinkje per naam. Afvinken laat N dalen en wordt onthouden tot middernacht (`localStorage.dpacAdminChecked = {d, ids}`). Bij N = 0 is de knop gedempt: "Vandaag niets te checken".
+  - **Knop "Vandaag betaling checken · N"** (eerste tegel naast de KPI's): leerlingen met `betaalafspraak_tot` = vandaag. Klik geeft een inline lijst met een vinkje per naam. Afvinken laat N dalen en wordt onthouden tot middernacht (`localStorage.dpacAdminChecked = {d, ids}`). Bij N = 0 is de knop gedempt: "Vandaag niets te checken", zonder "▾".
   - **Labels bij de naam:**
     - `Herinnering gestuurd: DD-MM-JJJJ`
     - `Aanmaning gestuurd: DD-MM-JJJJ` (rood-gedempt)
@@ -20,7 +20,7 @@ Michèle vult per leerling in via het zijpaneel; dat schrijft direct naar Notion
 - 📅 **Afspraken** — lopende betaalafspraken (morgen/vandaag gemarkeerd) en verlopen afspraken.
 - 🔎 **Checken** — Moneybird-tijd: betaald bedrag nakijken en in Notion zetten.
 - 👥 **Alle leerlingen** — sorteerbare tabel, zoeken, klas- en statusfilter. Klik op een rij klapt die uit; klik op een naam opent het paneel.
-- 📊 **Overzicht** — betaalstand per klas/cohort (klik door), bonus nog niet uitgekeerd (voor Abel), hygiëne (wat in Notion ontbreekt).
+- 📊 **Overzicht** — bovenaan "Openstaand actieve leerlingen" (was een KPI-tegel), dan betaalstand per klas/cohort (klik door), bonus nog niet uitgekeerd (voor Abel), hygiëne (wat in Notion ontbreekt).
 - 🔗 **Afletteren** — overgenomen uit `finance/app.js` (geen iframe):
   - onafgeletterde bankbetalingen per leerling, met het score-model (partner, IBAN-historie, achternaam/voornaam, factuurnummer, bedrag)
   - Mollie-bundels en overige betalingen
@@ -33,6 +33,7 @@ Michèle vult per leerling in via het zijpaneel; dat schrijft direct naar Notion
 Het paneel schuift rechts in (max 480 px, mobiel schermvullend). Sluiten met ×, Esc of een klik buiten het paneel.
 - **Kop:** naam, klas, betaalstatus, openstaand en "Open in Notion".
 - **Betaalafspraak tot:** datumveld + Vandaag + Wissen. De leerling komt op die dag terug ("Vandaag betaling checken").
+- **Datumvelden:** naast elk datumveld (bij termijnen eronder) staat de datum als `DD-MM-JJJJ`, omdat de native weergave de browsertaal volgt.
 - **Segmenten:**
   - **Herinnering** en **Aanmaning**: datumveld + Vandaag + Wissen.
   - **Betaaltermijnen**: per regel binnen/open, bedrag en datum, plus ×. "+ Termijn" neemt de laatste datum + 1 maand en het vorige bedrag. Daaronder "Nog te betalen".

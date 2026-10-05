@@ -151,21 +151,20 @@ function render(){
 function drawKpis(wl,we,af,ch){
   const openWl=wl.reduce((a,s)=>a+s.open,0), ern=wl.filter(s=>s.status==="Loopt ernstig achter"), ach=wl.filter(s=>s.status==="Loopt achter");
   const morgen=af.filter(s=>s.afsprDagen<=1).length;
-  const openTot=S.filter(s=>s.actief==="Actief").reduce((a,s)=>a+s.open,0);
   document.getElementById("kpis").innerHTML=[
     [eur0(openWl),"Openstaand op de werklijst",wl.length?"warn":"good","tab='wl';statF=null;render()"],
     [ern.length,"Loopt ernstig achter",ern.length?"bad":"good","tab='wl';statF='Loopt ernstig achter';render()"],
     [ach.length,"Loopt achter",ach.length?"warn":"good","tab='wl';statF='Loopt achter';render()"],
     [we.length,"Wacht op eerste betaling",we.length?"warn":"good","tab='eerste';render()"],
     [af.length+(morgen?" · "+morgen+" morgen":""),"Betaalafspraken lopen",morgen?"warn":"","tab='afspr';render()"],
-    [ch.length,"Nog te checken (Moneybird)",ch.length?"":"good","tab='chk';render()"],
-    [eur0(openTot),"Openstaand actieve leerlingen","","tab='ov';render()"]
+    [ch.length,"Nog te checken (Moneybird)",ch.length?"":"good","tab='chk';render()"]
   ].map(x=>`<div class="kpi ${x[2]}" onclick="${x[3]}"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("")+(tab==="wl"?chkKnop():"");   // knop staat via CSS order vooraan
 }
 // ---- vandaag betaling checken (betaalafspraak tot == vandaag) ----
 function chkKnop(){
   const L=vandaagChecken(), n=L.filter(s=>!CHECKED.has(s.id)).length;
-  return `<button class="kpi kchk${n?"":" dim"}${chkOpen&&L.length?" on":""}" id="chkbtn"${L.length?` onclick="chkOpen=!chkOpen;render()"`:" disabled"} title="Betaalafspraak tot vandaag: kijk of de betaling binnen is en vink af"><b>${n?"Vandaag betaling checken · "+n:"Vandaag niets te checken"}</b><span>Betaalafspraak tot ${dmy(VANDAAG)}${L.length?(chkOpen?" ▴":" ▾"):""}</span></button>`;
+  const pijl=chkOpen&&L.length?" ▴":n?" ▾":"";   // ▾ alleen bij N > 0; ▴ blijft zolang de lijst open is
+  return `<button class="kpi kchk${n?"":" dim"}${chkOpen&&L.length?" on":""}" id="chkbtn"${L.length?` onclick="chkOpen=!chkOpen;render()"`:" disabled"} title="Betaalafspraak tot vandaag: kijk of de betaling binnen is en vink af"><b>${n?"Vandaag betaling checken · "+n:"Vandaag niets te checken"}</b><span>Betaalafspraak tot <em>${dmy(VANDAAG)}${pijl}</em></span></button>`;
 }
 function chkLijstHtml(){
   const L=vandaagChecken(); if(!chkOpen||!L.length) return "";
@@ -255,7 +254,9 @@ function ovHtml(){
   const rows=[...g.values()].sort((a,b)=>b.open-a.open);
   const tot=rows.reduce((a,r)=>{ for(const k of ["n","open","traject","betaald","vol","ach","ern","nn","chk","afspr"]) a[k]=(a[k]||0)+r[k]; return a; },{k:"Totaal"});
   const cell=(r,k,cls)=>`<td class="r${r[k]?"":" dim"}" ${r[k]?`style="cursor:pointer" onclick="tab='alle';klasF=${ovBy==="klas"?jq(r.k):"null"};statF=${jq(cls)};q='';render()"`:""}>${r[k]||"—"}</td>`;
-  let h=`<div class="wonchips"><span class="lbl">Per:</span><div class="wchip${ovBy==="klas"?" on":""}" onclick="ovBy='klas';render()">Klas (actieve leerlingen)</div><div class="wchip${ovBy==="cohort"?" on":""}" onclick="ovBy='cohort';render()">Cohort (iedereen)</div></div>`;
+  const openTot=S.filter(s=>s.actief==="Actief").reduce((a,s)=>a+s.open,0);
+  let h=`<div class="ovtot">Openstaand actieve leerlingen: <b>${eur0(openTot)}</b></div>`;
+  h+=`<div class="wonchips"><span class="lbl">Per:</span><div class="wchip${ovBy==="klas"?" on":""}" onclick="ovBy='klas';render()">Klas (actieve leerlingen)</div><div class="wchip${ovBy==="cohort"?" on":""}" onclick="ovBy='cohort';render()">Cohort (iedereen)</div></div>`;
   h+=`<div class="cmp"><h3>Betaalstand per ${ovBy} <span class="chsub">hoogste openstaand eerst · klik een getal voor de namen</span></h3><div class="tblwrap"><table><tr><th>${ovBy==="klas"?"Klas":"Cohort"}</th><th class="r">Leerlingen</th><th class="r">Openstaand</th><th class="r">Betaald</th><th class="r">Volledig</th><th class="r">Ernstig achter</th><th class="r">Achter</th><th class="r">Nog niets</th><th class="r">Checken</th><th class="r">Afspraak</th></tr>`+
     rows.concat([tot]).map(r=>`<tr${r.k==="Totaal"?' style="font-weight:700"':""}><td>${esc(r.k)}</td><td class="r">${r.n}</td><td class="r"><b>${eur0(r.open)}</b></td><td class="r"><div style="display:flex;gap:8px;align-items:center;justify-content:flex-end"><span class="bar"><b style="width:${r.traject?Math.min(100,Math.round(r.betaald/r.traject*100)):0}%"></b></span>${r.traject?Math.round(r.betaald/r.traject*100)+"%":"—"}</div></td>${cell(r,"vol","Volledig betaald")}${cell(r,"ern","Loopt ernstig achter")}${cell(r,"ach","Loopt achter")}${cell(r,"nn","Nog niets")}${cell(r,"chk","Checken")}<td class="r">${r.afspr||"—"}</td></tr>`).join("")+`</table></div></div>`;
   const bo=bonusOpen(); const perRep=new Map(); for(const s of bo) perRep.set(s.salesrep,(perRep.get(s.salesrep)||0)+1);
@@ -297,9 +298,9 @@ function sluitPaneel(){
 }
 function pnHtml(s){
   const stc=s.cls==="hi"||s.cls==="mid"?"lost":s.cls==="lo"?"warn":s.cls==="chk"?"info":s.cls==="ok"?"win":"";
-  return `<div class="pnhd"><div class="pnti"><h2>${esc(s.naam)}</h2><div class="pnsub">${esc(s.klas)} <span class="stg ${stc}">${esc(s.status||"geen status")}</span>${DEMO?` <span class="tag" title="Testmodus: wijzigingen blijven alleen in deze browser (localStorage), niet in Notion">demo</span>`:""}</div></div><span class="pnmsg" id="pnMsg" aria-live="polite"></span><button class="pnx" id="pnx" onclick="sluitPaneel()" title="Sluiten (Esc)">×</button></div>
+  return `<div class="pnhd"><div class="pnti"><h2>${esc(s.naam)}</h2><div class="pnsub">${esc(s.klas)} <span class="stg ${stc}">${esc(s.status||"geen status")}</span>${DEMO?` <span class="tag" title="Testmodus: wijzigingen blijven alleen in deze browser (localStorage), niet in Notion">demo</span>`:""}</div></div><div class="pnr"><span class="pnmsg" id="pnMsg" aria-live="polite"></span><button class="pnx" id="pnx" onclick="sluitPaneel()" title="Sluiten (Esc)">×</button></div></div>
   <div class="pnrow"><div class="pnamt"><b>${eur0(s.open)}</b><span>openstaand</span></div>${s.link_notion?`<a class="lnk pri" href="${esc(s.link_notion)}" target="_blank" rel="noopener">Open in Notion</a>`:""}</div>
-  <div class="pnf"><h4>Betaalafspraak tot</h4>${datumVeld("betaalafspraak_tot",s.betaalafspraak_tot)}</div>
+  <div class="pnf" title="Op deze datum komt de leerling terug op de werklijst"><h4>Betaalafspraak tot</h4>${datumVeld("betaalafspraak_tot",s.betaalafspraak_tot)}</div>
   <div class="segs">${SEGS.map(([k,t])=>`<button class="tab${PSEG===k?" on":""}" data-k="${k}" onclick="pnSeg('${k}')">${t}</button>`).join("")}</div>
   <div id="pnSeg" class="pnseg"></div>
   <div class="pnf"><h4>Notitie</h4><textarea id="pnNote" rows="3" oninput="ntInput(this)" onblur="ntSave()">${esc(s.notitie||"")}</textarea>${s.tijdlijn?`<div class="pntl"><h4>Eerdere afspraken (Notion)</h4><div class="notitie">${esc(s.tijdlijn)}</div></div>`:""}</div>
@@ -317,16 +318,18 @@ function pnMeld(ok,txt){
 }
 function pnHerstel(s,keys){   // na een mislukte schrijfactie: velden terug naar de waarde in S (notitie blijft staan zodat er geen tekst verloren gaat)
   for(const k of keys){
-    const el=document.getElementById("pn_"+k); if(el) el.value=String(s[k]||"").slice(0,10);
+    const el=document.getElementById("pn_"+k); if(el){ el.value=String(s[k]||"").slice(0,10); dtxt(k,el.value); }
     if(k==="schuldhulp"){ const c=document.getElementById("pnSh"); if(c) c.checked=isJa(s.schuldhulp); }
     if(k==="termijnen"){ PT=parseTermijnen(s.termijnen); if(PSEG==="term") pnSegDraw(); }
   }
 }
-// datumveld: opslaan direct bij wijziging
-const datumVeld=(f,v)=>`<div class="dveld"><input type="date" id="pn_${f}" value="${esc(String(v||"").slice(0,10))}" onchange="zetDatum('${f}',this.value)"><button class="tbtn" onclick="zetDatum('${f}',VANDAAG)">Vandaag</button><button class="tbtn" onclick="zetDatum('${f}','')">Wissen</button></div>`;
+// datumveld: opslaan direct bij wijziging; ernaast altijd DD-MM-JJJJ (de native datumweergave volgt de browsertaal)
+const datumVeld=(f,v)=>`<div class="dveld"><input type="date" id="pn_${f}" value="${esc(String(v||"").slice(0,10))}" onchange="zetDatum('${f}',this.value)"><span class="dtxt" id="pn_${f}_t">${dmy(v)}</span><span class="dknop"><button class="tbtn" onclick="zetDatum('${f}',VANDAAG)">Vandaag</button><button class="tbtn" onclick="zetDatum('${f}','')">Wissen</button></span></div>`;
+function dtxt(f,v){ const t=document.getElementById("pn_"+f+"_t"); if(t) t.textContent=dmy(v); }
 function zetDatum(f,v){
   const s=pnLeerling(); if(!s) return;
   const el=document.getElementById("pn_"+f); if(el&&el.value!==v) el.value=v;
+  dtxt(f,v);
   if(String(s[f]||"").slice(0,10)===(v||"")) return;
   schrijf(PN,{[f]:v||null});
 }
@@ -342,12 +345,12 @@ function ntSave(){
 const tmIn=v=>v?(v%1?v.toFixed(2).replace(".",","):String(v)):"";
 const tmOpen=()=>PT.filter(t=>!t.binnen).reduce((a,t)=>a+t.bedrag,0);
 function tmHtml(){
-  return `${PT.length?`<div class="tmr tmh"><span>Binnen</span><span>Bedrag</span><span>Datum</span><span></span></div>`:""}${PT.map((t,i)=>`<div class="tmr${t.binnen?" in":""}"><label class="tmck" title="${t.binnen?"Binnen":"Open"}"><input type="checkbox"${t.binnen?" checked":""} onchange="tmZet(${i},'binnen',this.checked,this)"></label><span class="tmeur"><i>€</i><input inputmode="decimal" value="${tmIn(t.bedrag)}" onchange="tmZet(${i},'bedrag',this.value,this)"></span><input type="date" value="${esc(t.datum)}" onchange="tmZet(${i},'datum',this.value,this)"><button class="tbtn tmx" title="Termijn verwijderen" onclick="tmDel(${i})">×</button></div>`).join("")}<div class="tmfoot"><button class="tbtn" onclick="tmAdd()">+ Termijn</button><span>Nog te betalen: <b id="tmSom">${eurT(tmOpen())}</b></span></div>`;
+  return `${PT.length?`<div class="tmr tmh"><span>Binnen</span><span>Bedrag</span><span>Datum</span><span></span></div>`:""}${PT.map((t,i)=>`<div class="tmr${t.binnen?" in":""}"><label class="tmck" title="${t.binnen?"Binnen":"Open"}"><input type="checkbox"${t.binnen?" checked":""} onchange="tmZet(${i},'binnen',this.checked,this)"></label><span class="tmeur"><i>€</i><input inputmode="decimal" value="${tmIn(t.bedrag)}" onchange="tmZet(${i},'bedrag',this.value,this)"></span><input type="date" value="${esc(t.datum)}" onchange="tmZet(${i},'datum',this.value,this)"><button class="tbtn tmx" title="Termijn verwijderen" onclick="tmDel(${i})">×</button><span class="dtxt">${dmy(t.datum)}</span></div>`).join("")}<div class="tmfoot"><button class="tbtn" onclick="tmAdd()">+ Termijn</button><span>Nog te betalen: <b id="tmSom">${eurT(tmOpen())}</b></span></div>`;
 }
 function tmZet(i,k,v,el){
   const t=PT[i]; if(!t) return;
   if(k==="bedrag"){ t.bedrag=parseBedrag(v); el.value=tmIn(t.bedrag); }
-  else if(k==="datum") t.datum=v;
+  else if(k==="datum"){ t.datum=v; el.closest(".tmr").querySelector(".dtxt").textContent=dmy(v); }
   else { t.binnen=!!v; el.closest(".tmr").classList.toggle("in",t.binnen); el.parentNode.title=t.binnen?"Binnen":"Open"; }
   tmSave();
 }

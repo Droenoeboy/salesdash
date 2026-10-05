@@ -127,9 +127,56 @@ Er is geen bestaand klikbaar element verdwenen.
   - Tijdens de bouw faalden er eerst 2. "kpi ernstig → filter" kwam doordat de nieuwe knop voor in de DOM stond; die staat nu achteraan en wordt met CSS `order` vooraan getoond.
   - "390 geen horizontale scroll" (Overzicht 396 px) kwam doordat de naamcel in de bonustabel vet was geworden. Opgelost, plus `.grid2>*{min-width:0}`.
 
+## Polijstronde (na review door Hermes, punten 1–6)
+Getest op 5 okt 2026, zelfde opzet (8787 nieuw, 8788 vóór). Nieuw script: `admin315/t10_polijst.js`, zit in `run_all.js` (desktop 1440 en mobiel 390).
+Opnieuw gemaakt: `admin315-1-werklijst-desktop.png`, `admin315-1-werklijst-mobiel.png`, `admin315-3-paneel-desktop.png` (plus de rest van run_all). Nieuw: `admin315-10-polijst-desktop.png`, `admin315-10-polijst-mobiel.png`.
+
+**Resultaat: alle 6 punten OK, `run_all.js` zonder errors, `flow_admin.js` 36 PASS en 0 FAIL** (ook los gedraaid).
+```
+EVAL 1440: {"kpi":{"aantal":7,"rijen":1,"eerste":"chkbtn","labels":["Openstaand op de werklijst","Loopt ernstig achter","Loopt achter","Wacht op eerste betaling","Betaalafspraken lopen","Nog te checken (Moneybird)","Betaalafspraak tot 05-10-2026 ▾"],"kopTotOnderKpis":256,"openstaandActiefWeg":true},
+ "overzichtRegel":"Openstaand actieve leerlingen: € 266.218","overzichtBovenaan":true,
+ "pijl":{"metN":"Betaalafspraak tot 05-10-2026 ▾","n0dicht":"Betaalafspraak tot 05-10-2026","n0knop":"Vandaag niets te checken","n0open":"Betaalafspraak tot 05-10-2026 ▴"},
+ "termChip":{"tekst":"€ 1.965 op 05-10-2026 · nog te betalen € 1.965","rest":"rgb(139, 139, 148)","bedragDatum":"rgb(236, 236, 241)","vet":"700","bg":"rgb(30, 30, 35)","bgHerin":"rgb(30, 30, 35)"},"labelAfstand":[6],
+ "paneel":{"tooltip":"Op deze datum komt de leerling terug op de werklijst","afspraakVoorSegmenten":true,"schuldhulp":{"lijn":"1px rgb(38, 38, 43)","labelKleur":"rgb(139, 139, 148)"}},
+ "datumTekst":{"herinneringLeeg":{"tekst":"","zichtbaar":false},"herinneringVandaag":"05-10-2026","naastVeld":true,"betaalafspraakTot":"20-10-2026","betaalafspraakNaWissen":"","aanmaning":"03-10-2026"},
+ "melding":{"tekst":"Opgeslagen ✓","kleur":"rgb(95, 215, 154)","okTx":"#5fd79a","ruimteTotX":8,"linksVanX":true,"verticaalGecentreerd":true},
+ "termijnRij":{"hoogtes":[36,36,36],"midden":[336,336,336],"datumTekst":["05-09-2026","05-10-2026","04-11-2026","04-12-2026"],"naWijzigen":"24-12-2026"},
+ "sw":1440,"iw":1440,"afletteren":{"tab":"🔗 Afletteren35","knoppen":["🔗 Bekijk in Odoo:30","👤 Klant op betaling:27","🔗 Bekijk in Odoo:30"]}}
+shot shots/admin315-10-polijst-desktop.png errors: none
+EVAL 390:  {"kpi":{"aantal":7,"rijen":3,"eerste":"chkbtn","kopTotOnderKpis":595, …}, "labelAfstand":[6], "melding":{"ruimteTotX":8, …},
+ "termijnRij":{"hoogtes":[36,36,36],"midden":[357,357,357], …},"sw":390,"iw":390,
+ "afletteren":{"tab":"🔗 Afletteren35","knoppen":["🔗 Bekijk in Odoo:40","👤 Klant op betaling:40","🔗 Bekijk in Odoo:40"],"swAfl":390}}
+shot shots/admin315-10-polijst-mobiel.png errors: none
+```
+1. **KPI-rij:**
+   - De tegel "Openstaand actieve leerlingen" is weg; het bedrag staat nu als eerste regel in Overzicht.
+   - Op 1440 px staan 7 tegels op één rij (`minmax(150px,1fr)` was genoeg). De checkknop is de eerste tegel.
+   - Op 390 px eindigt de KPI-rij op y = 595 (was 686): checkknop over de volle breedte, daaronder 2 × 3 tegels.
+   - "▾" alleen bij N > 0. Is de lijst open, dan blijft "▴" staan, zodat je hem ook bij N = 0 kunt dichtklappen.
+   - De datum in de knop breekt niet meer af ("05-/10-2026" gebeurde bij de bredere tegels).
+2. **Datums:** naast Betaalafspraak tot, Herinnering en Aanmaning staat `DD-MM-JJJJ` in `--mut`. Het verschijnt bij typen, bij Vandaag en bij een mislukte opslag; na Wissen is het weg.
+   - Per termijn staat de datumtekst direct onder het datumveld, in dezelfde kolom. Ernaast was op 390 px geen ruimte.
+   - Op 390 px passen datumveld, tekst, Vandaag en Wissen op één regel: gaten 6 px en knoppen iets smaller (alleen ≤ 640 px). Vandaag+Wissen zijn een groep; past het op een ander toestel toch niet, dan gaan ze samen naar de volgende regel.
+3. **Paneel:**
+   - "Betaalafspraak tot" heeft de tooltip en staat nog vóór de segmentknoppen.
+   - Schuldhulp heeft een scheidingslijn in `--line` (de oude in `--line2` was bijna onzichtbaar) en label in `--mut`, gewicht 500.
+   - Termijnrij: bedrag, datum en × zijn alle drie 36 px hoog met hetzelfde midden.
+   - "Opgeslagen ✓" staat in een eigen groepje met ×: 8 px ertussen, verticaal gecentreerd op ×, kleur `--ok-tx`.
+4. **Werklijst-rij:**
+   - Termijnchip: bedrag+datum in `--txt` (vet 700), de rest in `--mut`, achtergrond gelijk aan de herinneringschip. Dat was al zo in de code; nu gemeten.
+   - De labelrij staat op alle rijen 6 px onder de subregel (was 5).
+5. **Afletteren:**
+   - De teller in de tab is ongewijzigd (35).
+   - Op 390 px zijn "👤 Klant op betaling" en "🔗 Bekijk in Odoo" 40 px hoog. Op desktop zijn ze 27–30 px; daar is geen eis.
+6. **Overige gevolgen:**
+   - Klikbare elementen op de Werklijst: 245 (was 246): 7 KPI-tegels inclusief checkknop, in plaats van 8.
+   - De mobiele audit (t8) meldt nu bewust 36 px voor de termijninputs en ×, zoals POLIJST vraagt. De rest blijft ≥ 40 px.
+   - `app.js?v=3` (cache-bust).
+
 ## Open punten / niet getest
 - **Endpoint niet live getest.** Schrijven en set_partner zijn niet tegen de echte endpoints getest, alleen met een nagebootste `fetch` (bewust: geen testwijzigingen in echte Notion- of Odoo-data). Het contract zegt "al live getest".
-- **Datumvelden in headless Chrome:** de native `<input type="date">` toont daar `mm/dd/yyyy` (en-US). In een Nederlandse browser is dat `dd-mm-jjjj`. Alle labels gebruiken zelf `DD-MM-JJJJ`.
+- **Datumvelden in headless Chrome:** de native `<input type="date">` toont daar `mm/dd/yyyy` (en-US). In een Nederlandse browser is dat `dd-mm-jjjj`. Alle labels gebruiken zelf `DD-MM-JJJJ`, en sinds de polijstronde staat die tekst ook naast elk datumveld in het paneel.
+- **Mobiele kop:** zelfs met één tegel minder neemt de kop op 390 px veel ruimte in: Ververs op een eigen regel en 7 tabs over 4 regels. Viel buiten de polijstronde.
 - **Mollie-bundels:** zoals in finance/ herkent `isMollie` die aan "mollie" in omschrijving of partnernaam. In de testdata staan 68 regels met `journal:"Mollie"` zonder dat woord; die vallen onder "Overige" (103). Met echte data controleren of de `journal`-kolom mee moet tellen.
 - **Notitie bij een mislukte opslag:** de waarde in S gaat terug, maar de tekst blijft in het veld staan (met de melding "Niet opgeslagen…"), zodat Michelle niets kwijtraakt. De volgende blur probeert opnieuw.
 - **Betaalafspraak lokaal aangepast:** tot de volgende stand rekent het dashboard zelf of de leerling op de werklijst hoort (`op_betaallijst` → `null`). De Notion-formule neemt het daarna weer over.
