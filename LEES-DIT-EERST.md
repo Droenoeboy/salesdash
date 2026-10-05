@@ -23,3 +23,7 @@ bij de periode waarin de lead binnenkwam, niet bij de periode waarin de uitkomst
 - `data/` - versleutelde dataset, leest het dashboard bij openen
 
 De root bevat de oude v1 van het sales-dashboard.
+
+## Werkwijze
+
+Elke wijziging aan een dashboard volgt `WERKWIJZE.md` (onderzoek eerst, drie controlerondes, pas opleveren als alles echt is nagelopen).

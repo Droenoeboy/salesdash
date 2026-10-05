@@ -1,4 +1,4 @@
-// DPAC · Administratie-dashboard (nachtbouw 30 sep 2026, Hermes; uitgebreid okt 2026, DPAC-315). Werklijst betalingen voor Michèle.
+// DPAC · Administratie-dashboard (Hermes, DPAC-315/353). Werklijst betalingen voor Michèle. Eén scherm: Werklijst · Eerste betaling · Afspraken · Afletteren; klik een naam = zijpaneel.
 // Data: n8n-endpoint dpac-admin-data (lezen + schrijven naar Notion Leerlingen, zie README.md) · lokaal: ?local=1 laadt admin_data.json (fictief).
 // Schrijven: zijpaneel per leerling (herinnering, aanmaning, termijnen, betaalafspraak, notitie, schuldhulp). In local-modus alleen in deze browser.
 // Tab Afletteren = overgenomen uit finance/app.js (facturen/bankregels zitten in hetzelfde antwoord).
@@ -26,6 +26,8 @@ function parseTermijnen(txt){ return String(txt||"").split(/\r?\n/).map(r=>r.tri
 const termijnenTekst=T=>T.map(t=>t.datum+"|"+t.bedrag+"|"+(t.binnen?"binnen":"open")).join("\n");
 function plusMaand(s){ const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return VANDAAG; let y=+m[1], mo=+m[2]+1; if(mo>12){ mo=1; y++; } return y+"-"+pad2(mo)+"-"+pad2(Math.min(+m[3],new Date(y,mo,0).getDate())); }
 
+
+// ---- toegang + data ----
 // ---- toegang + data ----
 let S=[], GEN=null, GCODE="", DEMO=false;
 async function laad(code){
@@ -57,7 +59,7 @@ async function gTry(code,stil){
   }
 }
 function gCheck(){ gTry(document.getElementById("gcode").value.trim(),false); }
-async function ververs(){ if(LOCAL()) return gTry("",true); if(GCODE) await gTry(GCODE,true); }
+async function ververs(){ const b=document.getElementById("refr"); if(b) b.classList.add("busy"); try{ if(LOCAL()) await gTry("",true); else if(GCODE) await gTry(GCODE,true); } finally{ if(b) b.classList.remove("busy"); } }
 
 // ---- schrijven (naar Notion via het endpoint; local-modus: alleen in deze browser) ----
 const leesLokaal=()=>{ try{ return JSON.parse(localStorage.dpacAdminLocalEdits||"{}")||{}; }catch(e){ return {}; } };
@@ -129,211 +131,150 @@ const checken=()=>S.filter(s=>s.status==="Checken");
 const bonusOpen=()=>S.filter(s=>s.betaald>=1000&&s.bonus_uitgekeerd===false&&s.salesrep);
 const vandaagChecken=()=>S.filter(s=>String(s.betaalafspraak_tot||"").slice(0,10)===VANDAAG).sort((a,b)=>b.open-a.open);
 
+
 // ---- state ----
-let tab="wl", open=new Set(), done=new Set(), statF=null, klasF=null, q="", sortK={c:"prio",d:1}, ovBy="klas", chkOpen=false, CHECKED=new Set();
-try{ const d=JSON.parse(localStorage.dpacAdminDone||"null"); if(d&&d.t&&Date.now()-d.t<12*36e5) done=new Set(d.k); }catch(e){}   // "klaar" onthouden tot 12 uur
+let seg="wl", statF=null, klasF=null, q="", chkOpen=false, CHECKED=new Set(), afOpen=new Set(), afAll=false, MAXROWS=60;
 try{ const c=JSON.parse(localStorage.dpacAdminChecked||"null"); if(c&&c.d===VANDAAG&&Array.isArray(c.ids)) CHECKED=new Set(c.ids); }catch(e){}   // "gecheckt" geldt alleen vandaag
-function saveDone(){ try{ localStorage.dpacAdminDone=JSON.stringify({t:Date.now(),k:[...done]}); }catch(e){} }
 function saveChecked(){ try{ localStorage.dpacAdminChecked=JSON.stringify({d:VANDAAG,ids:[...CHECKED]}); }catch(e){} }
-function tog(k){ open.has(k)?open.delete(k):open.add(k); render(); }
-function doneTog(k){ done.has(k)?done.delete(k):done.add(k); saveDone(); render(); }
 function chkTog(k){ CHECKED.has(k)?CHECKED.delete(k):CHECKED.add(k); saveChecked(); render(); }
 function keepScroll(fn){ const y=window.scrollY; fn(); window.scrollTo(0,y); }
+const KORT={"Loopt ernstig achter":"Ernstig achter","Loopt achter":"Achter","Nog niets":"Nog niets","Checken":"Checken","Volledig betaald":"Betaald","Loopt bij":"Loopt bij","Startbedrag binnen":"Start binnen"};
+const kort=s=>KORT[s]||s||"Geen status";
+const SEP='</span><span>';   // meta-items: elk in een span, scheidingsteken via CSS (::before), zodat er nooit een los punt aan het regeleinde hangt
 
+function boot(){
+  for(const s of S) verrijk(s);
+  const gd=GEN?new Date(GEN):null;
+  document.getElementById("gen").textContent = gd&&!isNaN(gd)? "stand "+gd.getDate()+" "+MND[gd.getMonth()]+" "+pad2(gd.getHours())+":"+pad2(gd.getMinutes()) : "";
+  render();
+}
 function render(){
-  const wl=werklijst(), we=wachtEerste(), af=afspraken(), ch=checken();
-  const nErn=wl.filter(s=>s.status==="Loopt ernstig achter").length;
-  const T=[["wl","📞 Werklijst",wl.length,nErn?"bad":wl.length?"warn":""],["eerste","⏳ Eerste betaling",we.length,we.length?"warn":""],["afspr","📅 Afspraken",af.length,""],["chk","🔎 Checken",ch.length,""],["alle","👥 Alle leerlingen",S.length,""],["ov","📊 Overzicht",null,""],["afl","🔗 Afletteren",aflData().withPay.length,""]];
-  document.getElementById("tabs").innerHTML=T.map(t=>`<div class="tab${tab===t[0]?" on":""}" onclick="tab='${t[0]}';statF=null;klasF=null;render()">${t[1]}${t[2]!=null?`<span class="n ${t[3]}">${t[2]}</span>`:""}</div>`).join("");
-  drawKpis(wl,we,af,ch);
-  keepScroll(()=>{ document.getElementById("view").innerHTML = tab==="wl"?chkLijstHtml()+wlHtml(wl) : tab==="eerste"?eersteHtml(we) : tab==="afspr"?afsprHtml(af) : tab==="chk"?chkHtml(ch) : tab==="alle"?alleHtml() : tab==="afl"?afletHtml() : ovHtml(); });
+  const wl=werklijst(), we=wachtEerste(), af=afspraken();
+  const T=[["wl","Werklijst",wl.length],["eerste","Eerste betaling",we.length],["afspr","Afspraken",af.length],["afl","Afletteren",aflData().withPay.length]];
+  document.getElementById("segs").innerHTML=T.map(t=>`<button class="seg${seg===t[0]?" on":""}" onclick="seg='${t[0]}';statF=null;klasF=null;render()">${t[1]}<b>${t[2]}</b></button>`).join("");
+  keepScroll(()=>{ document.getElementById("view").innerHTML = q.trim()?zoekHtml() : seg==="wl"?wlHtml(wl) : seg==="eerste"?eersteHtml(we) : seg==="afspr"?afsprHtml(af) : afletHtml(); });
 }
-function drawKpis(wl,we,af,ch){
-  const openWl=wl.reduce((a,s)=>a+s.open,0), ern=wl.filter(s=>s.status==="Loopt ernstig achter"), ach=wl.filter(s=>s.status==="Loopt achter");
-  const morgen=af.filter(s=>s.afsprDagen<=1).length;
-  document.getElementById("kpis").innerHTML=[
-    [eur0(openWl),"Openstaand op de werklijst",wl.length?"warn":"good","tab='wl';statF=null;render()"],
-    [ern.length,"Loopt ernstig achter",ern.length?"bad":"good","tab='wl';statF='Loopt ernstig achter';render()"],
-    [ach.length,"Loopt achter",ach.length?"warn":"good","tab='wl';statF='Loopt achter';render()"],
-    [we.length,"Wacht op eerste betaling",we.length?"warn":"good","tab='eerste';render()"],
-    [af.length+(morgen?" · "+morgen+" morgen":""),"Betaalafspraken lopen",morgen?"warn":"","tab='afspr';render()"],
-    [ch.length,"Nog te checken (Moneybird)",ch.length?"":"good","tab='chk';render()"]
-  ].map(x=>`<div class="kpi ${x[2]}" onclick="${x[3]}"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("")+(tab==="wl"?chkKnop():"");   // knop staat via CSS order vooraan
-}
-// ---- vandaag betaling checken (betaalafspraak tot == vandaag) ----
-function chkKnop(){
-  const L=vandaagChecken(), n=L.filter(s=>!CHECKED.has(s.id)).length;
-  const pijl=chkOpen&&L.length?" ▴":n?" ▾":"";   // ▾ alleen bij N > 0; ▴ blijft zolang de lijst open is
-  return `<button class="kpi kchk${n?"":" dim"}${chkOpen&&L.length?" on":""}" id="chkbtn"${L.length?` onclick="chkOpen=!chkOpen;render()"`:" disabled"} title="Betaalafspraak tot vandaag: kijk of de betaling binnen is en vink af"><b>${n?"Vandaag betaling checken · "+n:"Vandaag niets te checken"}</b><span>Betaalafspraak tot <em>${dmy(VANDAAG)}${pijl}</em></span></button>`;
-}
-function chkLijstHtml(){
-  const L=vandaagChecken(); if(!chkOpen||!L.length) return "";
-  return `<div class="cmp cklist"><h3>Vandaag betaling checken <span class="chsub">${L.filter(s=>CHECKED.has(s.id)).length} van ${L.length} gecheckt</span></h3>${L.map(s=>{ const c=CHECKED.has(s.id); return `<div class="ckrow${c?" on":""}"><label class="ckbox" title="${c?"Gecheckt (vandaag)":"Afvinken: betaling gecheckt"}"><input type="checkbox"${c?" checked":""} onchange="chkTog(${jq(s.id)})"></label><span class="nmlink" onclick="openPaneel(${jq(s.id)})">${esc(s.naam)}</span><span class="cksub">${esc(s.klas)} · ${eur0(s.open)}</span></div>`; }).join("")}</div>`;
-}
-function chipsHtml(list,withStatus){
-  const st=new Map(), kl=new Map(); for(const s of list){ st.set(s.status||"(leeg)",(st.get(s.status||"(leeg)")||0)+1); kl.set(s.klas,(kl.get(s.klas)||0)+1); }
-  let h=`<div class="wonchips"><input class="zoek" placeholder="🔍 zoek op naam, klas, e-mail" value="${esc(q)}" oninput="q=this.value;render()"><span class="lbl">${list.length} leerlingen</span>`;
-  if(withStatus){ h+=`<span class="lbl" style="margin-left:8px">Status:</span><div class="wchip${statF==null?" on":""}" onclick="statF=null;render()">Alles</div>`+[...st.entries()].sort((a,b)=>(RANK[a[0]]??9)-(RANK[b[0]]??9)).map(([k,n])=>`<div class="wchip${statF===k?" on":""}" onclick="statF=statF===${jq(k)}?null:${jq(k)};render()">${esc(k)}<span class="n">${n}</span></div>`).join(""); }
-  h+=`</div><div class="wonchips"><span class="lbl">Klas:</span><div class="wchip${klasF==null?" on":""}" onclick="klasF=null;render()">Alle</div>`+[...kl.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="wchip${klasF===k?" on":""}" onclick="klasF=klasF===${jq(k)}?null:${jq(k)};render()">${esc(k)}<span class="n">${n}</span></div>`).join("")+`</div>`;
-  return h;
-}
-const filt=list=>list.filter(s=>(statF==null||(s.status||"(leeg)")===statF)&&(klasF==null||s.klas===klasF)&&(!q||s.zoek.includes(q.toLowerCase())));
-// naam = opent het zijpaneel (in elke tab)
-const nmLink=s=>`<span class="nmlink" onclick="event.stopPropagation();openPaneel(${jq(s.id)})">${esc(s.naam)}</span>`;
+
+// ---- rijen ----
 const shIcoon=s=>isJa(s.schuldhulp)?`<span class="shi" title="Schuldhulpverlening">◎</span>`:"";
-function termTag(s){
+function termTxt(s){
   const T=parseTermijnen(s.termijnen).filter(t=>!t.binnen); if(!T.length) return "";
   const nx=T.filter(t=>t.datum).sort((a,b)=>a.datum<b.datum?-1:a.datum>b.datum?1:0)[0]||T[0];
   const som=T.reduce((a,t)=>a+t.bedrag,0);
-  return `<span class="tag" title="Eerstvolgende open termijn · totaal open termijnen"><b>${eurT(nx.bedrag)}${nx.datum?` op <span${nx.datum<VANDAAG?' class="laat"':""}>${dmy(nx.datum)}</span>`:""}</b> · nog te betalen ${eurT(som)}</span>`;
+  return `<span><b>${eurT(nx.bedrag)}${nx.datum?` op <span${nx.datum<VANDAAG?' class="late"':""}>${dmy(nx.datum)}</span>`:""}</b> · nog ${eurT(som)}</span>`;
 }
-function tagsHtml(s){
-  const t=[];
-  if(s.herinnering) t.push(`<span class="tag">Herinnering gestuurd: ${dmy(s.herinnering)}</span>`);
-  if(s.aanmaning) t.push(`<span class="tag red">Aanmaning gestuurd: ${dmy(s.aanmaning)}</span>`);
-  const tt=termTag(s); if(tt) t.push(tt);
-  return t.length?`<span class="tags">${t.join("")}</span>`:"";
+function metaWl(s){
+  const m=[`${esc(s.klas)}${s.betaalwijze?" · "+esc(s.betaalwijze):""}`];
+  if(s.afsprDagen!=null&&s.afsprDagen<=0) m.push(`<span class="late">afspraak verlopen ${dmy(s.betaalafspraak_tot)}</span>`);
+  if(s.herinnering) m.push(`Herinnering gestuurd: ${dmy(s.herinnering)}`);
+  if(s.aanmaning) m.push(`<span class="late">Aanmaning gestuurd: ${dmy(s.aanmaning)}</span>`);
+  const t=termTxt(s); if(t) m.push(t);
+  return m.join(SEP);
 }
-function row(s,rank){
-  const k=s.id, opn=open.has(k), dn=done.has(k);
-  return `<div class="wlrow ${s.cls}${dn?" done":""}" onclick="tog(${jq(k)})">
-    <div class="wlhead">${rank!=null?`<span class="rank">${rank}</span>`:""}
-      <span class="wlnm">${nmLink(s)}${shIcoon(s)}<small>${esc(s.klas)}${s.betaalwijze?" · "+esc(s.betaalwijze):""}${s.producten&&s.producten.includes("Allstar")?" · All Star":""}</small>${tagsHtml(s)}</span>
-      <span class="wlamt">${eur0(s.open)}<small>van ${eur0(s.traject)}${s.pct!=null?" · "+s.pct+"% betaald":""}</small></span>
-      <span class="wlmeta"><span class="stg ${s.cls==="hi"||s.cls==="mid"?"lost":s.cls==="lo"?"warn":s.cls==="chk"?"info":s.cls==="ok"?"win":""}">${esc(s.status||"geen status")}</span>${s.afsprDagen!=null&&s.afsprDagen>0?`<span>📅 afspraak t/m ${fmt(s.betaalafspraak_tot)} (nog ${s.afsprDagen} d)</span>`:s.afsprDagen!=null&&s.afsprDagen<=0?`<span style="color:var(--red-tx)">📅 afspraak verlopen ${fmt(s.betaalafspraak_tot)}</span>`:""}${s.bron==="odoo"?"":`<span title="niet in Odoo: handmatig via Moneybird/Notion">✍️ handmatig</span>`}</span>
-      <span class="act"><span class="actlbl ${s.act[0]}">${esc(s.act[1])}</span><button class="donebtn${dn?" on":""}" onclick="event.stopPropagation();doneTog(${jq(k)})" title="alleen een vinkje voor vandaag op dit apparaat; de status zelf zet je in Notion">${dn?"✓ gedaan":"gedaan?"}</button></span>
-    </div>
-    ${opn?`<div class="why">${esc(s.why)}</div><div class="wlx"><div><h4>Bedragen</h4><div class="kv"><span>Trajectbedrag</span><span>${eur0(s.traject)}</span><span>Betaald</span><span>${eur0(s.betaald)}${s.betaald_odoo!=null&&s.betaald_notion!=null&&s.betaald_odoo!==s.betaald_notion?` <small style="color:var(--warn-tx)">(Odoo ${eur0(s.betaald_odoo)} · Notion ${eur0(s.betaald_notion)})</small>`:""}</span><span>Openstaand</span><span><b>${eur0(s.open)}</b></span><span>Betaalwijze</span><span>${esc(s.betaalwijze||"—")}</span><span>Inschrijfdatum</span><span>${fmt(s.inschrijfdatum)}${s.dagenSinds!=null?" · "+s.dagenSinds+" d geleden":""}</span><span>Bedenktijd</span><span>${s.bedenk!=null&&s.bedenk>0?"⏳ nog "+s.bedenk+" dagen":"✅ definitief"}</span><span>Bron betaling</span><span>${s.bron==="odoo"?"Odoo (leidend)":"handmatig (Moneybird-tijd)"}</span><span>Salesrep</span><span>${esc(s.salesrep||"—")}</span><span>Laatst gewijzigd</span><span>${fmt(s.gewijzigd)}</span></div>
-      <div class="links">${s.link_notion?`<a class="lnk pri" href="${esc(s.link_notion)}" target="_blank" onclick="event.stopPropagation()">✍️ Invullen in Notion</a>`:""}${s.link_odoo?`<a class="lnk" href="${esc(s.link_odoo)}" target="_blank" onclick="event.stopPropagation()">Odoo</a>`:""}${s.link_moneybird?`<a class="lnk" href="${esc(s.link_moneybird)}" target="_blank" onclick="event.stopPropagation()">Moneybird</a>`:""}${s.link_ghl?`<a class="lnk" href="${esc(s.link_ghl)}" target="_blank" onclick="event.stopPropagation()">GHL</a>`:""}${s.telefoon?`<a class="lnk" href="tel:${esc(String(s.telefoon).replace(/\\s/g,""))}" onclick="event.stopPropagation()">📞 ${esc(s.telefoon)}</a>`:""}${s.email?`<a class="lnk" href="mailto:${esc(s.email)}" onclick="event.stopPropagation()">✉️ mail</a>`:""}</div></div>
-      <div><h4>Notitie administratie (uit Notion)</h4><div class="notitie">${esc(s.notitie||"—")}</div>${s.tijdlijn?`<h4 style="margin-top:10px">Betaalafspraken tijdlijn</h4><div class="notitie">${esc(s.tijdlijn)}</div>`:""}</div></div>`:""}
+function row(s,meta,right){
+  return `<div class="row ${s.cls}" onclick="openPaneel(${jq(s.id)})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openPaneel(${jq(s.id)})">
+    <div class="nm"><span>${esc(s.naam)}</span>${shIcoon(s)}</div>
+    <div class="meta"><span>${meta}</span></div>
+    <div class="amt"><span class="num">${eur0(s.open)}</span><small>van ${eur0(s.traject)}</small></div>
+    ${right!==undefined?right:`<span class="pill ${s.cls}">${esc(kort(s.status))}</span>`}
   </div>`;
 }
+const filt=list=>list.filter(s=>(statF==null||s.status===statF)&&(klasF==null||s.klas===klasF));
+function lijst(title,sub,list,metaFn,right){
+  const shown=list.slice(0,MAXROWS);
+  return `<div class="list"><div class="lhead"><h2>${title}</h2><span>${sub}</span></div>${shown.length?shown.map(s=>row(s,metaFn(s),right?right(s):undefined)).join(""):`<div class="empty">Niets te doen.</div>`}${list.length>MAXROWS?`<button class="more" onclick="MAXROWS+=100;render()">Toon alle ${list.length}</button>`:""}</div>`;
+}
+function klasSel(list){
+  const kl=new Map(); for(const s of list) kl.set(s.klas,(kl.get(s.klas)||0)+1);
+  if(kl.size<2) return "";
+  return `<span class="sp"></span><select class="sel" aria-label="Klas" onchange="klasF=this.value||null;render()"><option value="">Alle klassen</option>${[...kl.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<option value="${esc(k)}"${klasF===k?" selected":""}>${esc(k)} (${n})</option>`).join("")}</select>`;
+}
+
+// ---- werklijst ----
 function wlHtml(wl){
-  let list=filt(wl).sort((a,b)=>(RANK[a.status]??9)-(RANK[b.status]??9)||b.open-a.open);
-  const nu=list.filter(s=>s.status!=="Checken"), chk=list.filter(s=>s.status==="Checken");
-  let h=chipsHtml(wl,true);
-  h+=`<div class="cmp"><h3>Vandaag achteraan <span class="chsub">ernstig achter eerst, dan achter, dan nog niets · hoogste bedrag eerst · klik een rij</span></h3><div class="wl">${nu.length?nu.map((s,i)=>row(s,i+1)).join(""):`<div class="empty">Niets te doen${statF||klasF||q?" in dit filter":""}. 🎉</div>`}</div></div>`;
-  if(chk.length) h+=`<div class="cmp"><h3>Nog te checken <span class="chsub">leerlingen uit de Moneybird-tijd: betaald bedrag nakijken en Betaald in Notion zetten</span></h3><div class="wl">${chk.map(s=>row(s,null)).join("")}</div></div>`;
+  const ern=wl.filter(s=>s.status==="Loopt ernstig achter").length, ach=wl.filter(s=>s.status==="Loopt achter").length, chk=wl.filter(s=>s.status==="Checken").length, nn=wl.length-ern-ach-chk;
+  const openWl=wl.reduce((a,s)=>a+s.open,0);
+  const L=vandaagChecken(), n=L.filter(s=>!CHECKED.has(s.id)).length;
+  let h=`<div class="bar"><div class="sum"><span class="num">${eur0(openWl)}</span><span>open bij ${wl.length} leerlingen</span></div><span class="sp"></span>
+    <button class="pbtn${L.length?(chkOpen?" on":""):" dim"}" ${L.length?`onclick="chkOpen=!chkOpen;render()"`:"disabled"} title="Betaalafspraak tot vandaag: kijk of de betaling binnen is en vink af">${L.length?"Vandaag betaling checken":"Vandaag niets te checken"}${L.length?`<span class="pill-n">${n}</span>`:""}</button></div>`;
+  if(chkOpen&&L.length) h+=`<div class="ck"><div class="lhead"><h2>Vandaag betaling checken</h2><span>${L.length-n} van ${L.length} gecheckt · betaalafspraak tot ${dmy(VANDAAG)}</span></div>${L.map(s=>{ const c=CHECKED.has(s.id); return `<div class="ckrow${c?" on":""}"><label class="ckbox"><input type="checkbox"${c?" checked":""} onchange="chkTog(${jq(s.id)})" aria-label="Gecheckt: ${esc(s.naam)}"></label><span class="nml" onclick="openPaneel(${jq(s.id)})">${esc(s.naam)}</span><span class="sub">${esc(s.klas)} · ${eur0(s.open)}</span></div>`; }).join("")}</div>`;
+  const chipF=(k,t,n,cls)=>n?`<button class="chip${statF===k?" on":""}" onclick="statF=statF===${jq(k)}?null:${jq(k)};render()">${t}<b>${n}</b></button>`:"";
+  h+=`<div class="filt"><button class="chip${statF==null?" on":""}" onclick="statF=null;render()">Alles<b>${wl.length}</b></button>${chipF("Loopt ernstig achter","Ernstig achter",ern)}${chipF("Loopt achter","Achter",ach)}${chipF("Nog niets","Nog niets",nn)}${chipF("Checken","Checken",chk)}${klasSel(wl)}</div>`;
+  const list=filt(wl).sort((a,b)=>(RANK[a.status]??9)-(RANK[b.status]??9)||b.open-a.open);
+  h+=lijst("Achteraan","ernstig eerst, dan hoogste bedrag · klik een rij",list,metaWl);
   return h;
 }
+// ---- eerste betaling ----
 function eersteHtml(we){
   const list=filt(we).sort((a,b)=>(b.dagenSinds||0)-(a.dagenSinds||0));
-  let h=chipsHtml(we,false);
-  h+=`<div class="cmp"><h3>Wacht op eerste betaling <span class="chsub">actief, nog geen betaalstatus · de salesrep is eigenaar tot de eerste termijn binnen is · langst wachtend eerst</span></h3><div class="wl">${list.length?list.map((s,i)=>row(s,i+1)).join(""):`<div class="empty">Iedereen heeft een eerste betaling gedaan. 🎉</div>`}</div></div>`;
-  const perRep=new Map(); for(const s of we) perRep.set(s.salesrep||"(geen rep)",(perRep.get(s.salesrep||"(geen rep)")||0)+1);
-  h+=`<div class="cmp"><h3>Per salesrep</h3><div class="wonchips">${[...perRep.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="wchip" onclick="q=${jq(k==="(geen rep)"?"":k)};render()">${esc(k)}<span class="n">${n}</span></div>`).join("")}</div></div>`;
+  let h=`<div class="bar"><div class="sum"><span class="num">${we.length}</span><span>wachten op hun eerste betaling · de salesrep is eigenaar tot de eerste termijn binnen is</span></div></div>`;
+  h+=`<div class="filt">${klasSel(we).replace('<span class="sp"></span>','')}</div>`;
+  h+=lijst("Langst wachtend eerst","klik een rij",list,s=>`${esc(s.klas)}${SEP}ingeschreven ${dmy(s.inschrijfdatum)}${s.dagenSinds!=null?` (${s.dagenSinds} d)`:""}${s.bedenk>0?`${SEP}bedenktijd nog ${s.bedenk} d`:""}`,s=>`<span class="pill">${esc(s.salesrep||"geen rep")}</span>`);
   return h;
 }
+// ---- afspraken ----
 function afsprHtml(af){
   const list=filt(af);
-  let h=chipsHtml(af,false);
-  h+=`<div class="cmp"><h3>Lopende betaalafspraken <span class="chsub">staan niet op de werklijst; komen de dag na de afspraakdatum vanzelf terug</span></h3><div class="tblwrap"><table><tr><th>Naam</th><th>Klas</th><th>Status</th><th class="r">Openstaand</th><th>Afspraak t/m</th><th class="r">Nog</th><th></th></tr>${list.map(s=>`<tr class="trk" onclick="tab='alle';q=${jq(s.naam)};open.add(${jq(s.id)});render()"><td class="nm">${nmLink(s)}${shIcoon(s)}</td><td>${esc(s.klas)}</td><td><span class="stg ${s.cls==="hi"||s.cls==="mid"?"lost":"warn"}">${esc(s.status)}</span></td><td class="r"><b>${eur0(s.open)}</b></td><td>${fmt(s.betaalafspraak_tot)}</td><td class="r">${s.afsprDagen<=1?`<b style="color:var(--warn-tx)">${s.afsprDagen===1?"morgen":"vandaag"}</b>`:s.afsprDagen+" d"}</td><td>${s.link_notion?`<a href="${esc(s.link_notion)}" target="_blank" onclick="event.stopPropagation()">Notion</a>`:""}</td></tr>`).join("")||`<tr><td colspan="7" class="empty">Geen lopende afspraken.</td></tr>`}</table></div></div>`;
-  const verlopen=S.filter(s=>s.afsprDagen!=null&&s.afsprDagen<=0&&WL_STATUS.includes(s.status));
-  if(verlopen.length) h+=`<div class="cmp"><h3>Afspraak verlopen, weer op de werklijst <span class="chsub">${verlopen.length}</span></h3><div class="wl">${verlopen.sort((a,b)=>a.afsprDagen-b.afsprDagen).map(s=>row(s,null)).join("")}</div></div>`;
+  let h=`<div class="bar"><div class="sum"><span class="num">${af.length}</span><span>lopende betaalafspraken · komen de dag na de afspraakdatum terug op de werklijst</span></div></div>`;
+  h+=lijst("Eerstvolgende eerst","klik een rij",list,s=>`${esc(s.klas)}${SEP}${esc(kort(s.status))}${s.herinnering?`${SEP}Herinnering gestuurd: ${dmy(s.herinnering)}`:""}`,s=>`<span class="pill${s.afsprDagen<=1?" mid":""}">${s.afsprDagen===0?"vandaag":s.afsprDagen===1?"morgen":"t/m "+dmy(s.betaalafspraak_tot)}</span>`);
   return h;
 }
-function chkHtml(ch){
-  const list=filt(ch).sort((a,b)=>b.open-a.open);
-  let h=chipsHtml(ch,false);
-  h+=`<div class="cmp"><h3>Checken in Moneybird <span class="chsub">leerlingen van vóór Odoo: betaald bedrag nakijken, dan Betaald en Betaalstatus in Notion zetten · hoogste openstaand eerst</span></h3><div class="wl">${list.length?list.map((s,i)=>row(s,i+1)).join(""):`<div class="empty">Alles gecheckt. 🎉</div>`}</div></div>`;
-  return h;
-}
-function alleHtml(){
-  const cols=[["naam","Naam",s=>s.naam],["klas","Klas",s=>s.klas],["status","Status",s=>RANK[s.status]??(s.status==="Volledig betaald"?8:5)],["actief","Actief",s=>s.actief],["open","Openstaand",s=>s.open,"r"],["betaald","Betaald",s=>s.betaald,"r"],["pct","% betaald",s=>s.pct??-1,"r"],["afspr","Afspraak",s=>s.afsprDagen??-999],["rep","Salesrep",s=>s.salesrep||""],["gew","Gewijzigd",s=>s.gewijzigd||""]];
-  if(sortK.c==="prio") sortK={c:"status",d:1};
-  const C=cols.find(c=>c[0]===sortK.c)||cols[0];
-  const list=filt(S).sort((a,b)=>{ const x=C[2](a), y=C[2](b); return (x<y?-1:x>y?1:0)*sortK.d; });
-  let h=chipsHtml(S,true);
-  h+=`<div class="cmp"><h3>Alle leerlingen <span class="chsub">${list.length} van ${S.length} · klik een kolomkop om te sorteren, een naam om te openen</span></h3><div class="tblwrap"><table><tr>${cols.map(c=>`<th class="${c[3]||""}" onclick="sortK.c===${jq(c[0])}?sortK.d=-sortK.d:(sortK={c:${jq(c[0])},d:1});render()">${c[1]} ${sortK.c===c[0]?(sortK.d>0?"▲":"▼"):""}</th>`).join("")}</tr>`+
-    list.slice(0,400).map(s=>`<tr class="trk" onclick="open.has(${jq(s.id)})?open.delete(${jq(s.id)}):open.add(${jq(s.id)});render()"><td class="nm">${nmLink(s)}${shIcoon(s)}</td><td>${esc(s.klas)}</td><td><span class="stg ${s.cls==="hi"||s.cls==="mid"?"lost":s.cls==="lo"?"warn":s.cls==="chk"?"info":s.cls==="ok"?"win":""}">${esc(s.status||"—")}</span></td><td>${esc(s.actief||"—")}</td><td class="r"><b>${eur0(s.open)}</b></td><td class="r">${eur0(s.betaald)}</td><td class="r">${s.pct!=null?`<div style="display:flex;gap:8px;align-items:center;justify-content:flex-end"><span class="bar"><b style="width:${s.pct}%"></b></span>${s.pct}%</div>`:"—"}</td><td>${s.afsprDagen!=null?(s.afsprDagen>0?"t/m "+fmt(s.betaalafspraak_tot):"verlopen"):"—"}</td><td>${esc(s.salesrep||"—")}</td><td>${fmt(s.gewijzigd)}</td></tr>${open.has(s.id)?`<tr><td colspan="${cols.length}" style="white-space:normal;padding:0 0 10px">${row(s,null)}</td></tr>`:""}`).join("")+`</table>${list.length>400?`<div class="empty">eerste 400 van ${list.length}</div>`:""}</div></div>`;
-  return h;
-}
-function ovHtml(){
-  const key=ovBy==="klas"?s=>s.klas:s=>s.cohort||"(geen cohort)";
-  const g=new Map(); for(const s of S){ if(s.actief!=="Actief"&&ovBy==="klas") continue; const k=key(s); if(!g.has(k)) g.set(k,{k,n:0,open:0,traject:0,betaald:0,vol:0,ach:0,ern:0,nn:0,chk:0,afspr:0}); const r=g.get(k); r.n++; r.open+=s.open; r.traject+=s.traject; r.betaald+=s.betaald; if(s.status==="Volledig betaald") r.vol++; if(s.status==="Loopt achter") r.ach++; if(s.status==="Loopt ernstig achter") r.ern++; if(s.status==="Nog niets"||!s.status) r.nn++; if(s.status==="Checken") r.chk++; if(s.afsprDagen>0) r.afspr++; }
-  const rows=[...g.values()].sort((a,b)=>b.open-a.open);
-  const tot=rows.reduce((a,r)=>{ for(const k of ["n","open","traject","betaald","vol","ach","ern","nn","chk","afspr"]) a[k]=(a[k]||0)+r[k]; return a; },{k:"Totaal"});
-  const cell=(r,k,cls)=>`<td class="r${r[k]?"":" dim"}" ${r[k]?`style="cursor:pointer" onclick="tab='alle';klasF=${ovBy==="klas"?jq(r.k):"null"};statF=${jq(cls)};q='';render()"`:""}>${r[k]||"—"}</td>`;
-  const openTot=S.filter(s=>s.actief==="Actief").reduce((a,s)=>a+s.open,0);
-  let h=`<div class="ovtot">Openstaand actieve leerlingen: <b>${eur0(openTot)}</b></div>`;
-  h+=`<div class="wonchips"><span class="lbl">Per:</span><div class="wchip${ovBy==="klas"?" on":""}" onclick="ovBy='klas';render()">Klas (actieve leerlingen)</div><div class="wchip${ovBy==="cohort"?" on":""}" onclick="ovBy='cohort';render()">Cohort (iedereen)</div></div>`;
-  h+=`<div class="cmp"><h3>Betaalstand per ${ovBy} <span class="chsub">hoogste openstaand eerst · klik een getal voor de namen</span></h3><div class="tblwrap"><table><tr><th>${ovBy==="klas"?"Klas":"Cohort"}</th><th class="r">Leerlingen</th><th class="r">Openstaand</th><th class="r">Betaald</th><th class="r">Volledig</th><th class="r">Ernstig achter</th><th class="r">Achter</th><th class="r">Nog niets</th><th class="r">Checken</th><th class="r">Afspraak</th></tr>`+
-    rows.concat([tot]).map(r=>`<tr${r.k==="Totaal"?' style="font-weight:700"':""}><td>${esc(r.k)}</td><td class="r">${r.n}</td><td class="r"><b>${eur0(r.open)}</b></td><td class="r"><div style="display:flex;gap:8px;align-items:center;justify-content:flex-end"><span class="bar"><b style="width:${r.traject?Math.min(100,Math.round(r.betaald/r.traject*100)):0}%"></b></span>${r.traject?Math.round(r.betaald/r.traject*100)+"%":"—"}</div></td>${cell(r,"vol","Volledig betaald")}${cell(r,"ern","Loopt ernstig achter")}${cell(r,"ach","Loopt achter")}${cell(r,"nn","Nog niets")}${cell(r,"chk","Checken")}<td class="r">${r.afspr||"—"}</td></tr>`).join("")+`</table></div></div>`;
-  const bo=bonusOpen(); const perRep=new Map(); for(const s of bo) perRep.set(s.salesrep,(perRep.get(s.salesrep)||0)+1);
-  h+=`<div class="grid2"><div class="cmp"><h3>Bonus nog niet uitgekeerd <span class="chsub">eerste betaling binnen, vinkje "Bonus uitgekeerd" nog leeg · voor Abel</span></h3>${bo.length?`<div class="wonchips">${[...perRep.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>`<div class="wchip" onclick="tab='alle';q=${jq(k)};render()">${esc(k)}<span class="n">${n}</span></div>`).join("")}</div><div class="tblwrap"><table><tr><th>Naam</th><th>Salesrep</th><th class="r">Betaald</th><th>Inschrijving</th></tr>${bo.slice(0,30).map(s=>`<tr><td>${nmLink(s)}</td><td>${esc(s.salesrep)}</td><td class="r">${eur0(s.betaald)}</td><td>${fmt(s.inschrijfdatum)}</td></tr>`).join("")}</table></div>`:`<div class="empty">Alle bonussen uitgekeerd.</div>`}</div>
-    <div class="cmp"><h3>Hygiëne <span class="chsub">wat in Notion ontbreekt of niet klopt</span></h3><div class="wl">${hygHtml()}</div></div></div>`;
-  return h;
-}
-function hygHtml(){
-  const items=[
-    ["Actief zonder klas", S.filter(s=>s.actief==="Actief"&&s.klas==="(geen klas)")],
-    ["Op de werklijst maar Oud-leerling of Gestopt", S.filter(s=>WL_STATUS.includes(s.status)&&s.opLijst&&s.actief&&s.actief!=="Actief")],
-    ["Openstaand 0 maar status achter", S.filter(s=>["Loopt achter","Loopt ernstig achter"].includes(s.status)&&s.open<=0)],
-    ["Volledig betaald maar nog openstaand", S.filter(s=>s.status==="Volledig betaald"&&s.open>0)],
-    ["Geen trajectbedrag (actief)", S.filter(s=>s.actief==="Actief"&&!s.traject)],
-    ["Geen betaalwijze (actief, niet volledig betaald)", S.filter(s=>s.actief==="Actief"&&!s.betaalwijze&&s.status!=="Volledig betaald")],
-    ["Odoo en Notion verschillen in betaald bedrag", S.filter(s=>s.betaald_odoo!=null&&s.betaald_notion!=null&&Math.abs(s.betaald_odoo-s.betaald_notion)>1)],
-  ];
-  return items.map(([t,ls])=>`<div class="wlrow ${ls.length?"mid":"ok"}" onclick="if(${ls.length}){tab='alle';q='';statF=null;klasF=null;open=new Set([${ls.slice(0,60).map(s=>jq(s.id)).join(",")}]);render()}"><div class="wlhead"><span class="rank">${ls.length}</span><span class="wlnm" style="font-size:14px">${esc(t)}</span><span class="wlmeta">${ls.slice(0,4).map(nmLink).join(", ")}${ls.length>4?" …":""}</span></div></div>`).join("");
+// ---- zoeken (over alle leerlingen) ----
+function zoekHtml(){
+  const t=q.trim().toLowerCase(), list=S.filter(s=>s.zoek.includes(t)).sort((a,b)=>b.open-a.open);
+  return lijst(`Zoekresultaat`,`${list.length} van ${S.length} leerlingen`,list,s=>`${esc(s.klas)}${s.actief&&s.actief!=="Actief"?`${SEP}${esc(s.actief)}`:""}${s.afsprDagen>0?`${SEP}afspraak t/m ${dmy(s.betaalafspraak_tot)}`:""}`);
 }
 
 // ---- zijpaneel per leerling ----
-let PN=null, PSEG="herin", PT=[], NT=null, MT=null;
-const SEGS=[["herin","Herinnering"],["aanm","Aanmaning"],["term","Betaaltermijnen"]];
+let PN=null, PT=[], NT=null, MT=null;
 const pnLeerling=()=>S.find(x=>x.id===PN);
 function openPaneel(id){
   const s=S.find(x=>x.id===id); if(!s) return;
   if(PN&&PN!==id) ntSave();
   PN=id; PT=parseTermijnen(s.termijnen);
   const el=document.getElementById("pn");
-  el.innerHTML=pnHtml(s); pnSegDraw();
+  el.innerHTML=pnHtml(s); tmDraw();
   el.classList.add("on"); document.getElementById("pnbg").classList.add("on"); document.body.style.overflow="hidden";
   el.scrollTop=0; grow(document.getElementById("pnNote"));
-  document.getElementById("pnx").focus({preventScroll:true});
+  el.focus({preventScroll:true});
 }
 function sluitPaneel(){
   if(!PN) return;
   ntSave(); PN=null; clearTimeout(MT);
   document.getElementById("pn").classList.remove("on"); document.getElementById("pnbg").classList.remove("on"); document.body.style.overflow="";
 }
+const datumVeld=(f,v,hint)=>`<div class="dv"><input type="date" id="pn_${f}" value="${esc(String(v||"").slice(0,10))}" onchange="zetDatum('${f}',this.value)" aria-label="${hint}"><button class="tb" onclick="zetDatum('${f}',VANDAAG)">Vandaag</button>${v?`<button class="tb" onclick="zetDatum('${f}','')">Wissen</button>`:""}</div>`;
 function pnHtml(s){
-  const stc=s.cls==="hi"||s.cls==="mid"?"lost":s.cls==="lo"?"warn":s.cls==="chk"?"info":s.cls==="ok"?"win":"";
-  return `<div class="pnhd"><div class="pnti"><h2>${esc(s.naam)}</h2><div class="pnsub">${esc(s.klas)} <span class="stg ${stc}">${esc(s.status||"geen status")}</span>${DEMO?` <span class="tag" title="Testmodus: wijzigingen blijven alleen in deze browser (localStorage), niet in Notion">demo</span>`:""}</div></div><div class="pnr"><span class="pnmsg" id="pnMsg" aria-live="polite"></span><button class="pnx" id="pnx" onclick="sluitPaneel()" title="Sluiten (Esc)">×</button></div></div>
-  <div class="pnrow"><div class="pnamt"><b>${eur0(s.open)}</b><span>openstaand</span></div>${s.link_notion?`<a class="lnk pri" href="${esc(s.link_notion)}" target="_blank" rel="noopener">Open in Notion</a>`:""}</div>
-  <div class="pnf" title="Op deze datum komt de leerling terug op de werklijst"><h4>Betaalafspraak tot</h4>${datumVeld("betaalafspraak_tot",s.betaalafspraak_tot)}</div>
-  <div class="segs">${SEGS.map(([k,t])=>`<button class="tab${PSEG===k?" on":""}" data-k="${k}" onclick="pnSeg('${k}')">${t}</button>`).join("")}</div>
-  <div id="pnSeg" class="pnseg"></div>
-  <div class="pnf"><h4>Notitie</h4><textarea id="pnNote" rows="3" oninput="ntInput(this)" onblur="ntSave()">${esc(s.notitie||"")}</textarea>${s.tijdlijn?`<div class="pntl"><h4>Eerdere afspraken (Notion)</h4><div class="notitie">${esc(s.tijdlijn)}</div></div>`:""}</div>
-  <label class="pnck"><input type="checkbox" id="pnSh"${isJa(s.schuldhulp)?" checked":""} onchange="schrijf(PN,{schuldhulp:this.checked})"><span>Schuldhulpverlening</span></label>`;
-}
-function pnSeg(k){ PSEG=k; document.querySelectorAll("#pn .segs .tab").forEach(b=>b.classList.toggle("on",b.dataset.k===k)); pnSegDraw(); }
-function pnSegDraw(){
-  const s=pnLeerling(), el=document.getElementById("pnSeg"); if(!s||!el) return;
-  el.innerHTML = PSEG==="herin"?datumVeld("herinnering",s.herinnering) : PSEG==="aanm"?datumVeld("aanmaning",s.aanmaning) : tmHtml();
+  return `<div class="pnhd"><div class="sp"><h2>${esc(s.naam)}${shIcoon(s)}</h2><div class="pnsub">${esc(s.klas)}${s.betaalwijze?" · "+esc(s.betaalwijze):""}${s.actief&&s.actief!=="Actief"?" · "+esc(s.actief):""}</div></div><span class="pnmsg" id="pnMsg" aria-live="polite"></span><button class="pnx" id="pnx" onclick="sluitPaneel()" aria-label="Sluiten"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="pnamt"><span class="num">${eur0(s.open)}</span><span>open van ${eur0(s.traject)}</span><span class="tag pill ${s.cls}">${esc(kort(s.status))}</span></div>
+  <div class="fld"><label>Betaalafspraak tot<small>daarna weer op de werklijst</small></label>${datumVeld("betaalafspraak_tot",s.betaalafspraak_tot,"Betaalafspraak tot")}</div>
+  <div class="fld"><label>Herinnering gestuurd</label>${datumVeld("herinnering",s.herinnering,"Herinnering gestuurd")}</div>
+  <div class="fld"><label>Aanmaning gestuurd</label>${datumVeld("aanmaning",s.aanmaning,"Aanmaning gestuurd")}</div>
+  <div class="fld col"><label>Betaaltermijnen</label><div id="tm"></div></div>
+  <div class="fld col"><label>Notitie</label><textarea id="pnNote" rows="3" oninput="ntInput(this)" onblur="ntSave()" aria-label="Notitie">${esc(s.notitie||"")}</textarea></div>
+  <label class="pnck"><input type="checkbox" id="pnSh"${isJa(s.schuldhulp)?" checked":""} onchange="schrijf(PN,{schuldhulp:this.checked})"><span>Schuldhulpverlening</span></label>
+  <div class="links">${s.link_notion?`<a class="lnk pri" href="${esc(s.link_notion)}" target="_blank" rel="noopener">Notion</a>`:""}${s.link_odoo?`<a class="lnk" href="${esc(s.link_odoo)}" target="_blank" rel="noopener">Odoo</a>`:""}${s.link_moneybird?`<a class="lnk" href="${esc(s.link_moneybird)}" target="_blank" rel="noopener">Moneybird</a>`:""}${s.telefoon?`<a class="lnk" href="tel:${esc(String(s.telefoon).replace(/\s/g,""))}">${esc(s.telefoon)}</a>`:""}${s.email?`<a class="lnk" href="mailto:${esc(s.email)}">E-mail</a>`:""}</div>
+  <div class="kv"><span>Betaald</span><span>${eur0(s.betaald)}${s.betaald_odoo!=null&&s.betaald_notion!=null&&Math.abs(s.betaald_odoo-s.betaald_notion)>1?` <span class="late">(Odoo ${eur0(s.betaald_odoo)}, Notion ${eur0(s.betaald_notion)})</span>`:""}</span><span>Bron</span><span>${s.bron==="odoo"?"Odoo":"handmatig (Moneybird)"}</span><span>Ingeschreven</span><span>${dmy(s.inschrijfdatum)||"—"}${s.bedenk>0?` · bedenktijd nog ${s.bedenk} d`:""}</span><span>Salesrep</span><span>${esc(s.salesrep||"—")}</span></div>
+  ${s.tijdlijn?`<h4>Eerdere afspraken (Notion)</h4><div class="pre">${esc(s.tijdlijn)}</div>`:""}`;
 }
 function pnMeld(ok,txt){
   const el=document.getElementById("pnMsg"); if(!el) return;
-  clearTimeout(MT); el.className="pnmsg "+(ok?"ok":"fout"); el.textContent=ok?"Opgeslagen ✓":txt;
+  clearTimeout(MT); el.className="pnmsg "+(ok?"ok":"fout"); el.textContent=ok?"Opgeslagen":txt;
   if(ok) MT=setTimeout(()=>{ el.textContent=""; el.className="pnmsg"; },1500);
 }
-function pnHerstel(s,keys){   // na een mislukte schrijfactie: velden terug naar de waarde in S (notitie blijft staan zodat er geen tekst verloren gaat)
+function pnHerstel(s,keys){   // na een mislukte schrijfactie: velden terug naar de waarde in S (notitie blijft staan)
   for(const k of keys){
-    const el=document.getElementById("pn_"+k); if(el){ el.value=String(s[k]||"").slice(0,10); dtxt(k,el.value); }
+    const el=document.getElementById("pn_"+k); if(el) el.value=String(s[k]||"").slice(0,10);
     if(k==="schuldhulp"){ const c=document.getElementById("pnSh"); if(c) c.checked=isJa(s.schuldhulp); }
-    if(k==="termijnen"){ PT=parseTermijnen(s.termijnen); if(PSEG==="term") pnSegDraw(); }
+    if(k==="termijnen"){ PT=parseTermijnen(s.termijnen); tmDraw(); }
   }
 }
-// datumveld: opslaan direct bij wijziging; ernaast altijd DD-MM-JJJJ (de native datumweergave volgt de browsertaal)
-const datumVeld=(f,v)=>`<div class="dveld"><input type="date" id="pn_${f}" value="${esc(String(v||"").slice(0,10))}" onchange="zetDatum('${f}',this.value)"><span class="dtxt" id="pn_${f}_t">${dmy(v)}</span><span class="dknop"><button class="tbtn" onclick="zetDatum('${f}',VANDAAG)">Vandaag</button><button class="tbtn" onclick="zetDatum('${f}','')">Wissen</button></span></div>`;
-function dtxt(f,v){ const t=document.getElementById("pn_"+f+"_t"); if(t) t.textContent=dmy(v); }
 function zetDatum(f,v){
   const s=pnLeerling(); if(!s) return;
-  const el=document.getElementById("pn_"+f); if(el&&el.value!==v) el.value=v;
-  dtxt(f,v);
   if(String(s[f]||"").slice(0,10)===(v||"")) return;
-  schrijf(PN,{[f]:v||null});
+  const dv=document.getElementById("pn_"+f)?.closest(".dv");
+  schrijf(PN,{[f]:v||null}).then(()=>{ if(PN===s.id&&dv&&dv.isConnected) dv.outerHTML=datumVeld(f,s[f],dv.querySelector("input")?.getAttribute("aria-label")||f); });   // alleen dit veld vernieuwen (Wissen-knop), melding blijft staan
 }
-// notitie: auto-groeiend, opslaan 800 ms na de laatste toets en bij blur
 function grow(el){ if(!el) return; el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }
 function ntInput(el){ grow(el); clearTimeout(NT); NT=setTimeout(ntSave,800); }
 function ntSave(){
@@ -341,25 +282,25 @@ function ntSave(){
   const el=document.getElementById("pnNote"), s=pnLeerling(); if(!el||!s) return;
   if(el.value!==(s.notitie||"")) schrijf(PN,{notitie:el.value});
 }
-// betaaltermijnen
 const tmIn=v=>v?(v%1?v.toFixed(2).replace(".",","):String(v)):"";
 const tmOpen=()=>PT.filter(t=>!t.binnen).reduce((a,t)=>a+t.bedrag,0);
-function tmHtml(){
-  return `${PT.length?`<div class="tmr tmh"><span>Binnen</span><span>Bedrag</span><span>Datum</span><span></span></div>`:""}${PT.map((t,i)=>`<div class="tmr${t.binnen?" in":""}"><label class="tmck" title="${t.binnen?"Binnen":"Open"}"><input type="checkbox"${t.binnen?" checked":""} onchange="tmZet(${i},'binnen',this.checked,this)"></label><span class="tmeur"><i>€</i><input inputmode="decimal" value="${tmIn(t.bedrag)}" onchange="tmZet(${i},'bedrag',this.value,this)"></span><input type="date" value="${esc(t.datum)}" onchange="tmZet(${i},'datum',this.value,this)"><button class="tbtn tmx" title="Termijn verwijderen" onclick="tmDel(${i})">×</button><span class="dtxt">${dmy(t.datum)}</span></div>`).join("")}<div class="tmfoot"><button class="tbtn" onclick="tmAdd()">+ Termijn</button><span>Nog te betalen: <b id="tmSom">${eurT(tmOpen())}</b></span></div>`;
+function tmDraw(){
+  const el=document.getElementById("tm"); if(!el) return;
+  el.innerHTML=`${PT.length?`<div class="tm h"><span>Binnen</span><span>Bedrag</span><span>Datum</span><span></span></div>`:""}${PT.map((t,i)=>`<div class="tm${t.binnen?" in":""}"><label class="tmck"><input type="checkbox"${t.binnen?" checked":""} onchange="tmZet(${i},'binnen',this.checked,this)" aria-label="Binnen"></label><span class="tmeur"><i>€</i><input inputmode="decimal" value="${tmIn(t.bedrag)}" onchange="tmZet(${i},'bedrag',this.value,this)" aria-label="Bedrag"></span><input type="date" value="${esc(t.datum)}" onchange="tmZet(${i},'datum',this.value,this)" aria-label="Datum"><button class="tb tmx" aria-label="Termijn verwijderen" onclick="tmDel(${i})">×</button></div>`).join("")}<div class="tmfoot"><button class="tb" onclick="tmAdd()">+ Termijn</button>${PT.length?`<span>Nog te betalen <b id="tmSom">${eurT(tmOpen())}</b></span>`:""}</div>`;
 }
 function tmZet(i,k,v,el){
   const t=PT[i]; if(!t) return;
   if(k==="bedrag"){ t.bedrag=parseBedrag(v); el.value=tmIn(t.bedrag); }
-  else if(k==="datum"){ t.datum=v; el.closest(".tmr").querySelector(".dtxt").textContent=dmy(v); }
-  else { t.binnen=!!v; el.closest(".tmr").classList.toggle("in",t.binnen); el.parentNode.title=t.binnen?"Binnen":"Open"; }
+  else if(k==="datum") t.datum=v;
+  else { t.binnen=!!v; el.closest(".tm").classList.toggle("in",t.binnen); }
   tmSave();
 }
 function tmAdd(){
   const met=PT.filter(t=>t.datum).sort((a,b)=>a.datum<b.datum?-1:a.datum>b.datum?1:0), last=met[met.length-1]||PT[PT.length-1];
   PT.push({datum:last&&last.datum?plusMaand(last.datum):VANDAAG,bedrag:last?last.bedrag:0,binnen:false});
-  pnSegDraw(); tmSave();
+  tmDraw(); tmSave();
 }
-function tmDel(i){ PT.splice(i,1); pnSegDraw(); tmSave(); }
+function tmDel(i){ PT.splice(i,1); tmDraw(); tmSave(); }
 function tmSave(){ const el=document.getElementById("tmSom"); if(el) el.textContent=eurT(tmOpen()); schrijf(PN,{termijnen:termijnenTekst(PT)}); }
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&PN) sluitPaneel(); });
 
@@ -369,7 +310,7 @@ const RECON_URL=ODOO+"/odoo/accounting/13/reconciliation";   // Bankaflettering-
 const MOLLIE_URL="https://my.mollie.com/dashboard/";
 const JID_PA=8;
 const olink=(model,id,txt)=>id?`<a href="${ODOO}/web#id=${id}&model=${model}&view_type=form" target="_blank" title="openen in Odoo" onclick="event.stopPropagation()">${txt}</a>`:txt;
-let INV=[], BANK=[], IBANMAP=new Map(), AFL=null, afOpen=new Set(), afAll=false;   // alleen lezen: het dashboard schrijft niets naar Odoo
+let INV=[], BANK=[], IBANMAP=new Map(), AFL=null;   // alleen lezen: het dashboard schrijft niets naar Odoo
 const IBAN_RE=/\b[A-Z]{2}\d{2}[A-Z]{4}[0-9A-Z]{6,}\b/;
 const norm=s=>String(s||"").toLowerCase();
 const nrmS=s=>String(s||"").toLowerCase().replace(/[^a-zÀ-ɏ]+/gi," ").replace(/\s+/g," ").trim(); // woorden met spaties, voor woordgrens-matching
@@ -433,35 +374,27 @@ function aflData(){   // rekenwerk één keer per stand, niet bij elke render
   const claimed=new Set(); withPay.forEach(c=>c.cand.forEach(x=>claimed.add(x.t.id)));
   return AFL={withPay, mollie:BANK.filter(t=>!t.rec&&isMollie(t)), rest:BANK.filter(t=>!t.rec&&!isMollie(t)&&!isIntern(t)&&!claimed.has(t.id))};
 }
-function afNaam(d){ const s=d.pid?S.find(x=>x.odoo_partner_id===d.pid):null; return s?`${nmLink(s)} <span class="odl">${olink("res.partner",d.pid,"Odoo ↗")}</span>`:olink("res.partner",d.pid,esc(d.nm)); }
+function afNaam(d){ const s=d.pid?S.find(x=>x.odoo_partner_id===d.pid):null; return s?`<span class="nml" onclick="event.stopPropagation();openPaneel(${jq(s.id)})" title="Open leerling">${esc(s.naam)}</span>`:olink("res.partner",d.pid,esc(d.nm)); }
+
 function afletHtml(){
   const {withPay,mollie,rest}=aflData();
-  let h=`<div class="cmp"><h3>Afletteren per leerling · ${withPay.length} <span class="chsub">bedrag = openstaand volgens Odoo · klik een rij</span></h3>`;
-  if(!withPay.length) h+=`<div class="empty">Geen onafgeletterde betalingen te koppelen aan leerlingen. 👌</div>`;
-  h+=`<div class="wl">`+withPay.map(c=>{
+  let h=`<div class="bar"><div class="sum"><span class="num">${withPay.length}</span><span>leerlingen met een niet-afgeletterde betaling · alleen kijken, afletteren doe je in Odoo</span></div></div>`;
+  h+=`<div class="list afl"><div class="lhead"><h2>Per leerling</h2><span>bedrag = openstaand volgens Odoo · klik een rij</span></div>`;
+  if(!withPay.length) h+=`<div class="empty">Geen betalingen te koppelen.</div>`;
+  h+=withPay.map(c=>{
     const d=c.d,k="a"+(d.pid||d.nm),opn=afOpen.has(k);
     const som=c.cand.reduce((s,x)=>s+ +x.t.amount,0);
-    return `<div class="wlrow ${d.open>0?"mid":""}" onclick="afTog(${jq(k)})">
-      <div class="wlhead"><span class="rank">€</span>
-        <span class="wlnm">${afNaam(d)}</span>
-        <span class="wlamt">${eur0(d.open)}</span>
-        <span class="wlmeta"><span>${c.cand.length} betaling${c.cand.length===1?"":"en"}</span></span>
-      </div>
-      ${opn?`<div class="why">${c.cand.length} mogelijke betaling${c.cand.length===1?"":"en"} gevonden (samen ${eur0(som)}) — als die kloppen is het echte openstaand ${eur0(Math.max(0,d.open-som))} in plaats van ${eur0(d.open)}.</div><div class="wlx"><div><h4>Gevonden betalingen</h4>${c.cand.map(x=>{ const h2=ibanHist(x.t); const tt=(x.t.ref||"")+(h2.length?"  |  eerder via deze rekening: "+h2.map(v=>eur0(v.amount)+" op "+fmt(v.date)+(v.rec?" (afgeletterd"+(v.pname?" op "+v.pname:"")+")":" (nog open)")).join(", "):""); return `<div class="mtch"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span title="${esc(tt)}"><b>${eur0(x.t.amount)}</b> · ${fmt(x.t.date)}${payNaam(x.t)?` · van ${esc(payNaam(x.t))}`:""}${x.t.pid===d.pid&&d.pid?' · <span class="stg win">naam staat al op de betaling</span>':""}<br><span class="chsub">${x.why.map(shortWhy).join(" · ")}${h2.length?` · 🔎 ${h2.length} eerdere betaling${h2.length===1?"":"en"} via deze rekening`:""}</span></span><span class="act"><a class="okbtn" href="${RECON_URL}" target="_blank" rel="noopener" onclick="event.stopPropagation();reconGo(${jq(payNaam(x.t)||achternaam(d.nm))},this)" title="Opent de bankaflettering in Odoo; de naam van de betaler staat op je klembord. Plak die in het zoekveld en klik daar Afletteren.">🔗 Bekijk in Odoo</a></span></div>`; }).join("")}</div>
-      <div><h4>Facturen van ${esc(d.nm)}</h4><div class="tblwrap"><table><tr><th>Nr</th><th>Bedrag</th><th>Open</th><th>Status</th></tr>${d.inv.map(i=>`<tr><td>${olink("account.move",i.id,esc(i.name||"—"))}</td><td>${eur0(i.total)}</td><td><b>${i.open>0?eur0(i.open):"✓"}</b></td><td>${psPill(i)}</td></tr>`).join("")}</table></div></div></div>`:""}
-    </div>`;
-  }).join("")+`</div></div>`;
-  h+=`<div class="cmp"><h3>🟣 Mollie-uitbetalingen (bundels) · ${mollie.length} · ${eur0(mollie.reduce((s,t)=>s+ +t.amount,0))} <span class="chsub">uitsplitsen kan alleen in Mollie</span></h3>
-    ${mollie.slice(0,10).map(t=>`<div class="lr"><span>${eur0(t.amount)} · ${fmt(t.date)} · <span class="chsub">${esc(String(t.ref||"").match(/REF [^ ]+/)?.[0]||"Mollie")}</span></span></div>`).join("")}${mollie.length>10?`<div class="chsub" style="margin:4px 0 8px">… en ${mollie.length-10} meer</div>`:""}
-    <div style="margin-top:8px"><a class="okbtn" style="text-decoration:none" href="${MOLLIE_URL}" target="_blank">🔗 Open Mollie-dashboard</a></div></div>`;
-  h+=`<div class="cmp"><h3>❓ Overige niet-afgeletterde betalingen · ${rest.length} <span class="chsub">geen leerling herkend — handmatig bekijken</span></h3>
-    ${rest.slice(0,afAll?rest.length:25).map(t=>`<div class="mtch"><span class="conf lo">onbekend</span><span class="mtxt"><b>${eur0(t.amount)}</b> · ${fmt(t.date)}<br><span class="chsub rref" title="${esc(t.ref||"")}">"${esc(t.ref||"—")}"</span></span><span class="act"><a class="okbtn" href="${RECON_URL}" target="_blank" rel="noopener" onclick="event.stopPropagation();reconGo(${jq(String((norm(t.ref).match(/naam: ([^o]+?) (?:omschrijving|kenmerk)/)||[])[1]||"").trim().split(" ").slice(-1)[0]||"")},this)">🔗 Bankaflettering</a></span></div>`).join("")}
-    ${rest.length>25&&!afAll?`<div style="text-align:center;margin:10px 0"><span class="wchip" style="display:inline-flex" onclick="afAll=true;render()">Toon alle ${rest.length}</span></div>`:""}</div>`;
+    return `<div class="row ${d.open>0?"mid":""}" onclick="afTog(${jq(k)})" role="button" tabindex="0"><div class="nm"><span>${afNaam(d)}</span></div><div class="meta">${d.inv.length} factu${d.inv.length===1?"ur":"ren"}</div><div class="amt"><span class="num">${eur0(d.open)}</span><small>open</small></div><span class="cnt">${c.cand.length} betaling${c.cand.length===1?"":"en"} · ${eur0(som)}</span></div>
+      ${opn?`<div class="afx"><p>Als deze betaling${c.cand.length===1?"":"en"} klopt${c.cand.length===1?"":"en"}, is het echte openstaand ${eur0(Math.max(0,d.open-som))}.</p>${c.cand.map(x=>{ const h2=ibanHist(x.t); return `<div class="mt"><span class="conf ${x.sc>=70?"hi":x.sc>=45?"mid":"lo"}">${x.sc>=70?"zeker":x.sc>=45?"waarschijnlijk":"onzeker"}</span><span><b>${eur0(x.t.amount)}</b> · ${dmy(x.t.date)}${payNaam(x.t)?` · van ${esc(payNaam(x.t))}`:""}</span><a class="lnk" href="${RECON_URL}" target="_blank" rel="noopener" onclick="event.stopPropagation();reconGo(${jq(payNaam(x.t)||achternaam(d.nm))},this)" title="Opent de bankaflettering in Odoo; de naam staat op je klembord">Bekijk in Odoo</a><span class="why" title="${esc(x.t.ref||"")}">${x.why.map(shortWhy).join(" · ")}${h2.length?` · ${h2.length} eerdere betaling${h2.length===1?"":"en"} via deze rekening`:""}</span></div>`; }).join("")}
+      <table><tr><th>Factuur</th><th class="r">Bedrag</th><th class="r">Open</th><th>Status</th></tr>${d.inv.map(i=>`<tr><td>${olink("account.move",i.id,esc(i.name||"—"))}</td><td class="r">${eur0(i.total)}</td><td class="r">${i.open>0?eur0(i.open):"✓"}</td><td>${psPill(i)}</td></tr>`).join("")}</table></div>`:""}`;
+  }).join("")+`</div>`;
+  h+=`<div class="list sect"><div class="lhead"><h2>Mollie-bundels</h2><span>${mollie.length} · ${eur0(mollie.reduce((s,t)=>s+ +t.amount,0))} · uitsplitsen kan alleen in <a href="${MOLLIE_URL}" target="_blank" rel="noopener">Mollie</a></span></div>${mollie.slice(0,10).map(t=>`<div class="lr"><b>${eur0(t.amount)}</b><span>${dmy(t.date)}</span><span>${esc(String(t.ref||"").match(/REF [^ ]+/)?.[0]||"")}</span></div>`).join("")}${mollie.length>10?`<div class="lr">… en ${mollie.length-10} meer</div>`:""}</div>`;
+  h+=`<div class="list sect"><div class="lhead"><h2>Onbekende betalingen</h2><span>${rest.length} · geen leerling herkend</span></div>${rest.slice(0,afAll?rest.length:25).map(t=>`<div class="mt" style="padding:10px 16px;border-top:0;border-bottom:1px solid var(--line2)"><span class="conf lo">onbekend</span><span><b>${eur0(t.amount)}</b> · ${dmy(t.date)}</span><a class="lnk" href="${RECON_URL}" target="_blank" rel="noopener" onclick="event.stopPropagation();reconGo(${jq(String((norm(t.ref).match(/naam: ([^o]+?) (?:omschrijving|kenmerk)/)||[])[1]||"").trim().split(" ").slice(-1)[0]||"")},this)">Bankaflettering</a><span class="why" title="${esc(t.ref||"")}">${esc(String(t.ref||"—").slice(0,120))}</span></div>`).join("")}${rest.length>25&&!afAll?`<button class="more" onclick="afAll=true;render()">Toon alle ${rest.length}</button>`:""}</div>`;
   return h;
 }
 function afTog(k){ afOpen.has(k)?afOpen.delete(k):afOpen.add(k); render(); }
 
 // ---- start ----
-try{ localStorage.removeItem("dpacAdminCode"); }catch(e){}   // oude onthouden code opruimen: nooit automatisch inloggen (DPAC-315)
+try{ localStorage.removeItem("dpacAdminCode"); localStorage.removeItem("dpacAdminDone"); }catch(e){}   // nooit automatisch inloggen
 setTimeout(()=>{ const g=document.getElementById("gcode"); if(g && document.getElementById("gate").style.display!=="none") g.focus(); },50);
 try{ if(LOCAL()) gTry("",true); else { const c=sessionStorage.dpacAdminCode; if(c) gTry(c,true); } }catch(e){}
