@@ -1026,7 +1026,7 @@ function drawAdviceInner(){
     +`<button class="rbtn big pri" onclick="advDoorvoeren()" title="${esc(tAi)}" ${advBusy?"disabled":""}>${advBusy?"⏳ Bezig…":"🤖 Adviezen doorvoeren"}</button>`
     +`<button class="rbtn big" onclick="folSendOpen()" title="${esc(tGer)}">🍆 Naar Ger</button></div></div>`;
   if(advBusy){ if(!document.getElementById("abusycss")){ const st=document.createElement("style"); st.id="abusycss"; st.textContent=".abusy{margin:-4px 0 12px;font-size:13px;color:var(--mut)}.abusy i{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-bottom:6px;position:relative}.abusy i:before{content:'';position:absolute;left:-40%;width:40%;height:100%;background:var(--plan,#7a6ee0);animation:abusy 1.2s linear infinite}@keyframes abusy{to{left:100%}}"; document.head.appendChild(st); }
-    h+=`<div class="abusy"><i></i>Budget en aan/uit meten, daarna maakt de AI nieuw advies met jullie vinkjes en opmerkingen. 2 tot 4 minuten.</div>`; }
+    h+=`<div class="abusy" role="status" aria-live="polite"><i></i>${esc(AIRUN.progress||"Budget en bronnen ophalen")}</div>`; }
   if(AIRUN.err) h+=`<div class="aierr">${esc(AIRUN.err)}</div>`;
   h+=`<div class="arows">`+(todo.length?todo.map(r=>advRow(r.ad,r.cls)).join(""):`<div class="aempty">${ai.length?"Alles gedaan.":"Nog geen AI-advies."}</div>`)+`</div>`;
   if(gedaan.length) h+=`<div class="adone" onclick="advDoneOpen=!advDoneOpen;drawAdvice()"><i class="chev${advDoneOpen?" open":""}"></i>Gedaan · ${gedaan.length}</div>`+(advDoneOpen?`<div class="arows">${gedaan.map(r=>advRow(r.ad,"ok")).join("")}</div>`:"");
@@ -1047,20 +1047,52 @@ function advDoorvoeren(){
     <div class="modalft"><button class="rbtn sm2 pri" id="aistartbtn" onclick="aiStart(document.getElementById('aiww').value)">Start</button></div></div>`;
   m.style.display="flex"; m.onclick=folReportClose; setTimeout(()=>{ const i=document.getElementById("aiww"); if(i) i.focus(); },30);
 }
+let AI_JOB_REQUEST=null;
 async function aiStart(ww){
   ww=String(ww||"").trim(); const f=document.getElementById("aiwwfout"), b=document.getElementById("aistartbtn"); if(!ww||(b&&b.disabled)) return; if(f) f.textContent=""; if(b) b.disabled=true;
-  let resp=null; try{ resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({code:GCODE,ww,model:"fable"})}); }catch(e){}
-  if(!resp){ if(f) f.textContent="geen verbinding"; if(b) b.disabled=false; return; }
-  if(resp.status===401){ if(f) f.textContent="wachtwoord klopt niet"; if(b) b.disabled=false; return; }
-  const j=await resp.json().catch(()=>null); if(!resp.ok||!j||!j.ok){ if(f) f.textContent="starten mislukt ("+(j&&j.error||resp.status)+")"; if(b) b.disabled=false; return; }
-  folReportClose(); advBusy="ai"; drawAdvice();
-  try{ await aiWait(); }catch(e){ AIRUN.err=e&&e.message?e.message:"doorvoeren mislukt"; }
-  advBusy=null; drawAdvice();
+  // Only a random job ID survives a refresh; NEVER credentials or source data.
+  if(!AI_JOB_REQUEST) AI_JOB_REQUEST=sessionStorage.getItem("dpacMktAiJob")||crypto.randomUUID();
+  sessionStorage.setItem("dpacMktAiJob",AI_JOB_REQUEST);
+  let j; try{ j=await aiJobCall({action:"start",request_id:AI_JOB_REQUEST,model:"fable"},ww); }
+  catch(e){ if(f) f.textContent=e.message; if(b) b.disabled=false; return; }
+  if(!j.job_id){if(f) f.textContent="taaknummer ontbreekt; niets opnieuw gestart";if(b)b.disabled=false;return;}
+  AI_JOB_REQUEST=j.job_id;sessionStorage.setItem("dpacMktAiJob",j.job_id);
+  const secretInput=document.getElementById("aiww");if(secretInput)secretInput.value="";
+  folReportClose(); advBusy="ai"; AIRUN.progress="Bronnen ophalen"; drawAdvice();
+  try{ await aiWait(j.job_id,ww); }catch(e){ AIRUN.err=e&&e.message?e.message:"doorvoeren mislukt"; }
+  ww="";advBusy=null;AIRUN.progress=null;drawAdvice();
 }
-async function aiWait(){
-  const before=AI_RUNAT(); const t0=Date.now();
-  for(let i=0;i<40;i++){ await new Promise(r=>setTimeout(r,15000)); const data=await laad(GCODE); const ra=data.ai_advice&&data.ai_advice.run_at?Date.parse(data.ai_advice.run_at):0; if(ra>before){ herlaad(data); return; } }
-  throw new Error("nog geen nieuw advies na "+Math.round((Date.now()-t0)/60000)+" minuten; probeer later Ververs");
+async function aiJobCall(body,ww){
+  const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),45000);
+  let resp;
+  try{resp=await fetch(AI_URL,{method:"POST",headers:{"Content-Type":"text/plain"},signal:controller.signal,body:JSON.stringify(Object.assign({code:GCODE,ww:ww},body))});}
+  catch(e){throw new Error("geen verbinding; de achtergrondtaak blijft bewaard");}
+  finally{clearTimeout(timer);}
+  if(resp.status===401)throw new Error("wachtwoord klopt niet");
+  const j=await resp.json().catch(()=>null);
+  if(!resp.ok||!j||!j.ok)throw new Error("adviesaanvraag mislukt; probeer dezelfde taak later opnieuw");
+  return j;
+}
+async function aiWait(jobId,ww){
+  for(let i=0;i<180;i++){
+    const j=await aiJobCall({action:"status",request_id:jobId},ww);
+    AIRUN.progress=j.progress||"Bronnen ophalen";drawAdvice();
+    if(j.state==="failed"){
+      AI_JOB_REQUEST=null;sessionStorage.removeItem("dpacMktAiJob");
+      throw new Error("Advies geblokkeerd ("+(j.error||"controle mislukt")+"). De bestaande lijst is niet vervangen.");
+    }
+    if(j.state==="awaiting_release")throw new Error("Controle geslaagd; wacht op inhoudelijke vrijgave. De bestaande lijst blijft staan.");
+    if(j.state==="stored"){
+      const data=await laad(GCODE);
+      // Compare the exact stored row, not a timestamp from an unrelated run.
+      if(j.advice_id&&data.ai_advice&&data.ai_advice.id===j.advice_id){
+        AI_JOB_REQUEST=null;sessionStorage.removeItem("dpacMktAiJob");herlaad(data);return;
+      }
+      throw new Error("Advies opgeslagen, maar teruglezen nog niet bevestigd. Probeer Ververs.");
+    }
+    await new Promise(r=>setTimeout(r,15000));
+  }
+  throw new Error("De achtergrondtaak loopt nog; open de knop later opnieuw om dezelfde taak te volgen.");
 }
 // ---- knop 3: rapport naar Ger (visueel HTML via de Slack-bot). Nooit id's, alleen namen voluit. ----
 function mbRows(){ return aiAdvList().concat(eigenList()).filter(ad=>ad.kant!=="sales").map(ad=>({ad,S:advState(ad)})).filter(r=>!(r.ad.eigen&&r.S.grp==="gedaan")); }
