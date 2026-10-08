@@ -2,28 +2,31 @@
 // Alleen instellen + inzien: leest en bewaart instellingen via n8n 99i (webhook dpac-heractivatie) in Supabase.
 // Ronde 2 (DPAC-730): leest uit cache (dpac.heractivatie_pool_cache/_rep_cache), ↻ = actie 'ververs'; sorteren op aantal;
 // reps aan/uit/verborgen + werkvoorraad uit dpac.v_rep_dag; groepen: 1 klik aan met Abels startinstelling.
+// Ronde 3 (DPAC-757): groepsrij direct bewerkbaar (schakelaar, per werkdag, periodechips), volgorde = prioriteit,
+// benaderd-balk 0×/1×/2×/3× uit dpac.heractivatie_benaderd_cache (per contact max(poging), test telt niet mee).
 // Verstuurt niets en schrijft niets naar GHL. Uit te zetten door dit script uit index.html te halen.
 const HERACT_LIVE = false;   // de parent zet dit aan zodra de verzending echt loopt
 const HX_URL = "https://dpac.app.n8n.cloud/webhook/dpac-heractivatie";
 const HX_LOCAL = () => location.search.indexOf("local=1") >= 0;
 const HX_PER = [["<30", "<30 dagen"], ["30-90", "30–90"], ["90-180", "90–180"], ["180+", "180+"]];
-const HX_G = [
+const HX_G = [ // volgorde = prioriteit
+  { id: "show", naam: "Show", def: "fase Show · 4 calls, geen brief, no money", std: 5 },
+  { id: "mls", naam: "Motivation Letter", def: "fase MLS · 4 calls, geen brief, no money", std: 5 },
   { id: "reopen", naam: "Reopen later", def: "alle fases · reden Reopen later", std: 10 },
   { id: "noshow", naam: "No Show", def: "fase No Show · zonder not interested", std: 10 },
-  { id: "mls", naam: "Motivation Letter", def: "fase MLS · 4 calls, geen brief, no money", std: 5 },
-  { id: "show", naam: "Show", def: "fase Show · 4 calls, geen brief, no money", std: 5 },
   { id: "leads", naam: "Leads · 4 calls", def: "fase Leads · reden 4 calls attempted", std: 15 },
 ];
+const HX_KEER = [[0, "nog niet benaderd", "nog niet"], [1, "1× benaderd", "1×"], [2, "2× benaderd", "2×"], [3, "3× benaderd", "3×"]];
 const HX_STD_TOT = HX_G.reduce((s, g) => s + g.std, 0);
 const HX_STAP = [["pool", "in de pool"], ["benaderd", "benaderd"], ["reactie", "reageerde"], ["show", "show"], ["getekend", "getekend"], ["stop", "stop · nooit meer"]];
 const HX_MIN_DATA = 30; // pas een schatting tonen vanaf zoveel benaderd in de groep
-let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {}, res: [], open: new Set(), fStap: null, fGrp: null, fPer: null, poolFase: [], F: { groep: "", per: "" }, dirty: false, msg: null, busy: false, code: "", codeErr: null, sort: -1, repSort: -1, bijgewerkt: null, ververst: false, verErr: null };
+let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {}, res: [], open: new Set(), fStap: null, fGrp: null, fPer: null, poolFase: [], ben: {}, F: { groep: "", per: "" }, dirty: false, msg: null, busy: false, code: "", codeErr: null, sort: -1, repSort: -1, bijgewerkt: null, ververst: false, verErr: null };
 
 (function () {
   const st = document.createElement("style"); st.id = "heractcss";
   st.textContent = `
   body.hx-on main>*:not(#herwrap){display:none!important}
-  #herwrap{display:none;padding-bottom:84px;max-width:1240px;margin:0 auto}
+  #herwrap{display:none;max-width:1240px;margin:0 auto}
   body.hx-on #herwrap{display:block}
   #herwrap .hxlive{background:var(--show-bg);color:var(--show-tx);border-radius:var(--r2);padding:9px 14px;font-size:13px;font-weight:600;margin:0 0 14px}
   #herwrap .hxcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
@@ -64,10 +67,37 @@ let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {},
   #herwrap .hxfase>div{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--mut);padding:4px 0;border-bottom:1px solid var(--line2)} #herwrap .hxfase>div:last-child{border-bottom:0}
   #herwrap .hxfase b{color:var(--txt);font-variant-numeric:tabular-nums} #herwrap .hxfase .hxleeg{padding:4px 0;font-size:12px}
   #herwrap .hxleeg{font-size:13px;color:var(--mut);padding:10px 2px}
+  #herwrap .hxintro{font-size:12.5px;color:var(--mut);margin:-2px 0 6px;line-height:1.5}
   #herwrap .hxg{border-top:1px solid var(--line2)} #herwrap .hxg:first-child{border-top:0}
-  #herwrap .hxgr{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:14px;align-items:center;padding:11px 0}
-  #herwrap .hxnm{min-width:0} #herwrap .hxnm b{display:block;font-size:13.5px} #herwrap .hxnm span{font-size:12px;color:var(--mut);display:block}
+  #herwrap .hxgh,#herwrap .hxgr{display:grid;grid-template-columns:38px minmax(170px,1fr) 112px 372px 150px 30px;gap:14px;align-items:center}
+  #herwrap .hxgh{font-size:11.5px;color:var(--mut2);font-weight:600;padding:6px 0 2px;border-bottom:1px solid var(--line2)} #herwrap .hxgh .r{text-align:right}
+  #herwrap .hxgr{padding:11px 0}
+  #herwrap .hxnm{min-width:0} #herwrap .hxnm b{display:block;font-size:13.5px} #herwrap .hxnm span.sub{font-size:12px;color:var(--mut);display:block}
   #herwrap .hxg.off .hxnm b{color:var(--mut)}
+  #herwrap .hxstep{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+  #herwrap .hxstep button{font:inherit;width:30px;height:30px;border:0;background:none;color:var(--txt);cursor:pointer;font-size:16px;line-height:1;transition:background .15s}
+  #herwrap .hxstep button:hover:not(:disabled){background:var(--bg)} #herwrap .hxstep button:disabled{color:var(--mut2);cursor:default}
+  #herwrap .hxstep input[type=number]{width:44px;border:0;border-left:1px solid var(--line2);border-right:1px solid var(--line2);border-radius:0;text-align:center;padding:5px 2px;font-weight:700;-moz-appearance:textfield}
+  #herwrap .hxstep input::-webkit-outer-spin-button,#herwrap .hxstep input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  #herwrap .hxpdw{display:flex;align-items:center;gap:6px} #herwrap .hxpdw small{font-size:11.5px;color:var(--mut);display:none}
+  #herwrap .hxpc{display:flex;gap:6px;flex-wrap:nowrap}
+  #herwrap .hxpch{font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:99px;padding:4px 10px;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;transition:background .15s,border-color .15s}
+  #herwrap .hxpch small{font-weight:500;color:var(--mut2);margin-left:3px}
+  #herwrap .hxpch[aria-pressed="true"]{background:var(--sel-bg);border-color:var(--sel-bg);color:var(--sel-tx)} #herwrap .hxpch[aria-pressed="true"] small{color:inherit;opacity:.75}
+  #herwrap .hxpch:hover:not(:disabled){border-color:var(--mut2)} #herwrap .hxpch:disabled{cursor:default;opacity:.55}
+  #herwrap .hxstep button:focus-visible,#herwrap .hxpch:focus-visible,#herwrap .hxmeer:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  #herwrap .hxg.off .hxstep,#herwrap .hxg.off .hxpc{opacity:.5}
+  #herwrap .hxrt{text-align:right;font-variant-numeric:tabular-nums;line-height:1.35} #herwrap .hxrt b{font-size:14px} #herwrap .hxrt span{display:block;font-size:12px;color:var(--mut)}
+  #herwrap .hxrt span.aan{color:var(--sign-tx)} #herwrap .hxrt span.klaar{color:var(--plan-tx)} #herwrap .hxrt span.leeg{color:var(--close-tx)}
+  #herwrap .hxmeer{font:inherit;width:30px;height:30px;border:1px solid transparent;border-radius:8px;background:none;color:var(--mut);cursor:pointer;font-size:16px;line-height:1;transition:border-color .15s}
+  #herwrap .hxmeer:hover,#herwrap .hxg.open .hxmeer{border-color:var(--line);color:var(--txt)}
+  #herwrap .hxrowerr{grid-column:2/-1} #herwrap .hxrowerr .hxerr{margin-top:0} #herwrap .hxrowerr:not(:has(.hxerr.on)){display:none}
+  #herwrap .hxbb{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--line2);margin:6px 0 3px;max-width:320px}
+  #herwrap .hxbb i{display:block;height:100%} #herwrap .hxbb.tot{height:10px;border-radius:5px;max-width:none;margin:10px 0 6px}
+  #herwrap .k0{background:var(--mut2);opacity:.45} #herwrap .k1{background:var(--blue)} #herwrap .k2{background:var(--yellow)} #herwrap .k3{background:var(--pay)}
+  #herwrap .hxbl{display:flex;gap:4px 10px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);font-variant-numeric:tabular-nums}
+  #herwrap .hxbl em{font-style:normal;white-space:nowrap} #herwrap .hxbl em i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:0} #herwrap .hxbl b,#herwrap .hxnm .hxbl b{display:inline;font-size:11.5px;color:var(--txt);font-weight:600}
+  #herwrap .hxbtot{margin-top:12px;padding-top:10px;border-top:1px solid var(--line2)} #herwrap .hxbtot .lb{font-size:12.5px;font-weight:600}
   #herwrap .hxpn{font-size:12.5px;color:var(--mut);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums} #herwrap .hxpn b{color:var(--txt);font-size:14px}
   #herwrap .hxres{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
   #herwrap .hxpill{border-radius:99px;padding:3px 9px;font-size:12px;font-weight:600;background:var(--line2);color:var(--mut);white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -125,14 +155,20 @@ let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {},
   #herwrap .hxbtn{font:inherit;color:var(--txt);border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;transition:border-color .15s,opacity .15s}
   #herwrap .hxbtn:hover{border-color:var(--mut2)} #herwrap .hxbtn.main{background:var(--txt);color:var(--card);border-color:var(--txt);padding:9px 16px} #herwrap .hxbtn.main:hover{opacity:.85} #herwrap .hxbtn:disabled{opacity:.5;cursor:default}
   #herwrap .hxbtn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-  #herwrap .hxsave{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 22px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;z-index:20}
+  #herwrap .hxsave{position:sticky;bottom:0;margin-top:14px;background:var(--card);border:1px solid var(--line);border-bottom:0;border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -6px 18px rgba(0,0,0,.18);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;z-index:20}
   #herwrap .hxsave .msg{font-size:12.5px;color:var(--mut);flex:1;min-width:0} #herwrap .hxsave .msg.ok{color:var(--sign-tx);font-weight:600} #herwrap .hxsave .msg.bad{color:var(--close-tx)} #herwrap .hxsave .msg.dirty{color:var(--show-tx);font-weight:600}
   #herwrap .hxgate{max-width:420px} #herwrap .hxgate label{display:block;font-size:13px;font-weight:600;margin-bottom:8px}
   #herwrap .hxgate input{font:inherit;color:var(--txt);border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 10px;font-size:14px;width:200px}
   #herwrap .hxload-txt{padding:30px;text-align:center;color:var(--mut)}
+  @media(max-width:1100px){
+    #herwrap .hxgh{display:none}
+    #herwrap .hxgr{grid-template-columns:38px minmax(0,1fr) auto;row-gap:10px;column-gap:10px;grid-template-areas:'sw nm rt' 'pd pd me' 'pc pc pc'}
+    #herwrap .hxgr>.hxsw{grid-area:sw;align-self:start;margin-top:2px}#herwrap .hxnm{grid-area:nm}#herwrap .hxrt{grid-area:rt;align-self:start}
+    #herwrap .hxpdw{grid-area:pd}#herwrap .hxpdw small{display:inline}#herwrap .hxpc{grid-area:pc;flex-wrap:wrap}
+    #herwrap .hxmeer{grid-area:me;justify-self:end}
+    #herwrap .hxrowerr{grid-column:1/-1}#herwrap .hxbb{max-width:none}#herwrap .hxbl{gap:2px 8px}
+  }
   @media(max-width:900px){#herwrap .hxfun{grid-template-columns:repeat(3,minmax(0,1fr))}#herwrap .hxfs:nth-child(n+4){border-top:1px solid var(--line2)}#herwrap .hxfs:nth-child(4){border-left:0}
-    #herwrap .hxgr{grid-template-columns:minmax(0,1fr) auto;row-gap:6px;grid-template-areas:'nm sc' 'pn ed'}
-    #herwrap .hxnm{grid-area:nm}#herwrap .hxstc{grid-area:sc}#herwrap .hxpn{grid-area:pn;text-align:left}#herwrap .hxedit{grid-area:ed;justify-self:end}
     #herwrap .hxset{padding:12px}#herwrap table.hxper{font-size:12px;min-width:480px}#herwrap table.hxper th,#herwrap table.hxper td{padding:6px}
     #herwrap .hxcaph{display:none}#herwrap .hxcap{grid-template-columns:minmax(0,1fr) 96px;row-gap:6px}#herwrap .hxcap .ln{grid-column:1/-1}
     #herwrap .hxsave{padding-left:16px;padding-right:16px}#herwrap .hxsub{padding-left:8px}#herwrap .hxfase{margin-left:8px}}
@@ -153,7 +189,8 @@ function hxApplyInst(j) {
 }
 function hxApplyData(j) {
   HX.pool = {}; for (const p of (j.pool || [])) HX.pool[p.groep + "|" + p.periode] = p.n;
-  HX.res = j.resultaten || []; HX.poolFase = j.pool_fase || []; HX.bijgewerkt = j.bijgewerkt || j.gen || null;
+  HX.res = j.resultaten || []; HX.poolFase = j.pool_fase || [];
+  HX.ben = {}; for (const b of (j.benaderd || [])) HX.ben[b.groep + "|" + b.keer] = b.n; HX.bijgewerkt = j.bijgewerkt || j.gen || null;
   if (HX.dirty) { // eigen wijzigingen aan reps houden, cijfers verversen
     const m = Object.fromEntries(HX.reps.map(r => [r.rep, r]));
     HX.reps = (j.reps || []).map(r => ({ ...r, actief: m[r.rep] ? m[r.rep].actief : r.actief !== false, verborgen: m[r.rep] ? m[r.rep].verborgen : !!r.verborgen }));
@@ -293,45 +330,48 @@ function hxPerTable(g) { // alleen als er in deze groep al iets verstuurd is
     return `<tr><td>${pl}</td><td>${pool}</td><td>${b}</td><td>${re}${re ? " · " + hxPct(re, b) : ""}</td><td>${hxRes(g, pk, "intake")}</td><td>${hxRes(g, pk, "show")}</td><td>${hxRes(g, pk, "getekend")}</td><td>${hxRes(g, pk, "stop")}</td></tr>`;
   }).join("") + `</tbody></table></div>`;
 }
-function hxRowSub(g) {
-  const i = HX.inst[g];
-  if (!i.aan) return esc(HX_G.find(x => x.id === g).def);
-  const d = hxDagen(g), alle = i.periodes.length === HX_PER.length;
-  return `${i.per_dag || 0} per werkdag · ${alle ? "alle leads" : HX_PER.filter(p => i.periodes.includes(p[0])).map(p => p[1].replace(" dagen", "")).join(" · ") + " dagen"}${d != null ? " · klaar in ± " + d + " werkdag" + (d === 1 ? "" : "en") : ""}${i.stop_shows ? " · stopt na " + i.stop_shows + " shows" : ""}`;
+function hxRowSub(g) { const i = HX.inst[g]; return esc(HX_G.find(x => x.id === g).def) + (i.aan && i.stop_shows ? ` · stopt na ${i.stop_shows} shows` : ""); }
+// benaderd-balk: hoe vaak is elk contact in de groep (of totaal) al benaderd; uit de cache
+function hxBenBar(key, tot) {
+  const n = HX_KEER.map(([k]) => HX.ben[key + "|" + k] || 0), som = n.reduce((a, b) => a + b, 0) || (key === "_totaal" ? HX_G.reduce((t, G) => t + hxPool(G.id), 0) : hxPool(key));
+  if (!som) return "";
+  if (!n.reduce((a, b) => a + b, 0)) n[0] = som; // nog geen cache: pool = nog niet benaderd
+  const t = HX_KEER.map(([k, l], x) => `${n[x]} ${l}`).join(" · ");
+  return `<div class="hxbb${tot ? " tot" : ""}" role="img" aria-label="${esc(t)}" title="${esc(t)}">${HX_KEER.map(([k], x) => n[x] ? `<i class="k${k}" style="width:${100 * n[x] / som}%"></i>` : "").join("")}</div>`
+    + `<div class="hxbl">${HX_KEER.map(([k, l, kort], x) => `<em><i class="k${k}"></i>${tot ? l : kort} <b>${n[x]}</b></em>`).join("")}</div>`;
 }
-function hxLeadsLine(g) {
-  const i = HX.inst[g], x = hxOver(g), pd = i.per_dag || 0;
-  if (!i.periodes.length) return `Geen leads gekozen.`;
-  return `<b>${x} leads → klaar in ± ${pd > 0 ? Math.ceil(x / pd) : "…"} werkdag${pd > 0 && Math.ceil(x / pd) === 1 ? "" : "en"}</b> · jongste verloren gaan eerst.`;
+function hxRtHtml(g) {
+  const i = HX.inst[g], [sc, sl] = hxStat(g);
+  if (!i.aan) return `<b>${hxPool(g)}</b> leads<span>uit</span>`;
+  const x = hxOver(g), d = hxDagen(g);
+  if (!i.periodes.length) return `<b>0</b> leads<span class="leeg">kies een periode</span>`;
+  if (sc === "klaar" || sc === "leeg") return `<b>${x}</b> leads<span class="${sc}">${esc(sl)}</span>`;
+  return `<b>${x}</b> leads<span class="aan">${d != null ? `klaar in ± ${d} werkdag${d === 1 ? "" : "en"}` : "kies een aantal"}</span>`;
 }
 function hxStopLine(g) { const i = HX.inst[g]; let s = hxShowSchatting(g); if (i.aan && i.stop_shows && i.aan_sinds) s = `Nu ${i.shows_sinds || 0} van ${i.stop_shows} shows sinds ${new Date(i.aan_sinds).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}. ` + s; return s; }
 function hxGroupsHtml() {
   const vol = hxTeamVol();
-  return HX_G.map(G => {
-    const g = G.id, i = HX.inst[g], [sc, sl] = hxStat(g), open = HX.open.has(g), ben = hxRes(g, null, "benaderd"), adv = hxAdvies(g);
-    const alle = i.periodes.length === HX_PER.length;
+  return `<div class="hxgh" aria-hidden="true"><span></span><span>groep</span><span>per werkdag</span><span>welke leads · dagen geleden verloren</span><span class="r">nog te doen</span><span></span></div>` + HX_G.map(G => {
+    const g = G.id, i = HX.inst[g], open = HX.open.has(g), ben = hxRes(g, null, "benaderd"), uit = !i.aan;
     const pills = ben ? `<div class="hxres"><span class="hxpill">${ben} benaderd</span><span class="hxpill ${hxRes(g, null, "reactie") ? "b" : ""}">${hxRes(g, null, "reactie")} reactie · ${hxPct(hxRes(g, null, "reactie"), ben)}</span><span class="hxpill ${hxRes(g, null, "show") ? "y" : ""}">${hxRes(g, null, "show")} show</span><span class="hxpill ${hxRes(g, null, "getekend") ? "g" : ""}">${hxRes(g, null, "getekend")} getekend</span><span class="hxpill ${hxRes(g, null, "stop") ? "r" : ""}">${hxRes(g, null, "stop")} stop</span></div>` : "";
+    const pd = i.per_dag ?? 0;
     return `<div class="hxg${open ? " open" : ""}${i.aan ? "" : " off"}" data-g="${g}">
      <div class="hxgr">
-       <div class="hxnm"><b>${esc(G.naam)}</b><span class="sub">${hxRowSub(g)}</span>${pills}</div>
-       <div class="hxpn"><b>${hxPool(g)}</b> leads</div>
-       <button class="hxedit" data-hx="toggle" aria-expanded="${open}">${open ? "sluiten" : "aanpassen"}</button>
-       <div class="hxstc"><span class="hxst ${sc}">${sl}</span><button class="hxsw" role="switch" aria-checked="${i.aan}" aria-label="${esc(G.naam)} aan of uit" data-hx="aan"></button></div>
+       <button class="hxsw" role="switch" aria-checked="${i.aan}" aria-label="${esc(G.naam)} aan of uit" data-hx="aan" title="${i.aan ? "Aan · klik = uit" : `Uit · klik = aan met de startinstelling (${hxAdvies(g)} per werkdag, alle periodes)`}"></button>
+       <div class="hxnm"><b>${esc(G.naam)}</b><span class="sub">${hxRowSub(g)}</span>${hxBenBar(g)}${pills}</div>
+       <div class="hxpdw"><div class="hxstep"><button data-hx="pdmin" aria-label="${esc(G.naam)}: 1 minder per werkdag" ${uit || !(pd > 1) ? "disabled" : ""}>−</button><input type="number" id="hxpd-${g}" min="0" max="200" step="1" inputmode="numeric" value="${pd}" data-hx="perdag" aria-label="${esc(G.naam)}: berichten per werkdag" ${uit ? "disabled" : ""}><button data-hx="pdplus" aria-label="${esc(G.naam)}: 1 meer per werkdag" ${uit || pd >= 200 ? "disabled" : ""}>+</button></div><small>per werkdag</small></div>
+       <div class="hxpc" role="group" aria-label="${esc(G.naam)}: welke leads">${HX_PER.map(([pk, pl]) => { const on = i.periodes.includes(pk); return `<button class="hxpch" data-hx="pch" data-k="${pk}" aria-pressed="${on}" ${uit ? "disabled" : ""} title="${on ? "Doet mee · klik = uit" : "Doet niet mee · klik = aan"}">${pl.replace(" dagen", "")}<small>${HX.pool[g + "|" + pk] || 0}</small></button>`; }).join("")}</div>
+       <div class="hxrt">${hxRtHtml(g)}</div>
+       <button class="hxmeer" data-hx="toggle" aria-expanded="${open}" aria-label="${esc(G.naam)}: meer instellingen" title="Meer: automatisch stoppen na N shows">⋯</button>
+       <div class="hxrowerr"><div class="hxerr" id="hxe-pd-${g}">Per werkdag: heel getal van 1 tot 200.</div><div class="hxerr" id="hxe-per-${g}">Kies minstens één periode.</div></div>
      </div>
      <div class="hxset">
-       <div class="hxfld"><label for="hxpd-${g}">Berichten per werkdag</label>
-         <div class="hxinl"><input type="number" id="hxpd-${g}" min="0" max="200" step="1" value="${i.per_dag ?? 0}" data-hx="perdag">${i.per_dag !== adv ? `<button class="hxadv" data-hx="advpd">advies ${adv}</button>` : ""}</div>
-         <div class="hxgr2">${vol ? `Team zit vol (meer dan 3 weken werk): advies gehalveerd naar ${adv}.` : `Advies ${adv}: startinstelling Abel (alle groepen samen ${HX_STD_TOT} per werkdag). Halveert als het team meer dan 3 weken werk heeft.`}</div>
-         <div class="hxerr" id="hxe-pd-${g}">Heel getal van 1 tot 200.</div></div>
-       <div class="hxfld"><div class="lb">Welke leads <small>· hoe lang geleden verloren</small></div>
-         <div class="hxinl"><div class="hxchks">${HX_PER.map(([pk, pl]) => { const on = i.periodes.includes(pk); return `<label class="hxchk${on ? "" : " off"}"><input type="checkbox" data-hx="per" data-k="${pk}" ${on ? "checked" : ""}>${pl}${pk === "<30" ? "" : ""} <small>(${HX.pool[g + "|" + pk] || 0})</small></label>`; }).join("")}</div>${alle ? "" : `<button class="hxadv" data-hx="advper">advies: alle</button>`}</div>
-         <div class="hxgr2" data-line="leads">${hxLeadsLine(g)}</div>
-         <div class="hxerr" id="hxe-per-${g}">Vink minstens één periode aan.</div></div>
        <div class="hxfld"><div class="lb">Automatisch stoppen <small>· optioneel</small></div>
-         <div class="hxinl">Stop deze groep na <input type="number" min="1" step="1" value="${i.stop_shows || ""}" data-hx="stop" aria-label="aantal shows"> shows${i.stop_shows ? ` <button class="hxadv" data-hx="advstop">advies: leeg</button>` : ""}</div>
+         <div class="hxinl">Stop deze groep na <input type="number" min="1" step="1" value="${i.stop_shows || ""}" data-hx="stop" aria-label="aantal shows"> shows${i.stop_shows ? ` <button class="hxadv" data-hx="advstop">leeg maken</button>` : ""}</div>
          <div class="hxgr2">in totaal, geteld vanaf het moment dat je hem aanzet. Leeg = doorgaan tot de leads op zijn.</div>
          <div class="hxgr2" data-line="stop">${hxStopLine(g)}</div>
          <div class="hxerr" id="hxe-st-${g}">Heel getal vanaf 1, of leeg laten.</div></div>
+       ${vol ? `<div class="hxgr2">Team zit vol (meer dan 3 weken werk): de startinstelling is gehalveerd naar ${hxAdvies(g)} per werkdag.</div>` : ""}
        ${ben ? hxPerTable(g) : ""}
      </div></div>`;
   }).join("");
@@ -373,18 +413,20 @@ function hxDraw() {
   if (HX.err) h += `<div class="hxcard"><div class="hxleeg">${esc(HX.err)} <button class="hxbtn" data-hx="laad">Opnieuw laden</button></div></div>`;
   if (!HX.loaded) { w.innerHTML = h + (HX.err ? "" : `<div class="hxload-txt">Heractivatie laden…</div>`); return; }
   h += `<div class="hxcard" id="hxsumcard">${hxSumHtml()}</div>`;
-  h += `<div class="hxcard"><h2>Groepen <small>schakelaar = aan met de startinstelling · aanpassen voor details</small></h2><div id="hxgroups">${hxGroupsHtml()}</div></div>`;
-  h += `<div class="hxcard"><h2>Resultaten <small>klik een stap: per groep, periode en fase</small></h2><div class="hxfil"><label>Toon</label><select data-hx="fgroep" aria-label="groep"><option value="">Alle groepen</option>${HX_G.map(g => `<option value="${g.id}" ${HX.F.groep === g.id ? "selected" : ""}>${esc(g.naam)}</option>`).join("")}</select><select data-hx="fper" aria-label="periode"><option value="">Alle periodes</option>${HX_PER.map(p => `<option value="${p[0]}" ${HX.F.per === p[0] ? "selected" : ""}>${p[1].replace(" dagen", "")} dagen</option>`).join("")}</select>${HX.F.groep || HX.F.per ? `<button class="hxlink" data-hx="freset">Wis filter</button>` : ""}</div><div id="hxfunnel">${hxFunnelHtml()}</div></div>`;
+  h += `<div class="hxcard"><h2>Groepen <small>van boven naar beneden = prioriteit</small></h2><div class="hxintro">Elke groep die aan staat verstuurt elke werkdag zijn eigen aantal. Binnen een groep gaan de jongste verloren leads eerst.</div><div id="hxgroups">${hxGroupsHtml()}</div></div>`;
+  h += `<div class="hxcard"><h2>Resultaten <small>klik een stap: per groep, periode en fase</small></h2><div class="hxfil"><label>Toon</label><select data-hx="fgroep" aria-label="groep"><option value="">Alle groepen</option>${HX_G.map(g => `<option value="${g.id}" ${HX.F.groep === g.id ? "selected" : ""}>${esc(g.naam)}</option>`).join("")}</select><select data-hx="fper" aria-label="periode"><option value="">Alle periodes</option>${HX_PER.map(p => `<option value="${p[0]}" ${HX.F.per === p[0] ? "selected" : ""}>${p[1].replace(" dagen", "")} dagen</option>`).join("")}</select>${HX.F.groep || HX.F.per ? `<button class="hxlink" data-hx="freset">Wis filter</button>` : ""}</div><div id="hxfunnel">${hxFunnelHtml()}</div><div class="hxbtot" id="hxbtot">${hxBtotHtml()}</div></div>`;
   h += `<div class="hxcard"><h2>Team en werkvoorraad <small>klik een naam = doet mee of niet</small></h2><div id="hxreps">${hxRepsHtml()}</div></div>`;
   h += `<p class="hxnote">Leads: verloren leads met telefoonnummer, minstens 3 dagen stil, zonder andere open of gewonnen deal, zonder 'not interested'. Regels: 60 dagen tussen pogingen, max 3, stop bij reactie of opt-out. Reactie gaat naar de oorspronkelijke eigenaar.</p>`;
   h += `<div class="hxsave">${hxMsgHtml()}<button class="hxbtn main" data-hx="save" ${HX.busy ? "disabled" : ""}>${HX.busy ? "Opslaan…" : "Instellingen opslaan"}</button></div>`;
   w.innerHTML = h;
 }
+function hxBtotHtml() { const b = hxBenBar("_totaal", true); return b ? `<div class="lb">Hoe vaak benaderd · alle groepen</div>` + b : ""; }
 function hxDrawSum() { const c = document.getElementById("hxsumcard"); if (c) c.innerHTML = hxSumHtml(); }
 function hxRedrawPart() { // samenvatting, trechter, reps en meldingen bijwerken zonder invoervelden te vervangen
   const w = document.getElementById("herwrap"); if (!w || !HX.loaded) return;
   hxDrawSum();
   const f = document.getElementById("hxfunnel"); if (f) f.innerHTML = hxFunnelHtml();
+  const bt = document.getElementById("hxbtot"); if (bt) bt.innerHTML = hxBtotHtml();
   const r = document.getElementById("hxreps"); if (r) { const o = r.querySelector("details.hxhid"), op = o && o.open; r.innerHTML = hxRepsHtml(); const n = r.querySelector("details.hxhid"); if (n && op) n.open = true; }
   const m = document.getElementById("hxmsg"); if (m) m.outerHTML = hxMsgHtml();
 }
@@ -392,7 +434,7 @@ function hxValidate() {
   let ok = true;
   for (const G of HX_G) {
     const g = G.id, i = HX.inst[g];
-    const e = (id, bad) => { const el = document.getElementById(id); if (el) el.classList.toggle("on", bad); if (bad) { ok = false; HX.open.add(g); } };
+    const e = (id, bad) => { const el = document.getElementById(id); if (el) el.classList.toggle("on", bad); if (bad) { ok = false; if (id.startsWith("hxe-st")) HX.open.add(g); } };
     e("hxe-per-" + g, i.aan && i.periodes.length === 0);
     e("hxe-pd-" + g, !(Number.isInteger(i.per_dag) && i.per_dag >= 0 && i.per_dag <= 200) || (i.aan && i.per_dag === 0));
     e("hxe-st-" + g, !(i.stop_shows == null || (Number.isInteger(i.stop_shows) && i.stop_shows >= 1)));
@@ -415,9 +457,9 @@ async function hxSave() {
 }
 function hxChanged() { HX.dirty = true; HX.msg = null; }
 function hxRowRefresh(row, g) { // één groepsrij bijwerken zonder het invoerveld te vervangen
-  const [sc, sl] = hxStat(g); row.querySelector(".hxnm .sub").innerHTML = hxRowSub(g);
-  const st = row.querySelector(".hxst"); st.className = "hxst " + sc; st.textContent = sl;
-  const ll = row.querySelector("[data-line=leads]"); if (ll) ll.innerHTML = hxLeadsLine(g);
+  const i = HX.inst[g], pd = i.per_dag; row.querySelector(".hxnm .sub").innerHTML = hxRowSub(g);
+  row.querySelector(".hxrt").innerHTML = hxRtHtml(g);
+  const [mn, pl] = row.querySelectorAll(".hxstep button"); if (mn) { mn.disabled = !i.aan || !(pd > 1); pl.disabled = !i.aan || pd >= 200; }
   const sl2 = row.querySelector("[data-line=stop]"); if (sl2) sl2.textContent = hxStopLine(g);
   hxRedrawPart();
 }
@@ -438,11 +480,10 @@ function hxRowRefresh(row, g) { // één groepsrij bijwerken zonder het invoerve
     if (a === "dper") { HX.fPer = HX.fPer === t.dataset.p ? null : t.dataset.p; document.getElementById("hxfunnel").innerHTML = hxFunnelHtml(); return; }
     if (a === "dgrp") { HX.fGrp = HX.fGrp === t.dataset.g ? null : t.dataset.g; HX.fPer = null; document.getElementById("hxfunnel").innerHTML = hxFunnelHtml(); return; }
     if (a === "auto") { ev.preventDefault(); const nv = !HX_G.every(G => HX.inst[G.id].auto_bijdraaien); HX_G.forEach(G => HX.inst[G.id].auto_bijdraaien = nv); hxChanged(); hxRedrawPart(); return; }
-    if (a === "aan") { i.aan = !i.aan; if (i.aan) { if (!(i.per_dag > 0)) i.per_dag = hxAdvies(g); if (!i.periodes.length) i.periodes = HX_PER.map(p => p[0]); } hxChanged(); hxDraw(); return; }
+    if (a === "aan") { i.aan = !i.aan; if (i.aan) { if (!(i.per_dag > 0)) i.per_dag = hxAdvies(g); if (!i.periodes.length) i.periodes = HX_PER.map(p => p[0]); } hxChanged(); hxDraw(); const sw = document.querySelector(`#herwrap .hxg[data-g="${g}"] .hxsw`); if (sw) sw.focus(); return; }
     if (a === "toggle") { HX.open.has(g) ? HX.open.delete(g) : HX.open.add(g); hxDraw(); return; }
-    if (a === "per") { const k = t.dataset.k; i.periodes = t.checked ? HX_PER.map(p => p[0]).filter(p => p === k || i.periodes.includes(p)) : i.periodes.filter(x => x !== k); hxChanged(); hxDraw(); return; }
-    if (a === "advpd") { i.per_dag = hxAdvies(g); hxChanged(); hxDraw(); return; }
-    if (a === "advper") { i.periodes = HX_PER.map(p => p[0]); hxChanged(); hxDraw(); return; }
+    if (a === "pch") { const k = t.dataset.k, on = !i.periodes.includes(k); i.periodes = HX_PER.map(p => p[0]).filter(p => p === k ? on : i.periodes.includes(p)); t.setAttribute("aria-pressed", on); t.title = on ? "Doet mee · klik = uit" : "Doet niet mee · klik = aan"; hxChanged(); hxRowRefresh(gEl, g); return; }
+    if (a === "pdmin" || a === "pdplus") { const v = Number.isInteger(i.per_dag) ? i.per_dag : 0; i.per_dag = Math.max(0, Math.min(200, v + (a === "pdplus" ? 1 : -1))); const inp = gEl.querySelector("[data-hx=perdag]"); if (inp) inp.value = i.per_dag; hxChanged(); hxRowRefresh(gEl, g); return; }
     if (a === "advstop") { i.stop_shows = null; hxChanged(); hxDraw(); return; }
     if (a === "rep" && rep) { rep.actief = !rep.actief; hxChanged(); hxDraw(); return; }
     if (a === "verberg" && rep) { rep.verborgen = true; rep.actief = false; hxChanged(); hxDraw(); return; }
