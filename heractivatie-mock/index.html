@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Heractivatie · mockup v3</title>
+<title>Heractivatie · mockup v4</title>
 <style>
-:root{--ink:#0e0e0f;--sand:#d8d1b3;--sand2:#efeadb;--green:#1a9a3d;--blue:#1f6fd8;--red:#dc2a1e;--yellow:#f2c400;
+:root{--ink:#0e0e0f;--sand:#d8d1b3;--green:#1a9a3d;--blue:#1f6fd8;--red:#dc2a1e;--yellow:#f2c400;
 --txt:#0e0e0f;--bg:#f5f4f0;--card:#fff;--mut:#6e6e73;--mut2:#8e8e93;--line:#e6e4dc;--line2:#efede6;
 --plan-bg:#e9f1fc;--plan-tx:#1758ad;--show-bg:#fdf6d8;--show-tx:#8a6d00;--sign-bg:#e5f5ea;--sign-tx:#15803a;--close-bg:#fde9e7;--close-tx:#b91f15;--pay:#8f845e;
 --radius:16px;--r2:12px;--shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(20,20,20,.05);
@@ -12,19 +12,25 @@ button,input,select{font:inherit;color:inherit}
 .top{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--card)}
 .top .logo{width:28px;height:28px;background:var(--ink);border-radius:6px}.top h1{font-size:15px;margin:0;font-weight:700}.top .stand{margin-left:auto;color:var(--mut);font-size:12px}
 .tabsrow{display:flex;gap:6px;padding:12px 22px 0;overflow-x:auto;scrollbar-width:none}.tabsrow::-webkit-scrollbar{display:none}
-.tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 15px;font-size:13px;font-weight:600;white-space:nowrap;color:var(--txt)}
+.tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 15px;font-size:13px;font-weight:600;white-space:nowrap}
 .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .wrap{padding:16px 22px 80px;max-width:1240px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
-.kpi b{font-size:22px;display:block;letter-spacing:-.4px;line-height:1.15}.kpi span{font-size:12px;color:var(--mut)}
-.kpi.b b{color:var(--plan-tx)}.kpi.g b{color:var(--sign-tx)}.kpi.r b{color:var(--close-tx)}
-.strip{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;margin-bottom:14px;font-size:13px}
-.strip b{font-size:20px;letter-spacing:-.3px;margin-right:4px}.strip .m{color:var(--mut)}
-.strip .rem{margin-left:auto;background:var(--show-bg);color:var(--show-tx);border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
-.card h2{font-size:14px;margin:0 0 6px;display:flex;align-items:center;gap:8px}.card h2 small{color:var(--mut);font-weight:500;font-size:12px}
-/* group */
+.card h2{font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.card h2 small{color:var(--mut);font-weight:500;font-size:12px}
+/* filter + funnel */
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.filters label{font-size:12px;color:var(--mut);font-weight:600;margin-right:2px}
+.filters select{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:6px 10px;font-size:13px;font-weight:600}
+.filters .reset{border:0;background:none;color:var(--plan-tx);font-size:12px;font-weight:600;cursor:pointer;display:none}.filters .reset.on{display:inline}
+.funnel{display:grid;grid-template-columns:repeat(6,1fr);gap:0;border:1px solid var(--line);border-radius:var(--r2);overflow:hidden}
+.fs{padding:10px 12px;border-left:1px solid var(--line2);position:relative}.fs:first-child{border-left:0}
+.fs b{font-size:22px;display:block;letter-spacing:-.4px;line-height:1.15}.fs span{font-size:12px;color:var(--mut)}.fs small{font-size:11px;color:var(--mut2);display:block}
+.fs.b b{color:var(--plan-tx)}.fs.y b{color:var(--show-tx)}.fs.g b{color:var(--sign-tx)}.fs.r b{color:var(--close-tx)}
+.fs i{position:absolute;left:0;bottom:0;height:3px;background:var(--blue);opacity:.35}
+.strip{display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-size:13px;margin-top:10px}
+.strip b{font-size:18px;letter-spacing:-.3px;margin-right:4px}.strip .m{color:var(--mut)}
+.strip .rem{background:var(--show-bg);color:var(--show-tx);border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600}
+/* groups */
 .g{border-top:1px solid var(--line2)}.g:first-of-type{border-top:0}
 .grp{display:grid;grid-template-columns:34px 220px 1fr 360px 150px;gap:12px;align-items:center;padding:11px 0;cursor:pointer}
 .grp:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
@@ -32,11 +38,11 @@ button,input,select{font:inherit;color:inherit}
 .g.off .rank{background:var(--sand);color:var(--ink)}
 .gname{min-width:0}.gname b{display:block;font-size:13.5px}.gname span{font-size:12px;color:var(--mut)}
 .bar{height:22px;border-radius:6px;background:var(--line2);display:flex;overflow:hidden;position:relative}
-.bar i{display:block;height:100%}.bar .p1{background:var(--blue)}.bar .p2{background:#f2c400}.bar .p3{background:var(--pay)}
+.bar i{display:block;height:100%}.bar .p1{background:var(--blue)}.bar .p2{background:var(--yellow)}.bar .p3{background:var(--pay)}
 .bar em{position:absolute;right:8px;top:3px;font-style:normal;font-size:12px;color:var(--mut)}
 .res{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end}
-.pill{border:0;border-radius:99px;padding:4px 9px;font-size:12px;font-weight:600;background:var(--line2);color:var(--mut);cursor:pointer}
-.pill.b{background:var(--plan-bg);color:var(--plan-tx)}.pill.g{background:var(--sign-bg);color:var(--sign-tx)}.pill.r{background:var(--close-bg);color:var(--close-tx)}
+.pill{border:0;border-radius:99px;padding:4px 9px;font-size:12px;font-weight:600;background:var(--line2);color:var(--mut);cursor:pointer;white-space:nowrap}
+.pill.b{background:var(--plan-bg);color:var(--plan-tx)}.pill.y{background:var(--show-bg);color:var(--show-tx)}.pill.g{background:var(--sign-bg);color:var(--sign-tx)}.pill.r{background:var(--close-bg);color:var(--close-tx)}
 .pill:focus-visible{outline:2px solid var(--blue)}
 .stc{display:flex;align-items:center;gap:8px;justify-content:flex-end}
 .sw{width:38px;height:22px;border-radius:99px;background:#c9c6bb;position:relative;border:0;cursor:pointer;padding:0;flex:none}
@@ -44,17 +50,33 @@ button,input,select{font:inherit;color:inherit}
 .sw[aria-checked="true"]{background:var(--green)}.sw[aria-checked="true"]::after{left:19px}.sw:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .st{font-size:12px;font-weight:600;border-radius:99px;padding:4px 9px;white-space:nowrap}
 .st.uit{background:var(--line2);color:var(--mut)}.st.aan{background:var(--sign-bg);color:var(--sign-tx)}.st.rem{background:var(--show-bg);color:var(--show-tx)}.st.klaar{background:var(--plan-bg);color:var(--plan-tx)}.st.leeg{background:var(--close-bg);color:var(--close-tx)}
-.legend{display:flex;gap:12px;font-size:11.5px;color:var(--mut);margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-/* settings */
-.set{display:none;grid-column:1/-1;background:var(--bg);border-radius:var(--r2);padding:12px 14px;margin:0 0 12px 46px}
-.g.open .set{display:grid;grid-template-columns:auto auto auto;gap:10px 28px;align-items:start}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--mut);margin-top:8px;flex-wrap:wrap}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+/* settings panel */
+.set{display:none;background:var(--bg);border-radius:var(--r2);padding:12px 14px;margin:0 0 12px 46px}
+.g.open .set{display:block}
+.setrow{display:grid;grid-template-columns:auto auto;gap:10px 28px;align-items:start;margin-bottom:12px}
 .f label{display:block;font-size:12px;color:var(--mut);font-weight:600;margin-bottom:6px}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 11px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--mut)}
-.chip[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}.chip:focus-visible{outline:2px solid var(--blue)}
-input[type=number],input[type=date],select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 9px;font-size:13px;width:96px}
-select{width:auto}.inl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=number],input[type=date],select.sel{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 9px;font-size:13px;width:96px}
+select.sel{width:auto}.inl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .err{color:var(--close-tx);font-size:12px;margin-top:6px;display:none}.err.on{display:block}
+table.per{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border-radius:10px;overflow:hidden}
+table.per th{font-size:11.5px;color:var(--mut);font-weight:600;text-align:right;padding:8px 10px;border-bottom:1px solid var(--line2)}
+table.per th:first-child,table.per td:first-child{text-align:left}
+table.per td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line2)}table.per tr:last-child td{border-bottom:0}
+table.per tr.off td{color:var(--mut2)}table.per td.r{color:var(--plan-tx);font-weight:600}table.per td.ok{color:var(--sign-tx);font-weight:600}
+table.per .chk{width:16px;height:16px;vertical-align:-3px;margin-right:6px;accent-color:var(--ink)}
+.tbl-note{font-size:11.5px;color:var(--mut2);margin-top:6px}
+/* reps */
+.reps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.rep{border:1px solid var(--line);border-radius:var(--r2);padding:10px 12px}
+.rep .nm{display:flex;align-items:center;gap:8px;margin-bottom:6px}.rep .nm b{font-size:13.5px}.rep .nm .st{margin-left:auto}
+.rep .cap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut)}
+.rep .cap .num{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rep .cap .num button{border:0;background:var(--card);width:28px;height:28px;cursor:pointer;font-size:15px}.rep .cap .num button:hover{background:var(--line2)}
+.rep .cap .num span{min-width:30px;text-align:center;font-weight:700;font-size:13px;color:var(--txt)}
+.rep .load{height:8px;border-radius:4px;background:var(--line2);margin:8px 0 4px;overflow:hidden}.rep .load i{display:block;height:100%;background:var(--green)}
+.rep.vol .load i{background:var(--red)}.rep.bijna .load i{background:var(--yellow)}
+.rep .sub{font-size:12px;color:var(--mut)}
 .save{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 22px;display:flex;align-items:center;gap:12px;z-index:5}
 .save .msg{font-size:12.5px;color:var(--mut);flex:1}.save .msg.ok{color:var(--sign-tx)}.save .msg.bad{color:var(--close-tx)}
 .btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer}
@@ -64,109 +86,177 @@ select{width:auto}.inl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .drawer.on{transform:none}.drawer h3{margin:0 0 4px;font-size:15px}.drawer .sub{font-size:12px;color:var(--mut);margin-bottom:12px}
 .drawer table{width:100%;border-collapse:collapse;font-size:13px}.drawer td{padding:7px 4px;border-bottom:1px solid var(--line2)}.drawer td.r{text-align:right;color:var(--mut)}.drawer .x{position:absolute;top:12px;right:12px}
 .note{font-size:11.5px;color:var(--mut2);margin-top:6px}
-@media(max-width:900px){.grp{grid-template-columns:34px 1fr auto;row-gap:8px}.grp .bar,.grp .res{grid-column:1/-1}.res{justify-content:flex-start;flex-wrap:wrap}.set{margin-left:0}.g.open .set{grid-template-columns:1fr}.top .stand{display:none}.strip .rem{margin-left:0}}
+@media(max-width:900px){.funnel{grid-template-columns:repeat(3,1fr)}.fs{border-top:1px solid var(--line2)}.grp{grid-template-columns:34px 1fr auto;row-gap:8px}.grp .bar,.grp .res{grid-column:1/-1}.res{justify-content:flex-start;flex-wrap:wrap}.set{margin-left:0}.setrow{grid-template-columns:1fr}.top .stand{display:none}table.per{font-size:12px}table.per th,table.per td{padding:6px 6px}.set{overflow-x:auto}table.per{min-width:560px}}
 </style></head><body>
-<div class="top"><div class="logo"></div><h1>Sales</h1><div class="stand">Mockup v3 · pool geteld 8 okt 2026 · voortgang is voorbeeld</div></div>
+<div class="top"><div class="logo"></div><h1>Sales</h1><div class="stand">Mockup v4 · pool geteld 8 okt 2026 · voortgang en namen zijn voorbeeld</div></div>
 <div class="tabsrow">
 <div class="tab">📊 Totaal</div><div class="tab">📞 Vandaag</div><div class="tab">⚖️ Team</div><div class="tab">📅 Intakes</div><div class="tab">🏆 Gewonnen</div><div class="tab">🚫 Verloren</div><div class="tab on">♻️ Heractivatie</div><div class="tab">⚡ Adviezen</div><div class="tab">📜 Log</div>
 </div>
 <div class="wrap">
-<div class="kpis" id="kpis"></div>
-<div class="strip" id="strip"></div>
+
+<div class="card">
+ <div class="filters">
+  <label>Toon</label>
+  <select id="f-groep"><option value="">Alle groepen</option></select>
+  <select id="f-per"><option value="">Alle periodes</option></select>
+  <select id="f-rep"><option value="">Alle reps</option></select>
+  <select id="f-tijd"><option value="">Sinds start</option><option value="7">Laatste 7 dagen</option><option value="30">Laatste 30 dagen</option></select>
+  <button class="reset" id="f-reset">Wis filter</button>
+ </div>
+ <div class="funnel" id="funnel"></div>
+ <div class="strip" id="strip"></div>
+</div>
+
 <div class="card">
 <h2>Per groep <small>klik op een groep om in te stellen · balk = hoe vaak benaderd · elk getal klikt door naar de namen</small></h2>
 <div id="groups"></div>
-<div class="legend"><span><i style="background:var(--line2)"></i>nog niet</span><span><i style="background:var(--blue)"></i>1x benaderd</span><span><i style="background:#f2c400"></i>2x</span><span><i style="background:var(--pay)"></i>3x (laatste)</span></div>
+<div class="legend"><span><i style="background:var(--line2)"></i>nog niet</span><span><i style="background:var(--blue)"></i>1x benaderd</span><span><i style="background:var(--yellow)"></i>2x</span><span><i style="background:var(--pay)"></i>3x (laatste)</span></div>
 </div>
-<p class="note">Pool: Supabase, verloren leads met telefoonnummer, dagen stil sinds laatste fase- of statuswissel. Regels: 60 dagen tussen pogingen, max 3, stop bij reactie of opt-out, negatief = nooit meer, niet afgeleverd 1 retry. Boven 8 open reacties bij één rep: morgen de helft.</p>
+
+<div class="card">
+<h2>Capaciteit reps <small>max open reacties per rep · daarboven gaat zijn deel morgen op de helft</small></h2>
+<div class="reps" id="reps"></div>
+</div>
+
+<p class="note">Pool: Supabase, verloren leads met telefoonnummer, dagen stil sinds laatste fase- of statuswissel. Verzenden: elke werkdag 10:00, nieuwste eerst. Regels: 60 dagen tussen pogingen, max 3, stop bij reactie of opt-out, negatief = nooit meer, niet afgeleverd 1 retry. Reactie gaat naar de oorspronkelijke eigenaar.</p>
 </div>
 <div class="save"><div class="msg" id="msg">Opslaan verstuurt niets. GHL verstuurt elke werkdag om 10:00 volgens deze instellingen.</div><button class="btn main" id="saveBtn">Instellingen opslaan</button></div>
 <div class="tip" id="tip"></div>
 <div class="drawer" id="drawer"><button class="btn x" id="dx">Sluit</button><div id="dbody"></div></div>
 <script>
 const PER=[['j30','<30 d'],['d30_90','30 tot 90'],['d90_180','90 tot 180'],['d180p','180+']];
-const DOEL={pool:'tot de pool op is',intakes:'tot N intakes',reacties:'tot N reacties',datum:'tot een datum'};
+const DOEL={pool:'tot de pool op is',intakes:'tot N intakes',shows:'tot N shows',datum:'tot een datum'};
+const REPS=[{id:'marcel',naam:'Marcel',max:8,open:9},{id:'django',naam:'Django',max:8,open:4},{id:'connor',naam:'Connor',max:6,open:2}];
+// per periode: pool, benaderd (p1/p2/p3), react, intake, show, sign, stop
+const P=(pool,p1,react,intake,show,sign,stop)=>({pool,p1,p2:0,p3:0,react,intake,show,sign,stop});
 const G=[
- {id:'reopen',naam:'Reopen later',def:'alle fases · reden Reopen later',pool:{j30:18,d30_90:18,d90_180:29,d180p:9},aan:true,perdag:15,per:['d30_90','d90_180'],doel:'intakes',n:5,datum:'',sim:{p1:28,p2:0,p3:0,react:8,intake:3,sign:1,stop:1,start:{intake:0,react:0}}},
- {id:'mls',naam:'Motivation Letter',def:'fase MLS · 4 calls, geen brief, no money',pool:{j30:3,d30_90:13,d90_180:16,d180p:2},aan:true,perdag:10,per:['d30_90','d90_180'],doel:'pool',n:0,datum:'',sim:{p1:20,p2:0,p3:0,react:6,intake:2,sign:1,stop:0,start:{intake:0,react:0}}},
- {id:'show',naam:'Show',def:'fase Show · 4 calls, geen brief, no money',pool:{j30:2,d30_90:3,d90_180:27,d180p:6},aan:false,perdag:10,per:['d90_180'],doel:'pool',n:0,datum:'',sim:{p1:0,p2:0,p3:0,react:0,intake:0,sign:0,stop:0,start:{intake:0,react:0}}},
- {id:'noshow',naam:'No Show',def:'fase No Show · zonder not interested',pool:{j30:1,d30_90:9,d90_180:57,d180p:20},aan:true,perdag:20,per:['d30_90','d90_180'],doel:'reacties',n:10,datum:'',sim:{p1:30,p2:0,p3:0,react:7,intake:1,sign:0,stop:1,start:{intake:0,react:0}}},
- {id:'leads',naam:'Leads · 4 calls',def:'fase Leads · reden 4 calls attempted',pool:{j30:57,d30_90:132,d90_180:238,d180p:144},aan:true,perdag:40,per:['j30','d30_90'],doel:'datum',n:0,datum:'2026-11-30',sim:{p1:80,p2:0,p3:0,react:12,intake:0,sign:0,stop:2,start:{intake:0,react:0}}},
+ {id:'reopen',naam:'Reopen later',def:'alle fases · reden Reopen later',aan:true,perdag:15,per:['d30_90','d90_180'],doel:'intakes',n:5,datum:'',
+  d:{j30:P(18,0,0,0,0,0,0),d30_90:P(18,14,5,2,1,1,0),d90_180:P(29,14,3,1,0,0,1),d180p:P(9,0,0,0,0,0,0)}},
+ {id:'mls',naam:'Motivation Letter',def:'fase MLS · 4 calls, geen brief, no money',aan:true,perdag:10,per:['d30_90','d90_180'],doel:'pool',n:0,datum:'',
+  d:{j30:P(3,0,0,0,0,0,0),d30_90:P(13,10,4,2,1,1,0),d90_180:P(16,10,2,0,0,0,0),d180p:P(2,0,0,0,0,0,0)}},
+ {id:'show',naam:'Show',def:'fase Show · 4 calls, geen brief, no money',aan:false,perdag:10,per:['d90_180'],doel:'pool',n:0,datum:'',
+  d:{j30:P(2,0,0,0,0,0,0),d30_90:P(3,0,0,0,0,0,0),d90_180:P(27,0,0,0,0,0,0),d180p:P(6,0,0,0,0,0,0)}},
+ {id:'noshow',naam:'No Show',def:'fase No Show · zonder not interested',aan:true,perdag:20,per:['d30_90','d90_180'],doel:'shows',n:5,datum:'',
+  d:{j30:P(1,0,0,0,0,0,0),d30_90:P(9,9,3,1,1,0,0),d90_180:P(57,21,4,0,0,0,1),d180p:P(20,0,0,0,0,0,0)}},
+ {id:'leads',naam:'Leads · 4 calls',def:'fase Leads · reden 4 calls attempted',aan:true,perdag:40,per:['j30','d30_90'],doel:'datum',n:0,datum:'2026-11-30',
+  d:{j30:P(57,40,8,0,0,0,1),d30_90:P(132,40,4,0,0,0,1),d90_180:P(238,0,0,0,0,0,0),d180p:P(144,0,0,0,0,0,0)}},
 ];
-const REM=true, REMWIE='Sander · 9 open';
+G.forEach(g=>g.start={intake:0,show:0});
+const F={groep:'',per:'',rep:'',tijd:''};
 const open=new Set();
-const sel=g=>g.per.reduce((s,k)=>s+g.pool[k],0), benaderd=g=>g.sim.p1+g.sim.p2+g.sim.p3, over=g=>Math.max(0,sel(g)-benaderd(g));
+const sum=(g,k,pers)=> (pers||PER.map(p=>p[0])).reduce((s,p)=>s+g.d[p][k],0);
+const sel=g=>sum(g,'pool',g.per), benaderd=(g,pers)=>sum(g,'p1',pers)+sum(g,'p2',pers)+sum(g,'p3',pers), over=g=>Math.max(0,sel(g)-benaderd(g,g.per));
+const remmed=()=>REPS.some(r=>r.open>r.max), remNames=()=>REPS.filter(r=>r.open>r.max).map(r=>r.naam+' · '+r.open+' open').join(', ');
 function status(g){
   if(!g.aan) return ['uit','Uit'];
-  if(g.doel==='intakes'&&g.sim.intake-g.sim.start.intake>=g.n) return ['klaar','Doel bereikt'];
-  if(g.doel==='reacties'&&g.sim.react-g.sim.start.react>=g.n) return ['klaar','Doel bereikt'];
+  if(g.doel==='intakes'&&sum(g,'intake')-g.start.intake>=g.n) return ['klaar','Doel bereikt'];
+  if(g.doel==='shows'&&sum(g,'show')-g.start.show>=g.n) return ['klaar','Doel bereikt'];
   if(g.doel==='datum'&&g.datum&&new Date(g.datum)<new Date()) return ['klaar','Doel bereikt'];
   if(over(g)===0) return ['leeg','Pool op'];
-  if(REM) return ['rem',eff(g)+' van '+g.perdag+'/dag'];
+  if(remmed()) return ['rem',eff(g)+' van '+g.perdag+'/dag'];
   return ['aan',g.perdag+'/dag'];
 }
-const eff=g=>{const s=g.aan?Math.min(g.perdag,over(g)):0;return REM?Math.floor(s/2):s};
+const eff=g=>{const s=g.aan?Math.min(g.perdag,over(g)):0;return remmed()?Math.floor(s/2):s};
 const actief=g=>['aan','rem'].includes(status(g)[0]);
 function doelTxt(g){
   if(g.doel==='pool') return 'tot pool op';
-  if(g.doel==='intakes') return (g.sim.intake-g.sim.start.intake)+' van '+g.n+' intakes';
-  if(g.doel==='reacties') return (g.sim.react-g.sim.start.react)+' van '+g.n+' reacties';
+  if(g.doel==='intakes') return (sum(g,'intake')-g.start.intake)+' van '+g.n+' intakes';
+  if(g.doel==='shows') return (sum(g,'show')-g.start.show)+' van '+g.n+' shows';
   return 'tot '+(g.datum?new Date(g.datum).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'…');
 }
 const pct=(a,b)=>b?(100*a/b).toFixed(1).replace('.',',')+'%':'';
 const perTxt=g=>g.per.length?PER.filter(p=>g.per.includes(p[0])).map(p=>p[1]).join(' · ')+' d':'geen periode';
+/* filter + funnel */
+const repShare={marcel:.45,django:.35,connor:.2}, tijdShare={'':1,'7':.3,'30':.8};
+function funnel(){
+  const gs=F.groep?G.filter(g=>g.id===F.groep):G, pers=F.per?[F.per]:null;
+  const f=(F.rep?repShare[F.rep]:1)*tijdShare[F.tijd];
+  const t=k=>Math.round(gs.reduce((s,g)=>s+sum(g,k,pers),0)*(k==='pool'?1:f));
+  const pool=t('pool'), ben=Math.round(gs.reduce((s,g)=>s+benaderd(g,pers),0)*f), re=t('react'), inn=t('intake'), sh=t('show'), si=t('sign'), st=t('stop');
+  const w=n=>ben?Math.min(100,100*n/ben):0;
+  document.getElementById('funnel').innerHTML=`
+   <div class="fs"><b>${pool}</b><span>in de pool</span><small>${F.per||F.groep?'gefilterd':'alle groepen en periodes'}</small></div>
+   <div class="fs"><b>${ben}</b><span>benaderd</span><small>${pct(ben,pool)} van de pool</small><i style="width:${ben?100:0}%"></i></div>
+   <div class="fs b"><b>${re}</b><span>reageerde</span><small>${pct(re,ben)||'–'}</small><i style="width:${w(re)}%"></i></div>
+   <div class="fs y"><b>${sh}</b><span>show</span><small>${inn} intake geboekt</small><i style="width:${w(sh)}%"></i></div>
+   <div class="fs g"><b>${si}</b><span>getekend</span><small>${pct(si,ben)||'–'} van benaderd</small><i style="width:${w(si)}%"></i></div>
+   <div class="fs r"><b>${st}</b><span>stop · nooit meer</span><small>${pct(st,ben)||'–'}</small></div>`;
+  document.getElementById('f-reset').classList.toggle('on',!!(F.groep||F.per||F.rep||F.tijd));
+}
 function strip(){
   const act=G.filter(actief); const tot=act.reduce((s,g)=>s+(Number.isInteger(g.perdag)?eff(g):0),0);
-  let exp=0; act.forEach(g=>{ if(benaderd(g)>0) exp+=eff(g)*g.sim.react/benaderd(g); });
-  document.getElementById('strip').innerHTML=`<span><b>${act.length}</b><span class="m">groepen aan</span></span><span><b>${tot}</b><span class="m">berichten vandaag</span></span><span><b>≈${Math.round(exp)}</b><span class="m">reacties verwacht</span></span>${REM?`<span class="rem">Geremd: ${REMWIE} · morgen de helft</span>`:''}`;
+  let exp=0; act.forEach(g=>{const b=benaderd(g); if(b>0) exp+=eff(g)*sum(g,'react')/b;});
+  document.getElementById('strip').innerHTML=`<span><b>${act.length}</b><span class="m">groepen aan</span></span><span><b>${tot}</b><span class="m">berichten vandaag</span></span><span><b>≈${Math.round(exp)}</b><span class="m">reacties verwacht</span></span>${remmed()?`<span class="rem">Geremd: ${remNames()} · morgen de helft</span>`:''}`;
+}
+/* groups */
+function perTable(g){
+  return `<table class="per"><thead><tr><th>Periode</th><th>Pool</th><th>Benaderd</th><th>Reactie</th><th>Intake</th><th>Show</th><th>Getekend</th><th>Stop</th></tr></thead><tbody>${PER.map(p=>{const d=g.d[p[0]],on=g.per.includes(p[0]),b=d.p1+d.p2+d.p3;
+   return `<tr class="${on?'':'off'}"><td><label><input type="checkbox" class="chk" data-act="per" data-k="${p[0]}" ${on?'checked':''}>${p[1]} d</label></td><td>${d.pool}</td><td>${b}${b?' <small style="color:var(--mut2)">'+pct(b,d.pool)+'</small>':''}</td><td class="${d.react?'r':''}">${d.react}${d.react?' <small style="color:var(--mut2)">'+pct(d.react,b)+'</small>':''}</td><td class="${d.intake?'ok':''}">${d.intake}</td><td class="${d.show?'ok':''}">${d.show}</td><td class="${d.sign?'ok':''}">${d.sign}</td><td>${d.stop}</td></tr>`;}).join('')}</tbody></table>
+   <div class="tbl-note">Vinkje = periode doet mee. Verzenden gaat nieuwste eerst; aantal per dag geldt voor de hele groep.</div><div class="err" id="e-per-${g.id}">Kies minstens één periode.</div>`;
 }
 function render(){
-  const tp=G.reduce((s,g)=>s+Object.values(g.pool).reduce((a,b)=>a+b,0),0), tb=G.reduce((s,g)=>s+benaderd(g),0);
-  const tr=G.reduce((s,g)=>s+g.sim.react,0), ti=G.reduce((s,g)=>s+g.sim.intake,0), ts=G.reduce((s,g)=>s+g.sim.sign,0), tst=G.reduce((s,g)=>s+g.sim.stop,0);
-  document.getElementById('kpis').innerHTML=`<div class="kpi"><b>${tp}</b><span>in de pool</span></div><div class="kpi"><b>${tb}</b><span>benaderd</span></div><div class="kpi b"><b>${tr}</b><span>reageerde · ${pct(tr,tb)}</span></div><div class="kpi g"><b>${ti}</b><span>intake geboekt</span></div><div class="kpi g"><b>${ts}</b><span>getekend</span></div><div class="kpi r"><b>${tst}</b><span>stop · nooit meer</span></div>`;
-  strip();
+  funnel(); strip();
   document.getElementById('groups').innerHTML=G.map((g,ix)=>{
-    const [sc,sl]=status(g), s=sel(g), b=benaderd(g), w=k=>s?Math.round(100*g.sim[k]/s):0;
+    const [sc,sl]=status(g), s=sel(g), b=benaderd(g,g.per), w=k=>s?Math.round(100*sum(g,k,g.per)/s):0;
+    const re=sum(g,'react'),inn=sum(g,'intake'),sh=sum(g,'show'),si=sum(g,'sign'),st=sum(g,'stop'),ball=benaderd(g);
     return `<div class="g ${open.has(g.id)?'open':''} ${g.aan?'':'off'}" data-id="${g.id}">
      <div class="grp" tabindex="0" role="button" aria-expanded="${open.has(g.id)}" data-act="toggle">
        <div class="rank">${ix+1}</div>
        <div class="gname"><b>${g.naam}</b><span class="sub">${perTxt(g)} · ${doelTxt(g)}</span></div>
        <div class="bar" aria-label="${b} van ${s} benaderd"><i class="p1" style="width:${w('p1')}%"></i><i class="p2" style="width:${w('p2')}%"></i><i class="p3" style="width:${w('p3')}%"></i><em>${s} · nog ${over(g)}</em></div>
-       <div class="res"><button class="pill b" data-act="drill" data-k="react">${g.sim.react} reactie${b?' · '+pct(g.sim.react,b):''}</button><button class="pill ${g.sim.intake?'g':''}" data-act="drill" data-k="intake">${g.sim.intake} intake</button><button class="pill ${g.sim.sign?'g':''}" data-act="drill" data-k="sign">${g.sim.sign} getekend</button><button class="pill ${g.sim.stop?'r':''}" data-act="drill" data-k="stop">${g.sim.stop} stop</button></div>
+       <div class="res"><button class="pill b" data-act="drill" data-k="react">${re} reactie${ball?' · '+pct(re,ball):''}</button><button class="pill ${sh?'y':''}" data-act="drill" data-k="show">${sh} show</button><button class="pill ${si?'g':''}" data-act="drill" data-k="sign">${si} getekend</button><button class="pill ${st?'r':''}" data-act="drill" data-k="stop">${st} stop</button></div>
        <div class="stc"><span class="st ${sc}">${sl}</span><button class="sw" role="switch" aria-checked="${g.aan}" aria-label="${g.naam} aan of uit" data-act="aan"></button></div>
      </div>
      <div class="set">
-       <div class="f"><label>Periodes (dagen stil)</label><div class="chips">${PER.map(p=>`<button class="chip" aria-pressed="${g.per.includes(p[0])}" data-act="per" data-k="${p[0]}">${p[1]} · ${g.pool[p[0]]}</button>`).join('')}</div><div class="err" id="e-per-${g.id}">Kies minstens één periode.</div></div>
-       <div class="f"><label for="pd-${g.id}">Berichten per dag</label><input type="number" id="pd-${g.id}" min="1" step="1" value="${g.perdag}" data-act="perdag"><div class="err" id="e-pd-${g.id}">Heel getal boven 0.</div></div>
-       <div class="f"><label for="dl-${g.id}">Aan laten staan</label><div class="inl"><select id="dl-${g.id}" data-act="doel">${Object.entries(DOEL).map(([k,v])=>`<option value="${k}" ${g.doel===k?'selected':''}>${v}</option>`).join('')}</select><input type="number" min="1" step="1" value="${g.n||''}" data-act="n" aria-label="aantal" style="display:${['intakes','reacties'].includes(g.doel)?'inline-block':'none'}"><input type="date" value="${g.datum}" data-act="datum" aria-label="datum" style="display:${g.doel==='datum'?'inline-block':'none'};width:150px"></div><div class="err" id="e-dl-${g.id}">Getal boven 0 of datum in de toekomst.</div></div>
+       <div class="setrow">
+        <div class="f"><label for="pd-${g.id}">Berichten per dag</label><input type="number" id="pd-${g.id}" min="1" step="1" value="${g.perdag}" data-act="perdag"><div class="err" id="e-pd-${g.id}">Heel getal boven 0.</div></div>
+        <div class="f"><label for="dl-${g.id}">Aan laten staan</label><div class="inl"><select class="sel" id="dl-${g.id}" data-act="doel">${Object.entries(DOEL).map(([k,v])=>`<option value="${k}" ${g.doel===k?'selected':''}>${v}</option>`).join('')}</select><input type="number" min="1" step="1" value="${g.n||''}" data-act="n" aria-label="aantal" style="display:${['intakes','shows'].includes(g.doel)?'inline-block':'none'}"><input type="date" value="${g.datum}" data-act="datum" aria-label="datum" style="display:${g.doel==='datum'?'inline-block':'none'};width:150px"></div><div class="err" id="e-dl-${g.id}">Getal boven 0 of datum in de toekomst.</div></div>
+       </div>
+       ${perTable(g)}
      </div></div>`;}).join('');
+  reps();
+}
+function reps(){
+  document.getElementById('reps').innerHTML=REPS.map(r=>{const p=Math.min(100,100*r.open/r.max), cls=r.open>r.max?'vol':(r.open>=r.max*.75?'bijna':'');
+   const st=r.open>r.max?'<span class="st rem">Geremd</span>':(cls==='bijna'?'<span class="st klaar">Bijna vol</span>':'<span class="st aan">Ruimte</span>');
+   return `<div class="rep ${cls}" data-id="${r.id}"><div class="nm"><b>${r.naam}</b>${st}</div>
+    <div class="cap">max open reacties <span class="num"><button data-act="min" aria-label="minder">−</button><span>${r.max}</span><button data-act="plus" aria-label="meer">+</button></span></div>
+    <div class="load"><i style="width:${p}%"></i></div><div class="sub">${r.open} open nu · ${r.open>r.max?'morgen de helft':'ruimte voor '+(r.max-r.open)}</div></div>`;}).join('');
 }
 function validate(){let ok=true;G.forEach(g=>{const e=(id,bad)=>{const el=document.getElementById(id);if(el)el.classList.toggle('on',bad);if(bad)ok=false;};
   e('e-per-'+g.id,g.aan&&g.per.length===0);e('e-pd-'+g.id,!(Number.isInteger(g.perdag)&&g.perdag>0));
-  const dbad=['intakes','reacties'].includes(g.doel)?!(Number.isInteger(g.n)&&g.n>0):(g.doel==='datum'?!(g.datum&&new Date(g.datum)>new Date()):false);e('e-dl-'+g.id,g.aan&&dbad);});return ok;}
+  const dbad=['intakes','shows'].includes(g.doel)?!(Number.isInteger(g.n)&&g.n>0):(g.doel==='datum'?!(g.datum&&new Date(g.datum)>new Date()):false);e('e-dl-'+g.id,g.aan&&dbad);});return ok;}
+/* events */
 const groups=document.getElementById('groups');
 groups.addEventListener('click',ev=>{const t=ev.target.closest('[data-act]');if(!t)return;const row=ev.target.closest('.g');const g=G.find(x=>x.id===row.dataset.id);const a=t.dataset.act;
   if(a==='aan'){ev.stopPropagation();g.aan=!g.aan;render();return;}
   if(a==='toggle'){open.has(g.id)?open.delete(g.id):open.add(g.id);render();return;}
-  if(a==='per'){const k=t.dataset.k;g.per=g.per.includes(k)?g.per.filter(x=>x!==k):[...g.per,k];open.add(g.id);render();return;}
+  if(a==='per'){const k=t.dataset.k;g.per=t.checked?[...g.per,k]:g.per.filter(x=>x!==k);open.add(g.id);render();return;}
   if(a==='drill'){ev.stopPropagation();drill(g,t.dataset.k);}});
 groups.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.dataset.act==='toggle'){ev.preventDefault();ev.target.click();}});
-groups.addEventListener('input',ev=>{const t=ev.target;const g=G.find(x=>x.id===t.closest('.g').dataset.id);const a=t.dataset.act;
+groups.addEventListener('input',ev=>{const t=ev.target;const a=t.dataset.act;if(!a||a==='per')return;const g=G.find(x=>x.id===t.closest('.g').dataset.id);
   if(a==='perdag')g.perdag=t.value===''?NaN:Number(t.value);if(a==='n')g.n=t.value===''?NaN:Number(t.value);if(a==='datum')g.datum=t.value;
   if(a==='doel'){g.doel=t.value;render();return;}
   const row=t.closest('.g');const [sc,sl]=status(g);row.querySelector('.sub').textContent=perTxt(g)+' · '+doelTxt(g);const st=row.querySelector('.st');st.className='st '+sc;st.textContent=sl;strip();});
+document.getElementById('reps').addEventListener('click',ev=>{const t=ev.target.closest('[data-act]');if(!t)return;const r=REPS.find(x=>x.id===t.closest('.rep').dataset.id);
+  if(t.dataset.act==='plus')r.max=Math.min(30,r.max+1);if(t.dataset.act==='min')r.max=Math.max(1,r.max-1);render();});
+['groep','per','rep','tijd'].forEach(k=>document.getElementById('f-'+k).addEventListener('change',e=>{F[k]=e.target.value;funnel();}));
+document.getElementById('f-reset').addEventListener('click',()=>{Object.keys(F).forEach(k=>{F[k]='';document.getElementById('f-'+k).value='';});funnel();});
+G.forEach(g=>document.getElementById('f-groep').insertAdjacentHTML('beforeend',`<option value="${g.id}">${g.naam}</option>`));
+PER.forEach(p=>document.getElementById('f-per').insertAdjacentHTML('beforeend',`<option value="${p[0]}">${p[1]} dagen</option>`));
+REPS.forEach(r=>document.getElementById('f-rep').insertAdjacentHTML('beforeend',`<option value="${r.id}">${r.naam}</option>`));
 document.getElementById('saveBtn').addEventListener('click',()=>{const m=document.getElementById('msg');
   if(!validate()){m.className='msg bad';m.textContent='Niet opgeslagen: zie de rode melding bij de groep.';return;}
-  G.forEach(g=>{g.sim.start={intake:g.sim.intake,react:g.sim.react};});m.className='msg ok';m.textContent='Opgeslagen '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})+' (mockup, niets verstuurd). Doelen tellen vanaf nu.';render();});
+  G.forEach(g=>{g.start={intake:sum(g,'intake'),show:sum(g,'show')};});m.className='msg ok';m.textContent='Opgeslagen '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})+' (mockup, niets verstuurd). Doelen tellen vanaf nu.';render();});
 const FAKE=['A. Jansen','B. de Vries','C. Bakker','D. Visser','E. Smit','F. Meijer','G. de Boer','H. Mulder','I. Bos','J. Vos','K. Peters','L. Hendriks'];
-function drill(g,k){const n=g.sim[k];const lbl={react:'Reageerde',intake:'Intake geboekt',sign:'Getekend',stop:'Stop · nooit meer'}[k];
-  const rows=Array.from({length:n},(_,i)=>`<tr><td>${FAKE[i%FAKE.length]}</td><td class="r">${['Leads','Show','No Show','MLS'][i%4]}</td><td class="r">${30+i*17} d stil</td><td class="r">poging 1</td></tr>`).join('');
+function drill(g,k){const n=sum(g,k);const lbl={react:'Reageerde',show:'Show',sign:'Getekend',stop:'Stop · nooit meer'}[k];
+  const rows=Array.from({length:n},(_,i)=>`<tr><td>${FAKE[i%FAKE.length]}</td><td class="r">${['Marcel','Django','Connor'][i%3]}</td><td class="r">${30+i*17} d stil</td><td class="r">poging 1</td></tr>`).join('');
   document.getElementById('dbody').innerHTML=`<h3>${g.naam} · ${lbl}</h3><div class="sub">${n} ${n===1?'persoon':'personen'} · fictieve namen (mockup)</div><table>${rows||'<tr><td>Nog niemand.</td></tr>'}</table>`;document.getElementById('drawer').classList.add('on');}
 document.getElementById('dx').addEventListener('click',()=>document.getElementById('drawer').classList.remove('on'));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('drawer').classList.remove('on')});
 const tip=document.getElementById('tip');
-const TIPS={uit:'Staat uit. Niets wordt verstuurd.',aan:'Loopt elke werkdag om 10:00. Stopt vanzelf bij het doel of als de pool op is.',rem:'Een rep heeft meer dan 8 open reacties. Morgen gaat de helft uit, daarna weer normaal.',klaar:'Doel gehaald. Start niet vanzelf opnieuw; zet een nieuw doel.',leeg:'Iedereen in de gekozen periodes is benaderd. Kies een extra periode of wacht op ronde 2 (na 60 dagen).'};
+const TIPS={uit:'Staat uit. Niets wordt verstuurd.',aan:'Loopt elke werkdag om 10:00. Stopt vanzelf bij het doel of als de pool op is.',rem:'Een rep zit boven zijn max open reacties. Morgen gaat de helft uit, daarna weer normaal.',klaar:'Doel gehaald. Start niet vanzelf opnieuw; zet een nieuw doel.',leeg:'Iedereen in de gekozen periodes is benaderd. Vink een extra periode aan of wacht op ronde 2 (na 60 dagen).'};
 function showTip(el){const c=[...el.classList].find(x=>TIPS[x]);if(!c)return;tip.textContent=TIPS[c];tip.style.display='block';const r=el.getBoundingClientRect();tip.style.left=Math.min(r.left,innerWidth-280)+'px';tip.style.top=(r.bottom+6)+'px';}
-document.addEventListener('mouseover',e=>{const el=e.target.closest('.st');if(el)showTip(el);});document.addEventListener('mouseout',e=>{if(e.target.closest('.st'))tip.style.display='none';});
+document.addEventListener('mouseover',e=>{const el=e.target.closest('.grp .st');if(el)showTip(el);});document.addEventListener('mouseout',e=>{if(e.target.closest('.grp .st'))tip.style.display='none';});
 render();
 </script></body></html>
