@@ -17,7 +17,7 @@ const HX_G = [
 const HX_STD_TOT = HX_G.reduce((s, g) => s + g.std, 0);
 const HX_STAP = [["pool", "in de pool"], ["benaderd", "benaderd"], ["reactie", "reageerde"], ["show", "show"], ["getekend", "getekend"], ["stop", "stop · nooit meer"]];
 const HX_MIN_DATA = 30; // pas een schatting tonen vanaf zoveel benaderd in de groep
-let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {}, res: [], open: new Set(), fStap: null, fGrp: null, fPer: null, poolFase: [], F: { groep: "", per: "" }, dirty: false, msg: null, busy: false, sort: -1, repSort: -1, bijgewerkt: null, ververst: false, verErr: null };
+let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {}, res: [], open: new Set(), fStap: null, fGrp: null, fPer: null, poolFase: [], F: { groep: "", per: "" }, dirty: false, msg: null, busy: false, code: "", codeErr: null, sort: -1, repSort: -1, bijgewerkt: null, ververst: false, verErr: null };
 
 (function () {
   const st = document.createElement("style"); st.id = "heractcss";
@@ -127,6 +127,8 @@ let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {},
   #herwrap .hxbtn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
   #herwrap .hxsave{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 22px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:12px;z-index:20}
   #herwrap .hxsave .msg{font-size:12.5px;color:var(--mut);flex:1;min-width:0} #herwrap .hxsave .msg.ok{color:var(--sign-tx);font-weight:600} #herwrap .hxsave .msg.bad{color:var(--close-tx)} #herwrap .hxsave .msg.dirty{color:var(--show-tx);font-weight:600}
+  #herwrap .hxgate{max-width:420px} #herwrap .hxgate label{display:block;font-size:13px;font-weight:600;margin-bottom:8px}
+  #herwrap .hxgate input{font:inherit;color:var(--txt);border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 10px;font-size:14px;width:200px}
   #herwrap .hxload-txt{padding:30px;text-align:center;color:var(--mut)}
   @media(max-width:900px){#herwrap .hxfun{grid-template-columns:repeat(3,minmax(0,1fr))}#herwrap .hxfs:nth-child(n+4){border-top:1px solid var(--line2)}#herwrap .hxfs:nth-child(4){border-left:0}
     #herwrap .hxgr{grid-template-columns:minmax(0,1fr) auto;row-gap:6px;grid-template-areas:'nm sc' 'pn ed'}
@@ -170,9 +172,12 @@ async function hxLaad() {
   try {
     let j;
     if (HX_LOCAL()) j = await (await fetch("heractivatie_demo.json")).json();
-    else { if (!GCODE) throw new Error("log eerst in"); j = await hxPost({ code: GCODE, actie: "lezen" }); }
+    else { if (!HX.code) throw new Error("vul eerst de code in"); j = await hxPost({ code: HX.code, actie: "lezen" }); }
     hxApply(j);
-  } catch (e) { HX.err = "Heractivatie niet geladen: " + (e.message || e); }
+  } catch (e) {
+    if (/toegangscode/.test(e.message || "")) { HX.code = ""; HX.codeErr = "Code klopt niet"; }
+    else HX.err = "Heractivatie niet geladen: " + (e.message || e);
+  }
   HX.laadt = false; hxDraw();
 }
 async function hxVervers() { // rekent de cache opnieuw uit (±15 s); het scherm blijft bruikbaar
@@ -180,7 +185,7 @@ async function hxVervers() { // rekent de cache opnieuw uit (±15 s); het scherm
   try {
     let j;
     if (HX_LOCAL()) { await new Promise(r => setTimeout(r, 600)); j = await (await fetch("heractivatie_demo.json")).json(); j.bijgewerkt = new Date().toISOString(); }
-    else j = await hxPost({ code: GCODE, actie: "ververs" });
+    else j = await hxPost({ code: HX.code, actie: "ververs" });
     if (HX.dirty) hxApplyData(j); else hxApply(j);
   } catch (e) { HX.verErr = "verversen mislukt"; }
   HX.ververst = false; if (HX.dirty) hxRedrawPart(); else hxDraw();
@@ -361,6 +366,10 @@ function hxDraw() {
   document.body.classList.toggle("hx-on", on);
   if (!on) return;
   let h = HERACT_LIVE ? "" : `<div class="hxlive" role="status">Nog niets wordt verstuurd: de verzending staat nog uit.</div>`;
+  if (!HX.code && !HX_LOCAL()) { // eigen code voor dit tabblad; alleen in een JS-variabele, nooit opgeslagen
+    w.innerHTML = h + `<div class="hxcard hxgate"><form data-hx="gate" autocomplete="off"><label for="hxcode">Code voor Heractivatie</label><div class="hxinl"><input type="password" id="hxcode" name="hxcode" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore ${HX.laadt ? "disabled" : ""}><button class="hxbtn main" type="submit" ${HX.laadt ? "disabled" : ""}>${HX.laadt ? "Openen…" : "Openen"}</button></div><div class="hxerr${HX.codeErr ? " on" : ""}" role="alert">${esc(HX.codeErr || "")}</div></form></div>`;
+    const f = document.getElementById("hxcode"); if (f && !HX.laadt) f.focus(); return;
+  }
   if (HX.err) h += `<div class="hxcard"><div class="hxleeg">${esc(HX.err)} <button class="hxbtn" data-hx="laad">Opnieuw laden</button></div></div>`;
   if (!HX.loaded) { w.innerHTML = h + (HX.err ? "" : `<div class="hxload-txt">Heractivatie laden…</div>`); return; }
   h += `<div class="hxcard" id="hxsumcard">${hxSumHtml()}</div>`;
@@ -398,7 +407,7 @@ async function hxSave() {
   try {
     let j;
     if (HX_LOCAL()) { j = { instellingen: body.instellingen.map(x => ({ ...x, aan_sinds: x.aan ? (HX.inst[x.groep].aan_sinds || new Date().toISOString()) : null, shows_sinds: 0 })), reps: HX.reps, pool: Object.entries(HX.pool).map(([k, n]) => ({ groep: k.split("|")[0], periode: k.split("|")[1], n })), pool_fase: HX.poolFase, resultaten: HX.res, bijgewerkt: HX.bijgewerkt }; }
-    else j = await hxPost({ code: GCODE, ...body });
+    else j = await hxPost({ code: HX.code, ...body });
     hxApply(j);
     HX.msg = { c: "ok", t: "Opgeslagen ✓ " + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) + " · er wordt niets verstuurd." };
   } catch (e) { HX.msg = { c: "bad", t: "Niet opgeslagen: " + (e.message || e) }; }
@@ -439,6 +448,13 @@ function hxRowRefresh(row, g) { // één groepsrij bijwerken zonder het invoerve
     if (a === "verberg" && rep) { rep.verborgen = true; rep.actief = false; hxChanged(); hxDraw(); return; }
     if (a === "terug" && rep) { rep.verborgen = false; rep.actief = true; hxChanged(); hxDraw(); return; }
   });
+  w.addEventListener("submit", ev => {
+    if (!ev.target.matches("[data-hx=gate]")) return; ev.preventDefault();
+    const inp = document.getElementById("hxcode"), v = inp ? inp.value.trim() : "";
+    if (inp) inp.value = "";
+    if (!v) { HX.codeErr = "Vul de code in"; hxDraw(); return; }
+    HX.code = v; HX.codeErr = null; HX.err = null; HX.loaded = false; hxLaad();
+  });
   w.addEventListener("change", ev => {
     const t = ev.target, a = t.dataset && t.dataset.hx; if (!a) return;
     if (a === "fgroep") { HX.F.groep = t.value; HX.fGrp = null; hxDraw(); return; }
@@ -467,7 +483,7 @@ drawTabs = function () {
 };
 const _hxCols = drawCols;
 drawCols = function () {
-  if (typeof tab !== "undefined" && tab === "her") { hxDraw(); if (!HX.loaded && !HX.laadt && !HX.err) hxLaad(); return; }
+  if (typeof tab !== "undefined" && tab === "her") { hxDraw(); if ((HX.code || HX_LOCAL()) && !HX.loaded && !HX.laadt && !HX.err) hxLaad(); return; }
   document.body.classList.remove("hx-on");
   _hxCols.apply(this, arguments);
 };
