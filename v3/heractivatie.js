@@ -5,22 +5,22 @@
 // Ronde 3 (DPAC-757): groepsrij direct bewerkbaar (schakelaar, per werkdag, periodechips), volgorde = prioriteit,
 // benaderd-balk 0×/1×/2×/3× uit dpac.heractivatie_benaderd_cache (per contact max(poging), test telt niet mee).
 // Verstuurt niets en schrijft niets naar GHL. Uit te zetten door dit script uit index.html te halen.
-const HERACT_LIVE = false;   // de parent zet dit aan zodra de verzending echt loopt
+// Ronde 4 (DPAC-760): schakelaar 'Verzending aan' = dpac.heractivatie_systeem.live; n8n 99k awL9YgOU8Fw6hevX verstuurt elke werkdag 10:00 alleen als live=true.
 const HX_URL = "https://dpac.app.n8n.cloud/webhook/dpac-heractivatie";
 const HX_LOCAL = () => location.search.indexOf("local=1") >= 0;
 const HX_PER = [["<30", "<30 dagen"], ["30-90", "30–90"], ["90-180", "90–180"], ["180+", "180+"]];
 const HX_G = [ // volgorde = prioriteit
-  { id: "show", naam: "Show", def: "fase Show · 4 calls, geen brief, no money", std: 5 },
-  { id: "mls", naam: "Motivation Letter", def: "fase MLS · 4 calls, geen brief, no money", std: 5 },
+  { id: "show", naam: "Show", def: "fase Show · 4 calls of geen brief", std: 5 },
+  { id: "mls", naam: "Motivation Letter", def: "fase MLS · 4 calls of geen brief", std: 5 },
   { id: "reopen", naam: "Reopen later", def: "alle fases · reden Reopen later", std: 10 },
-  { id: "noshow", naam: "No Show", def: "fase No Show · zonder not interested", std: 10 },
+  { id: "noshow", naam: "No Show", def: "fase No Show · zonder not interested en no money", std: 10 },
   { id: "leads", naam: "Leads · 4 calls", def: "fase Leads · reden 4 calls attempted", std: 15 },
 ];
 const HX_KEER = [[0, "nog niet benaderd", "nog niet"], [1, "1× benaderd", "1×"], [2, "2× benaderd", "2×"], [3, "3× benaderd", "3×"]];
 const HX_STD_TOT = HX_G.reduce((s, g) => s + g.std, 0);
 const HX_STAP = [["pool", "in de pool"], ["benaderd", "benaderd"], ["reactie", "reageerde"], ["show", "show"], ["getekend", "getekend"], ["stop", "stop · nooit meer"]];
 const HX_MIN_DATA = 30; // pas een schatting tonen vanaf zoveel benaderd in de groep
-let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {}, res: [], open: new Set(), fStap: null, fGrp: null, fPer: null, poolFase: [], ben: {}, F: { groep: "", per: "" }, dirty: false, msg: null, busy: false, code: "", codeErr: null, sort: -1, repSort: -1, bijgewerkt: null, ververst: false, verErr: null };
+let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {}, res: [], open: new Set(), fStap: null, fGrp: null, fPer: null, poolFase: [], ben: {}, F: { groep: "", per: "" }, dirty: false, msg: null, busy: false, code: "", codeErr: null, sort: -1, repSort: -1, bijgewerkt: null, ververst: false, verErr: null, live: false, liveBusy: false, liveErr: null };
 
 (function () {
   const st = document.createElement("style"); st.id = "heractcss";
@@ -29,6 +29,10 @@ let HX = { loaded: false, laadt: false, err: null, inst: {}, reps: [], pool: {},
   #herwrap{display:none;max-width:1240px;margin:0 auto}
   body.hx-on #herwrap{display:block}
   #herwrap .hxlive{background:var(--show-bg);color:var(--show-tx);border-radius:var(--r2);padding:9px 14px;font-size:13px;font-weight:600;margin:0 0 14px}
+  #herwrap .hxlive.aan{background:var(--sign-bg);color:var(--sign-tx)}
+  #herwrap .hxzend{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line2);margin-top:12px;padding-top:12px;font-size:13px}
+  #herwrap .hxzend label{display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer}
+  #herwrap .hxzend .u{color:var(--mut);font-size:12.5px} #herwrap .hxzend .u.bad{color:var(--close-tx);font-weight:600}
   #herwrap .hxcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
   #herwrap .hxcard h2{font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   #herwrap .hxcard h2 small{color:var(--mut);font-weight:500;font-size:12px}
@@ -196,7 +200,7 @@ function hxApplyData(j) {
     HX.reps = (j.reps || []).map(r => ({ ...r, actief: m[r.rep] ? m[r.rep].actief : r.actief !== false, verborgen: m[r.rep] ? m[r.rep].verborgen : !!r.verborgen }));
   }
 }
-function hxApply(j) { hxApplyInst(j); hxApplyData(j); HX.loaded = true; HX.dirty = false; }
+function hxApply(j) { hxApplyInst(j); hxApplyData(j); if (typeof j.live === "boolean") HX.live = j.live; HX.loaded = true; HX.dirty = false; }
 async function hxPost(body) {
   const r = await fetch(HX_URL, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => null);
@@ -281,7 +285,22 @@ function hxSumHtml() {
   return `<div class="hxsum">${t}<div class="side">`
     + `<label class="hxauto" title="Past elke ochtend het aantal per werkdag aan volgens het advies. Wordt nu alleen bewaard; werkt pas als de verzending aan staat."><span>Automatisch bijdraaien</span><button class="hxsw" role="switch" aria-checked="${auto}" data-hx="auto" aria-label="Automatisch bijdraaien"></button></label>`
     + `<span class="hxver${HX.ververst ? " bezig" : ""}" title="Cijfers worden ververst bij nieuwe GHL-gebeurtenissen (max 1× per half uur). ↻ rekent ze nu opnieuw uit (±15 s)."><button data-hx="ververs" aria-label="Cijfers verversen" ${HX.ververst ? "disabled" : ""}>↻</button>${HX.ververst ? "verversen…" : HX.verErr ? esc(HX.verErr) : "bijgewerkt om " + hxTijd(HX.bijgewerkt)}</span>`
-    + `</div></div>`;
+    + `</div></div>` + hxZendHtml();
+}
+function hxZendHtml() {
+  const u = HX.liveErr ? `<span class="u bad" role="alert">${esc(HX.liveErr)}</span>` : `<span class="u">${HX.live ? "Elke werkdag om 10:00 gaan de groepen die aan staan echt de deur uit." : "Uit: er gaat niets naar leads, ook niet als groepen aan staan."}</span>`;
+  return `<div class="hxzend"><label><button class="hxsw" role="switch" aria-checked="${HX.live}" data-hx="live" aria-label="Verzending aan" ${HX.liveBusy ? "disabled" : ""}></button><span>Verzending aan</span></label>${HX.liveBusy ? `<span class="u">bezig…</span>` : u}</div>`;
+}
+async function hxLive() {
+  if (HX.liveBusy) return;
+  const nv = !HX.live;
+  if (nv && !confirm("Weet je het zeker? Vanaf morgen 10:00 gaan er echt berichten uit.")) return;
+  HX.liveBusy = true; HX.liveErr = null; hxDraw();
+  try {
+    if (HX_LOCAL()) HX.live = nv;
+    else { const j = await hxPost({ code: HX.code, actie: "opslaan", live: nv }); HX.live = !!j.live; }
+  } catch (e) { HX.liveErr = "Niet gelukt: " + (e.message || e); }
+  HX.liveBusy = false; hxDraw();
 }
 function hxSortBtn(lbl, key) { const d = key === "rep" ? HX.repSort : HX.sort; return `<button class="hxsort" data-hx="sort" data-k="${key}" aria-label="sorteer ${d < 0 ? "laag naar hoog" : "hoog naar laag"}">${lbl} ${d < 0 ? "▼" : "▲"}</button>`; }
 const hxSorted = (arr, f) => arr.map(x => [x, f(x)]).sort((a, b) => HX.sort * (a[1] - b[1])).map(x => x[0]);
@@ -398,14 +417,14 @@ function hxRepsHtml() {
 function hxMsgHtml() {
   const m = HX.msg; if (m) return `<div class="msg ${m.c}" id="hxmsg">${esc(m.t)}</div>`;
   if (HX.dirty) return `<div class="msg dirty" id="hxmsg">Nog niet opgeslagen.</div>`;
-  return `<div class="msg" id="hxmsg">Opslaan bewaart alleen de instellingen. Er wordt niets verstuurd.</div>`;
+  return `<div class="msg" id="hxmsg">${HX.live ? "Opslaan bewaart de instellingen; de verzending gebruikt ze elke werkdag om 10:00." : "Opslaan bewaart alleen de instellingen. Er wordt niets verstuurd."}</div>`;
 }
 function hxDraw() {
   const w = document.getElementById("herwrap"); if (!w) return;
   const on = typeof tab !== "undefined" && tab === "her";
   document.body.classList.toggle("hx-on", on);
   if (!on) return;
-  let h = HERACT_LIVE ? "" : `<div class="hxlive" role="status">Nog niets wordt verstuurd: de verzending staat nog uit.</div>`;
+  let h = HX.live ? `<div class="hxlive aan" role="status">Verzending staat aan · elke werkdag om 10:00</div>` : `<div class="hxlive" role="status">Nog niets wordt verstuurd: de verzending staat nog uit.</div>`;
   if (!HX.code && !HX_LOCAL()) { // eigen code voor dit tabblad; alleen in een JS-variabele, nooit opgeslagen
     w.innerHTML = h + `<div class="hxcard hxgate"><form data-hx="gate" autocomplete="off"><label for="hxcode">Code voor Heractivatie</label><div class="hxinl"><input type="password" id="hxcode" name="hxcode" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore ${HX.laadt ? "disabled" : ""}><button class="hxbtn main" type="submit" ${HX.laadt ? "disabled" : ""}>${HX.laadt ? "Openen…" : "Openen"}</button></div><div class="hxerr${HX.codeErr ? " on" : ""}" role="alert">${esc(HX.codeErr || "")}</div></form></div>`;
     const f = document.getElementById("hxcode"); if (f && !HX.laadt) f.focus(); return;
@@ -416,7 +435,7 @@ function hxDraw() {
   h += `<div class="hxcard"><h2>Groepen <small>van boven naar beneden = prioriteit</small></h2><div class="hxintro">Elke groep die aan staat verstuurt elke werkdag zijn eigen aantal. Binnen een groep gaan de jongste verloren leads eerst.</div><div id="hxgroups">${hxGroupsHtml()}</div></div>`;
   h += `<div class="hxcard"><h2>Resultaten <small>klik een stap: per groep, periode en fase</small></h2><div class="hxfil"><label>Toon</label><select data-hx="fgroep" aria-label="groep"><option value="">Alle groepen</option>${HX_G.map(g => `<option value="${g.id}" ${HX.F.groep === g.id ? "selected" : ""}>${esc(g.naam)}</option>`).join("")}</select><select data-hx="fper" aria-label="periode"><option value="">Alle periodes</option>${HX_PER.map(p => `<option value="${p[0]}" ${HX.F.per === p[0] ? "selected" : ""}>${p[1].replace(" dagen", "")} dagen</option>`).join("")}</select>${HX.F.groep || HX.F.per ? `<button class="hxlink" data-hx="freset">Wis filter</button>` : ""}</div><div id="hxfunnel">${hxFunnelHtml()}</div><div class="hxbtot" id="hxbtot">${hxBtotHtml()}</div></div>`;
   h += `<div class="hxcard"><h2>Team en werkvoorraad <small>klik een naam = doet mee of niet</small></h2><div id="hxreps">${hxRepsHtml()}</div></div>`;
-  h += `<p class="hxnote">Leads: verloren leads met telefoonnummer, minstens 3 dagen stil, zonder andere open of gewonnen deal, zonder 'not interested'. Regels: 60 dagen tussen pogingen, max 3, stop bij reactie of opt-out. Reactie gaat naar de oorspronkelijke eigenaar.</p>`;
+  h += `<p class="hxnote">Leads: verloren leads met telefoonnummer, minstens 3 dagen stil, zonder andere open of gewonnen deal, zonder 'not interested' en 'no money'. Regels: 60 dagen tussen pogingen, max 3, stop bij reactie of opt-out. Reactie gaat naar de oorspronkelijke eigenaar.</p>`;
   h += `<div class="hxsave">${hxMsgHtml()}<button class="hxbtn main" data-hx="save" ${HX.busy ? "disabled" : ""}>${HX.busy ? "Opslaan…" : "Instellingen opslaan"}</button></div>`;
   w.innerHTML = h;
 }
@@ -451,7 +470,7 @@ async function hxSave() {
     if (HX_LOCAL()) { j = { instellingen: body.instellingen.map(x => ({ ...x, aan_sinds: x.aan ? (HX.inst[x.groep].aan_sinds || new Date().toISOString()) : null, shows_sinds: 0 })), reps: HX.reps, pool: Object.entries(HX.pool).map(([k, n]) => ({ groep: k.split("|")[0], periode: k.split("|")[1], n })), pool_fase: HX.poolFase, resultaten: HX.res, bijgewerkt: HX.bijgewerkt }; }
     else j = await hxPost({ code: HX.code, ...body });
     hxApply(j);
-    HX.msg = { c: "ok", t: "Opgeslagen ✓ " + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) + " · er wordt niets verstuurd." };
+    HX.msg = { c: "ok", t: "Opgeslagen ✓ " + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }) + (HX.live ? " · geldt vanaf de volgende werkdag 10:00." : " · er wordt niets verstuurd.") };
   } catch (e) { HX.msg = { c: "bad", t: "Niet opgeslagen: " + (e.message || e) }; }
   HX.busy = false; hxDraw();
 }
@@ -473,6 +492,7 @@ function hxRowRefresh(row, g) { // één groepsrij bijwerken zonder het invoerve
     const repEl = ev.target.closest("[data-rep]"), rep = repEl && HX.reps.find(r => r.rep === repEl.dataset.rep);
     if (a === "laad") { hxLaad(); return; }
     if (a === "save") { hxSave(); return; }
+    if (a === "live") { hxLive(); return; }
     if (a === "ververs") { hxVervers(); return; }
     if (a === "freset") { HX.F = { groep: "", per: "" }; hxDraw(); return; }
     if (a === "sort") { if (t.dataset.k === "rep") { HX.repSort = -HX.repSort; document.getElementById("hxreps").innerHTML = hxRepsHtml(); } else { HX.sort = -HX.sort; document.getElementById("hxfunnel").innerHTML = hxFunnelHtml(); } const b = w.querySelector(`.hxsort[data-k="${t.dataset.k}"]`); if (b) b.focus(); return; }
