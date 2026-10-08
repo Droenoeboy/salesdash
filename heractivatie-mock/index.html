@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heractivatie · mockup v3</title>
+<style>
+:root{--ink:#0e0e0f;--sand:#d8d1b3;--sand2:#efeadb;--green:#1a9a3d;--blue:#1f6fd8;--red:#dc2a1e;--yellow:#f2c400;
+--txt:#0e0e0f;--bg:#f5f4f0;--card:#fff;--mut:#6e6e73;--mut2:#8e8e93;--line:#e6e4dc;--line2:#efede6;
+--plan-bg:#e9f1fc;--plan-tx:#1758ad;--show-bg:#fdf6d8;--show-tx:#8a6d00;--sign-bg:#e5f5ea;--sign-tx:#15803a;--close-bg:#fde9e7;--close-tx:#b91f15;--pay:#8f845e;
+--radius:16px;--r2:12px;--shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(20,20,20,.05);
+font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.35;font-feature-settings:"tnum" 1}
+button,input,select{font:inherit;color:inherit}
+.top{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--card)}
+.top .logo{width:28px;height:28px;background:var(--ink);border-radius:6px}.top h1{font-size:15px;margin:0;font-weight:700}.top .stand{margin-left:auto;color:var(--mut);font-size:12px}
+.tabsrow{display:flex;gap:6px;padding:12px 22px 0;overflow-x:auto;scrollbar-width:none}.tabsrow::-webkit-scrollbar{display:none}
+.tab{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:8px 15px;font-size:13px;font-weight:600;white-space:nowrap;color:var(--txt)}
+.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.wrap{padding:16px 22px 80px;max-width:1240px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
+.kpi b{font-size:22px;display:block;letter-spacing:-.4px;line-height:1.15}.kpi span{font-size:12px;color:var(--mut)}
+.kpi.b b{color:var(--plan-tx)}.kpi.g b{color:var(--sign-tx)}.kpi.r b{color:var(--close-tx)}
+.strip{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 16px;margin-bottom:14px;font-size:13px}
+.strip b{font-size:20px;letter-spacing:-.3px;margin-right:4px}.strip .m{color:var(--mut)}
+.strip .rem{margin-left:auto;background:var(--show-bg);color:var(--show-tx);border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:14px}
+.card h2{font-size:14px;margin:0 0 6px;display:flex;align-items:center;gap:8px}.card h2 small{color:var(--mut);font-weight:500;font-size:12px}
+/* group */
+.g{border-top:1px solid var(--line2)}.g:first-of-type{border-top:0}
+.grp{display:grid;grid-template-columns:34px 220px 1fr 360px 150px;gap:12px;align-items:center;padding:11px 0;cursor:pointer}
+.grp:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
+.rank{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+.g.off .rank{background:var(--sand);color:var(--ink)}
+.gname{min-width:0}.gname b{display:block;font-size:13.5px}.gname span{font-size:12px;color:var(--mut)}
+.bar{height:22px;border-radius:6px;background:var(--line2);display:flex;overflow:hidden;position:relative}
+.bar i{display:block;height:100%}.bar .p1{background:var(--blue)}.bar .p2{background:#f2c400}.bar .p3{background:var(--pay)}
+.bar em{position:absolute;right:8px;top:3px;font-style:normal;font-size:12px;color:var(--mut)}
+.res{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end}
+.pill{border:0;border-radius:99px;padding:4px 9px;font-size:12px;font-weight:600;background:var(--line2);color:var(--mut);cursor:pointer}
+.pill.b{background:var(--plan-bg);color:var(--plan-tx)}.pill.g{background:var(--sign-bg);color:var(--sign-tx)}.pill.r{background:var(--close-bg);color:var(--close-tx)}
+.pill:focus-visible{outline:2px solid var(--blue)}
+.stc{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.sw{width:38px;height:22px;border-radius:99px;background:#c9c6bb;position:relative;border:0;cursor:pointer;padding:0;flex:none}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.sw[aria-checked="true"]{background:var(--green)}.sw[aria-checked="true"]::after{left:19px}.sw:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.st{font-size:12px;font-weight:600;border-radius:99px;padding:4px 9px;white-space:nowrap}
+.st.uit{background:var(--line2);color:var(--mut)}.st.aan{background:var(--sign-bg);color:var(--sign-tx)}.st.rem{background:var(--show-bg);color:var(--show-tx)}.st.klaar{background:var(--plan-bg);color:var(--plan-tx)}.st.leeg{background:var(--close-bg);color:var(--close-tx)}
+.legend{display:flex;gap:12px;font-size:11.5px;color:var(--mut);margin-top:8px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+/* settings */
+.set{display:none;grid-column:1/-1;background:var(--bg);border-radius:var(--r2);padding:12px 14px;margin:0 0 12px 46px}
+.g.open .set{display:grid;grid-template-columns:auto auto auto;gap:10px 28px;align-items:start}
+.f label{display:block;font-size:12px;color:var(--mut);font-weight:600;margin-bottom:6px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 11px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--mut)}
+.chip[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}.chip:focus-visible{outline:2px solid var(--blue)}
+input[type=number],input[type=date],select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 9px;font-size:13px;width:96px}
+select{width:auto}.inl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.err{color:var(--close-tx);font-size:12px;margin-top:6px;display:none}.err.on{display:block}
+.save{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 22px;display:flex;align-items:center;gap:12px;z-index:5}
+.save .msg{font-size:12.5px;color:var(--mut);flex:1}.save .msg.ok{color:var(--sign-tx)}.save .msg.bad{color:var(--close-tx)}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer}
+.btn.main{background:var(--ink);color:#fff;border-color:var(--ink)}.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.tip{position:fixed;background:var(--ink);color:#fff;font-size:12px;padding:7px 10px;border-radius:8px;max-width:260px;display:none;z-index:9;pointer-events:none}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--card);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.08);transform:translateX(100%);transition:transform .18s;z-index:8;padding:16px 18px;overflow:auto}
+.drawer.on{transform:none}.drawer h3{margin:0 0 4px;font-size:15px}.drawer .sub{font-size:12px;color:var(--mut);margin-bottom:12px}
+.drawer table{width:100%;border-collapse:collapse;font-size:13px}.drawer td{padding:7px 4px;border-bottom:1px solid var(--line2)}.drawer td.r{text-align:right;color:var(--mut)}.drawer .x{position:absolute;top:12px;right:12px}
+.note{font-size:11.5px;color:var(--mut2);margin-top:6px}
+@media(max-width:900px){.grp{grid-template-columns:34px 1fr auto;row-gap:8px}.grp .bar,.grp .res{grid-column:1/-1}.res{justify-content:flex-start;flex-wrap:wrap}.set{margin-left:0}.g.open .set{grid-template-columns:1fr}.top .stand{display:none}.strip .rem{margin-left:0}}
+</style></head><body>
+<div class="top"><div class="logo"></div><h1>Sales</h1><div class="stand">Mockup v3 · pool geteld 8 okt 2026 · voortgang is voorbeeld</div></div>
+<div class="tabsrow">
+<div class="tab">📊 Totaal</div><div class="tab">📞 Vandaag</div><div class="tab">⚖️ Team</div><div class="tab">📅 Intakes</div><div class="tab">🏆 Gewonnen</div><div class="tab">🚫 Verloren</div><div class="tab on">♻️ Heractivatie</div><div class="tab">⚡ Adviezen</div><div class="tab">📜 Log</div>
+</div>
+<div class="wrap">
+<div class="kpis" id="kpis"></div>
+<div class="strip" id="strip"></div>
+<div class="card">
+<h2>Per groep <small>klik op een groep om in te stellen · balk = hoe vaak benaderd · elk getal klikt door naar de namen</small></h2>
+<div id="groups"></div>
+<div class="legend"><span><i style="background:var(--line2)"></i>nog niet</span><span><i style="background:var(--blue)"></i>1x benaderd</span><span><i style="background:#f2c400"></i>2x</span><span><i style="background:var(--pay)"></i>3x (laatste)</span></div>
+</div>
+<p class="note">Pool: Supabase, verloren leads met telefoonnummer, dagen stil sinds laatste fase- of statuswissel. Regels: 60 dagen tussen pogingen, max 3, stop bij reactie of opt-out, negatief = nooit meer, niet afgeleverd 1 retry. Boven 8 open reacties bij één rep: morgen de helft.</p>
+</div>
+<div class="save"><div class="msg" id="msg">Opslaan verstuurt niets. GHL verstuurt elke werkdag om 10:00 volgens deze instellingen.</div><button class="btn main" id="saveBtn">Instellingen opslaan</button></div>
+<div class="tip" id="tip"></div>
+<div class="drawer" id="drawer"><button class="btn x" id="dx">Sluit</button><div id="dbody"></div></div>
+<script>
+const PER=[['j30','<30 d'],['d30_90','30 tot 90'],['d90_180','90 tot 180'],['d180p','180+']];
+const DOEL={pool:'tot de pool op is',intakes:'tot N intakes',reacties:'tot N reacties',datum:'tot een datum'};
+const G=[
+ {id:'reopen',naam:'Reopen later',def:'alle fases · reden Reopen later',pool:{j30:18,d30_90:18,d90_180:29,d180p:9},aan:true,perdag:15,per:['d30_90','d90_180'],doel:'intakes',n:5,datum:'',sim:{p1:28,p2:0,p3:0,react:8,intake:3,sign:1,stop:1,start:{intake:0,react:0}}},
+ {id:'mls',naam:'Motivation Letter',def:'fase MLS · 4 calls, geen brief, no money',pool:{j30:3,d30_90:13,d90_180:16,d180p:2},aan:true,perdag:10,per:['d30_90','d90_180'],doel:'pool',n:0,datum:'',sim:{p1:20,p2:0,p3:0,react:6,intake:2,sign:1,stop:0,start:{intake:0,react:0}}},
+ {id:'show',naam:'Show',def:'fase Show · 4 calls, geen brief, no money',pool:{j30:2,d30_90:3,d90_180:27,d180p:6},aan:false,perdag:10,per:['d90_180'],doel:'pool',n:0,datum:'',sim:{p1:0,p2:0,p3:0,react:0,intake:0,sign:0,stop:0,start:{intake:0,react:0}}},
+ {id:'noshow',naam:'No Show',def:'fase No Show · zonder not interested',pool:{j30:1,d30_90:9,d90_180:57,d180p:20},aan:true,perdag:20,per:['d30_90','d90_180'],doel:'reacties',n:10,datum:'',sim:{p1:30,p2:0,p3:0,react:7,intake:1,sign:0,stop:1,start:{intake:0,react:0}}},
+ {id:'leads',naam:'Leads · 4 calls',def:'fase Leads · reden 4 calls attempted',pool:{j30:57,d30_90:132,d90_180:238,d180p:144},aan:true,perdag:40,per:['j30','d30_90'],doel:'datum',n:0,datum:'2026-11-30',sim:{p1:80,p2:0,p3:0,react:12,intake:0,sign:0,stop:2,start:{intake:0,react:0}}},
+];
+const REM=true, REMWIE='Sander · 9 open';
+const open=new Set();
+const sel=g=>g.per.reduce((s,k)=>s+g.pool[k],0), benaderd=g=>g.sim.p1+g.sim.p2+g.sim.p3, over=g=>Math.max(0,sel(g)-benaderd(g));
+function status(g){
+  if(!g.aan) return ['uit','Uit'];
+  if(g.doel==='intakes'&&g.sim.intake-g.sim.start.intake>=g.n) return ['klaar','Doel bereikt'];
+  if(g.doel==='reacties'&&g.sim.react-g.sim.start.react>=g.n) return ['klaar','Doel bereikt'];
+  if(g.doel==='datum'&&g.datum&&new Date(g.datum)<new Date()) return ['klaar','Doel bereikt'];
+  if(over(g)===0) return ['leeg','Pool op'];
+  if(REM) return ['rem',eff(g)+' van '+g.perdag+'/dag'];
+  return ['aan',g.perdag+'/dag'];
+}
+const eff=g=>{const s=g.aan?Math.min(g.perdag,over(g)):0;return REM?Math.floor(s/2):s};
+const actief=g=>['aan','rem'].includes(status(g)[0]);
+function doelTxt(g){
+  if(g.doel==='pool') return 'tot pool op';
+  if(g.doel==='intakes') return (g.sim.intake-g.sim.start.intake)+' van '+g.n+' intakes';
+  if(g.doel==='reacties') return (g.sim.react-g.sim.start.react)+' van '+g.n+' reacties';
+  return 'tot '+(g.datum?new Date(g.datum).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'…');
+}
+const pct=(a,b)=>b?(100*a/b).toFixed(1).replace('.',',')+'%':'';
+const perTxt=g=>g.per.length?PER.filter(p=>g.per.includes(p[0])).map(p=>p[1]).join(' · ')+' d':'geen periode';
+function strip(){
+  const act=G.filter(actief); const tot=act.reduce((s,g)=>s+(Number.isInteger(g.perdag)?eff(g):0),0);
+  let exp=0; act.forEach(g=>{ if(benaderd(g)>0) exp+=eff(g)*g.sim.react/benaderd(g); });
+  document.getElementById('strip').innerHTML=`<span><b>${act.length}</b><span class="m">groepen aan</span></span><span><b>${tot}</b><span class="m">berichten vandaag</span></span><span><b>≈${Math.round(exp)}</b><span class="m">reacties verwacht</span></span>${REM?`<span class="rem">Geremd: ${REMWIE} · morgen de helft</span>`:''}`;
+}
+function render(){
+  const tp=G.reduce((s,g)=>s+Object.values(g.pool).reduce((a,b)=>a+b,0),0), tb=G.reduce((s,g)=>s+benaderd(g),0);
+  const tr=G.reduce((s,g)=>s+g.sim.react,0), ti=G.reduce((s,g)=>s+g.sim.intake,0), ts=G.reduce((s,g)=>s+g.sim.sign,0), tst=G.reduce((s,g)=>s+g.sim.stop,0);
+  document.getElementById('kpis').innerHTML=`<div class="kpi"><b>${tp}</b><span>in de pool</span></div><div class="kpi"><b>${tb}</b><span>benaderd</span></div><div class="kpi b"><b>${tr}</b><span>reageerde · ${pct(tr,tb)}</span></div><div class="kpi g"><b>${ti}</b><span>intake geboekt</span></div><div class="kpi g"><b>${ts}</b><span>getekend</span></div><div class="kpi r"><b>${tst}</b><span>stop · nooit meer</span></div>`;
+  strip();
+  document.getElementById('groups').innerHTML=G.map((g,ix)=>{
+    const [sc,sl]=status(g), s=sel(g), b=benaderd(g), w=k=>s?Math.round(100*g.sim[k]/s):0;
+    return `<div class="g ${open.has(g.id)?'open':''} ${g.aan?'':'off'}" data-id="${g.id}">
+     <div class="grp" tabindex="0" role="button" aria-expanded="${open.has(g.id)}" data-act="toggle">
+       <div class="rank">${ix+1}</div>
+       <div class="gname"><b>${g.naam}</b><span class="sub">${perTxt(g)} · ${doelTxt(g)}</span></div>
+       <div class="bar" aria-label="${b} van ${s} benaderd"><i class="p1" style="width:${w('p1')}%"></i><i class="p2" style="width:${w('p2')}%"></i><i class="p3" style="width:${w('p3')}%"></i><em>${s} · nog ${over(g)}</em></div>
+       <div class="res"><button class="pill b" data-act="drill" data-k="react">${g.sim.react} reactie${b?' · '+pct(g.sim.react,b):''}</button><button class="pill ${g.sim.intake?'g':''}" data-act="drill" data-k="intake">${g.sim.intake} intake</button><button class="pill ${g.sim.sign?'g':''}" data-act="drill" data-k="sign">${g.sim.sign} getekend</button><button class="pill ${g.sim.stop?'r':''}" data-act="drill" data-k="stop">${g.sim.stop} stop</button></div>
+       <div class="stc"><span class="st ${sc}">${sl}</span><button class="sw" role="switch" aria-checked="${g.aan}" aria-label="${g.naam} aan of uit" data-act="aan"></button></div>
+     </div>
+     <div class="set">
+       <div class="f"><label>Periodes (dagen stil)</label><div class="chips">${PER.map(p=>`<button class="chip" aria-pressed="${g.per.includes(p[0])}" data-act="per" data-k="${p[0]}">${p[1]} · ${g.pool[p[0]]}</button>`).join('')}</div><div class="err" id="e-per-${g.id}">Kies minstens één periode.</div></div>
+       <div class="f"><label for="pd-${g.id}">Berichten per dag</label><input type="number" id="pd-${g.id}" min="1" step="1" value="${g.perdag}" data-act="perdag"><div class="err" id="e-pd-${g.id}">Heel getal boven 0.</div></div>
+       <div class="f"><label for="dl-${g.id}">Aan laten staan</label><div class="inl"><select id="dl-${g.id}" data-act="doel">${Object.entries(DOEL).map(([k,v])=>`<option value="${k}" ${g.doel===k?'selected':''}>${v}</option>`).join('')}</select><input type="number" min="1" step="1" value="${g.n||''}" data-act="n" aria-label="aantal" style="display:${['intakes','reacties'].includes(g.doel)?'inline-block':'none'}"><input type="date" value="${g.datum}" data-act="datum" aria-label="datum" style="display:${g.doel==='datum'?'inline-block':'none'};width:150px"></div><div class="err" id="e-dl-${g.id}">Getal boven 0 of datum in de toekomst.</div></div>
+     </div></div>`;}).join('');
+}
+function validate(){let ok=true;G.forEach(g=>{const e=(id,bad)=>{const el=document.getElementById(id);if(el)el.classList.toggle('on',bad);if(bad)ok=false;};
+  e('e-per-'+g.id,g.aan&&g.per.length===0);e('e-pd-'+g.id,!(Number.isInteger(g.perdag)&&g.perdag>0));
+  const dbad=['intakes','reacties'].includes(g.doel)?!(Number.isInteger(g.n)&&g.n>0):(g.doel==='datum'?!(g.datum&&new Date(g.datum)>new Date()):false);e('e-dl-'+g.id,g.aan&&dbad);});return ok;}
+const groups=document.getElementById('groups');
+groups.addEventListener('click',ev=>{const t=ev.target.closest('[data-act]');if(!t)return;const row=ev.target.closest('.g');const g=G.find(x=>x.id===row.dataset.id);const a=t.dataset.act;
+  if(a==='aan'){ev.stopPropagation();g.aan=!g.aan;render();return;}
+  if(a==='toggle'){open.has(g.id)?open.delete(g.id):open.add(g.id);render();return;}
+  if(a==='per'){const k=t.dataset.k;g.per=g.per.includes(k)?g.per.filter(x=>x!==k):[...g.per,k];open.add(g.id);render();return;}
+  if(a==='drill'){ev.stopPropagation();drill(g,t.dataset.k);}});
+groups.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.dataset.act==='toggle'){ev.preventDefault();ev.target.click();}});
+groups.addEventListener('input',ev=>{const t=ev.target;const g=G.find(x=>x.id===t.closest('.g').dataset.id);const a=t.dataset.act;
+  if(a==='perdag')g.perdag=t.value===''?NaN:Number(t.value);if(a==='n')g.n=t.value===''?NaN:Number(t.value);if(a==='datum')g.datum=t.value;
+  if(a==='doel'){g.doel=t.value;render();return;}
+  const row=t.closest('.g');const [sc,sl]=status(g);row.querySelector('.sub').textContent=perTxt(g)+' · '+doelTxt(g);const st=row.querySelector('.st');st.className='st '+sc;st.textContent=sl;strip();});
+document.getElementById('saveBtn').addEventListener('click',()=>{const m=document.getElementById('msg');
+  if(!validate()){m.className='msg bad';m.textContent='Niet opgeslagen: zie de rode melding bij de groep.';return;}
+  G.forEach(g=>{g.sim.start={intake:g.sim.intake,react:g.sim.react};});m.className='msg ok';m.textContent='Opgeslagen '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})+' (mockup, niets verstuurd). Doelen tellen vanaf nu.';render();});
+const FAKE=['A. Jansen','B. de Vries','C. Bakker','D. Visser','E. Smit','F. Meijer','G. de Boer','H. Mulder','I. Bos','J. Vos','K. Peters','L. Hendriks'];
+function drill(g,k){const n=g.sim[k];const lbl={react:'Reageerde',intake:'Intake geboekt',sign:'Getekend',stop:'Stop · nooit meer'}[k];
+  const rows=Array.from({length:n},(_,i)=>`<tr><td>${FAKE[i%FAKE.length]}</td><td class="r">${['Leads','Show','No Show','MLS'][i%4]}</td><td class="r">${30+i*17} d stil</td><td class="r">poging 1</td></tr>`).join('');
+  document.getElementById('dbody').innerHTML=`<h3>${g.naam} · ${lbl}</h3><div class="sub">${n} ${n===1?'persoon':'personen'} · fictieve namen (mockup)</div><table>${rows||'<tr><td>Nog niemand.</td></tr>'}</table>`;document.getElementById('drawer').classList.add('on');}
+document.getElementById('dx').addEventListener('click',()=>document.getElementById('drawer').classList.remove('on'));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('drawer').classList.remove('on')});
+const tip=document.getElementById('tip');
+const TIPS={uit:'Staat uit. Niets wordt verstuurd.',aan:'Loopt elke werkdag om 10:00. Stopt vanzelf bij het doel of als de pool op is.',rem:'Een rep heeft meer dan 8 open reacties. Morgen gaat de helft uit, daarna weer normaal.',klaar:'Doel gehaald. Start niet vanzelf opnieuw; zet een nieuw doel.',leeg:'Iedereen in de gekozen periodes is benaderd. Kies een extra periode of wacht op ronde 2 (na 60 dagen).'};
+function showTip(el){const c=[...el.classList].find(x=>TIPS[x]);if(!c)return;tip.textContent=TIPS[c];tip.style.display='block';const r=el.getBoundingClientRect();tip.style.left=Math.min(r.left,innerWidth-280)+'px';tip.style.top=(r.bottom+6)+'px';}
+document.addEventListener('mouseover',e=>{const el=e.target.closest('.st');if(el)showTip(el);});document.addEventListener('mouseout',e=>{if(e.target.closest('.st'))tip.style.display='none';});
+render();
+</script></body></html>
