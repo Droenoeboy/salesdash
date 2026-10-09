@@ -956,9 +956,14 @@ function eigenList(){ const out=[]; for(const k in FOLST){ if(k.indexOf("eigen|"
   const ad={ai:false,eigen:true,type:"eigen",label:text,cname:text,sname:null,platform:null,cid:null,sid:null,manual:true,absRef:null,absTgt:null,txt:"",titel:text,kant:"advertentie",zekerheid:"",w:0,prio:900,ref:null,reactie:"",opmTeam:"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}};
   ADVBYKEY.set(k,ad); out.push(ad); }
   // data-alarmen: alleen zichtbaar als er iets mis is (grijze rij, niet afvinkbaar)
-  const t=d2s(NOW), mA=s2d(new Date(t.getFullYear(),t.getMonth(),1)); const cur=L.filter(l=>l.cd>=mA&&l.cd<=NOW); const hard=cur.length?cur.filter(l=>l.hard).length/cur.length*100:null;
-  const al=[]; if(hard!=null&&cur.length>=20&&hard<85) al.push(`Hard bewijs deze maand ${r1(hard)}%, onder 85%`);
-  const nf=L.filter(l=>l.is_signed&&l.signed_via!=="formulier").length; if(nf) al.push(`${nf} inschrijving${nf===1?"":"en"} zonder inschrijfformulier`);
+  // Data-alarmen volgen de gekozen A/B-periode, nooit de kalendermaand (DPAC-893 punt 2).
+  const qa=(typeof AdvicePolicy!=="undefined"&&AdvicePolicy.qualityAlarm)?AdvicePolicy.qualityAlarm(L,A,B):null;
+  const al=[]; if(qa) al.push(`Hard bewijs ${fmtY(A)}–${fmtY(B)} ${r1(qa.hard)}%, onder 85% (${qa.total} leads). ${qa.text}`);
+  // DPAC-893 punt 3 (voorbereiding): "zonder formulier" moet form_evidence gebruiken zodra
+  // de onderzoeker die velden levert; tot dan blijft de oude signed_via-telling de terugval,
+  // nooit automatisch als "ontbrekend" gelabeld zonder die bronreconciliatie.
+  const formMissing=l=>(typeof AdvicePolicy!=="undefined"&&AdvicePolicy.formState&&l.form_evidence)?AdvicePolicy.formState(l)==="missing":l.signed_via!=="formulier";
+  const nf=L.filter(l=>l.is_signed&&formMissing(l)).length; if(nf) al.push(`${nf} inschrijving${nf===1?"":"en"} zonder inschrijfformulier`);
   const um=FORMS.filter(f=>!f.contact_id).length; if(um) al.push(`${um} formulier${um===1?"":"en"} zonder contact`);
   al.forEach(x=>out.push({ai:false,alarm:true,type:"alarm",label:x,cname:x,sname:null,platform:null,cid:null,sid:null,manual:true,absRef:null,absTgt:null,txt:"",titel:x,kant:"data",zekerheid:"",w:0,prio:800,ref:null,reactie:"",opmTeam:"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}}));
   return out; }
@@ -1002,7 +1007,13 @@ function advRow(ad,cls){
   if(ad.alarm) return `<div class="arow al"><span class="amk">⚠️</span><div class="amain"><b>${esc(ad.titel)}</b></div><span class="abud uitz">data</span></div>`;
   if(ad.eigen) return `<div class="arow eig ${S.grp}"><label class="achk" title="Gedaan"><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label><span class="amk"></span><div class="amain"><b>${esc(ad.titel)}</b></div></div>`;
   const sn=stNowOf(ad);
-  const panel=opn?`<div class="apanel"><p class="amut">${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${ad.adnaam?` › ${esc(ad.adnaam)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}</p>${ad.manual&&ad.titel?`<p><b>${esc(ad.titel)}</b></p>`:""}${ad.txt?`<p>${esc(zin2(ad.txt))}</p>`:""}${ad.doen?`<p class="amut">${esc(ad.doen)}</p>`:""}${ad.meet?`<p class="amut">Toets ${meetDatum(ad.meet.datum)}: ${esc(ad.meet.criterium)}</p>`:""}${ad.verwacht?`<p class="amut">${esc(ad.verwacht)}</p>`:""}${ad.ref&&ad.opmTeam?`<p class="amut">📝 ${esc(ad.opmTeam)}</p>`:""}${ad.ref&&ad.reactie?`<p class="amut">🔁 ${esc(ad.reactie)}</p>`:""}</div>`:"";
+  // DPAC-893 punt 1: één klein regel campagne/adset/ad onder de hoofdrij, daaronder twee
+  // menselijk geschreven zinnen (wat + waarom). Bronmetadata (doen/meetpunt/verwacht/audit/
+  // opmerkingen) blijft bewaard, maar gestapeld alleen achter "Meer details" — niet standaard op het scherm.
+  const unitLine=`${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${ad.adnaam?` › ${esc(ad.adnaam)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}`;
+  const zinnen=zin2(ad.doen?`${ad.txt} ${ad.doen}`:ad.txt);
+  const metaBits=[ad.manual&&ad.titel?`<b>${esc(ad.titel)}</b>`:"",ad.meet?`Toets ${meetDatum(ad.meet.datum)}: ${esc(ad.meet.criterium)}`:"",ad.verwacht?esc(ad.verwacht):"",ad.ref&&ad.opmTeam?`📝 ${esc(ad.opmTeam)}`:"",ad.ref&&ad.reactie?`🔁 ${esc(ad.reactie)}`:""].filter(Boolean);
+  const panel=opn?`<div class="apanel"><p class="aunit">${unitLine}</p>${zinnen?`<p class="atxt">${esc(zinnen)}</p>`:""}${metaBits.length?`<details class="ameta"><summary>Meer details</summary>${metaBits.map(b=>`<p class="amut">${b}</p>`).join("")}</details>`:""}</div>`:"";
   const naam=ad.adnaam||ad.sname||ad.cname;
   return `<div class="arow ${cls||""} ${S.grp}${opn?" open":""}">`
     +`<label class="achk" title="Gedaan. Zonder opmerking = advies gevolgd. Met opmerking = anders gedaan."><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
