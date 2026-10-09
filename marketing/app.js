@@ -413,7 +413,7 @@ function drawTreeInner(){
   let t=buildTreeFiltered(A,B); addKeywords(t); t.forEach(n=>decorate(n,A,B));
   TREE=t; sortNodes(TREE,true);
   TOTM=metrics(L.filter(l=>PARTY||!l.party),spendIn(A,B,partyF),A,B);
-  let h=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">Platform › campagne › adset › advertentie</th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
+  let h=`<div class="cmp treecard"><table class="tree"><tr><th class="nm">Platform › campagne › adset › advertentie${open.size?`<button type="button" class="tclose" onclick="event.stopPropagation();treeCloseAll()">Alles inklappen</button>`:`<button type="button" class="tclose" onclick="event.stopPropagation();treeOpenAll()">Alles uitklappen</button>`}</th>`+COLS.map(c=>`<th class="${c.w}${sortKey===c.k?" on":""}" onclick="setSort('${c.k}')" ${c.tip?`title="${esc(c.tip)}"`:""}>${c.t} <span class="arr">${sortKey===c.k?(sortDir>0?"▲":"▼"):""}</span></th>`).join("")+`</tr>`;
   h+=`<tr class="tot"><td class="nm" style="padding-left:10px"><b>Totaal</b></td>`+COLS.map(c=>`<td class="${c.w}"${c.tipc&&c.tipc(TOTM)?` title="${esc(c.tipc(TOTM))}"`:""}>${c.f(TOTM)}</td>`).join("")+`</tr>`;
   for(const n of TREE) h+=rowHtml(n,0);
   w.innerHTML=h+`</table></div>`;
