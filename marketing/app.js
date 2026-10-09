@@ -841,7 +841,7 @@ function aiAdvList(){
     const adnaam=a.advertentie?String(a.advertentie):null;
     const manual=(type==="uitzoeken"||!cid||a.budget_naar==null);
     const ad={ai:true,type,actie:String(a.actie||"uitzoeken"),label:cname+(sname?" → "+sname:"")+(adnaam?" → "+adnaam:""),cname,sname,adnaam,adId:a.ad_id||null,platform:a.platform,cid,sid,manual,absRef:manual?null:(a.budget_nu==null?null:+a.budget_nu),absTgt:manual?null:+a.budget_naar,
-      txt:String(a.waarom||""),titel:String(a.titel||""),kant:a.kant||"advertentie",zekerheid:a.zekerheid||"",w:+a.euro_per_maand||0,prio:+a.prioriteit||i+1,
+      txt:String(a.waarom||""),punten:Array.isArray(a.punten)?a.punten.map(String).filter(Boolean):[],adviesRegel:a.advies?String(a.advies):"",titel:String(a.titel||""),kant:a.kant||"advertentie",zekerheid:a.zekerheid||"",w:+a.euro_per_maand||0,prio:+a.prioriteit||i+1,
       ref:a.ref||null,reactie:a.reactie?String(a.reactie):"",opmTeam:a.opmerking_team?String(a.opmerking_team):"",vast:!!a.vast_punt,
       doen:a.doen?String(a.doen):"",meet:(a.meetpunt&&a.meetpunt.criterium)?a.meetpunt:null,verwacht:a.verwacht?String(a.verwacht):"",wa:null,wb:null,m:{spend:0,n:0,sh:0,sg:0,cpk:null}};
     ADVBYKEY.set(folKey(ad),ad); return ad; });
@@ -1011,9 +1011,11 @@ function advRow(ad,cls){
   // menselijk geschreven zinnen (wat + waarom). Bronmetadata (doen/meetpunt/verwacht/audit/
   // opmerkingen) blijft bewaard, maar gestapeld alleen achter "Meer details" — niet standaard op het scherm.
   const unitLine=`${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${ad.adnaam?` › ${esc(ad.adnaam)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}`;
-  const zinnen=zin2(ad.doen?`${ad.txt} ${ad.doen}`:ad.txt);
-  const metaBits=[ad.manual&&ad.titel?`<b>${esc(ad.titel)}</b>`:"",ad.meet?`Toets ${meetDatum(ad.meet.datum)}: ${esc(ad.meet.criterium)}`:"",ad.verwacht?esc(ad.verwacht):"",ad.ref&&ad.opmTeam?`📝 ${esc(ad.opmTeam)}`:"",ad.ref&&ad.reactie?`🔁 ${esc(ad.reactie)}`:""].filter(Boolean);
-  const panel=opn?`<div class="apanel"><p class="aunit">${unitLine}</p>${zinnen?`<p class="atxt">${esc(zinnen)}</p>`:""}${metaBits.length?`<details class="ameta"><summary>Meer details</summary>${metaBits.map(b=>`<p class="amut">${b}</p>`).join("")}</details>`:""}</div>`:"";
+  const nieuw=ad.punten&&ad.punten.length&&ad.adviesRegel;   // DPAC-952: bullets + Advies-regel (Abels leesvorm); oude runs vallen terug op twee zinnen
+  const zinnen=nieuw?"":zin2(ad.doen?`${ad.txt} ${ad.doen}`:ad.txt);
+  const body=nieuw?`<ul class="apts">${ad.punten.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p class="aadv">${esc(ad.adviesRegel).replace(/^Advies:/,"<b>Advies:</b>")}</p>`:(zinnen?`<p class="atxt">${esc(zinnen)}</p>`:"");
+  const metaBits=[ad.manual&&ad.titel?`<b>${esc(ad.titel)}</b>`:"",nieuw&&ad.txt?`Onderbouwing: ${esc(ad.txt)}`:"",nieuw&&ad.doen?`Zo doe je het: ${esc(ad.doen)}`:"",ad.meet?`Toets ${meetDatum(ad.meet.datum)}: ${esc(ad.meet.criterium)}`:"",ad.verwacht?esc(ad.verwacht):"",ad.ref&&ad.opmTeam?`📝 ${esc(ad.opmTeam)}`:"",ad.ref&&ad.reactie?`🔁 ${esc(ad.reactie)}`:""].filter(Boolean);
+  const panel=opn?`<div class="apanel"><p class="aunit">${unitLine}</p>${body}${metaBits.length?`<details class="ameta"><summary>Meer details</summary>${metaBits.map(b=>`<p class="amut">${b}</p>`).join("")}</details>`:""}</div>`:"";
   const naam=ad.adnaam||ad.sname||ad.cname;
   return `<div class="arow ${cls||""} ${S.grp}${opn?" open":""}">`
     +`<label class="achk" title="Gedaan. Zonder opmerking = advies gevolgd. Met opmerking = anders gedaan."><input type="checkbox" ${S.chk?"checked":""} onchange="folCheck(${jq(key)},this.checked)"></label>`
