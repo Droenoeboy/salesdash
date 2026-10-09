@@ -1012,9 +1012,9 @@ function advRow(ad,cls){
   // opmerkingen) blijft bewaard, maar gestapeld alleen achter "Meer details" — niet standaard op het scherm.
   const unitLine=`${esc(ad.cname)}${ad.sname?` › ${esc(ad.sname)}`:""}${ad.adnaam?` › ${esc(ad.adnaam)}`:""}${sn?` · nu ingesteld: ${stUit(ad)?"uit":sn.budget!=null?eur0(sn.budget)+" per dag":"aan"}`:""}`;
   const nieuw=ad.punten&&ad.punten.length&&ad.adviesRegel;   // DPAC-952: bullets + Advies-regel (Abels leesvorm); oude runs vallen terug op twee zinnen
-  const zinnen=nieuw?"":zin2(ad.doen?`${ad.txt} ${ad.doen}`:ad.txt);
+  const zinnen=nieuw?"":(ad.titel||zin2(ad.txt));   // DPAC-1050: oude runs zonder bullets tonen alleen de titel, geen cijferlap
   const body=nieuw?`<ul class="apts">${ad.punten.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><p class="aadv">${esc(ad.adviesRegel).replace(/^Advies:/,"<b>Advies:</b>")}</p>`:(zinnen?`<p class="atxt">${esc(zinnen)}</p>`:"");
-  const metaBits=[ad.manual&&ad.titel?`<b>${esc(ad.titel)}</b>`:"",nieuw&&ad.txt?`Onderbouwing: ${esc(ad.txt)}`:"",nieuw&&ad.doen?`Zo doe je het: ${esc(ad.doen)}`:"",ad.meet?`Toets ${meetDatum(ad.meet.datum)}: ${esc(ad.meet.criterium)}`:"",ad.verwacht?esc(ad.verwacht):"",ad.ref&&ad.opmTeam?`📝 ${esc(ad.opmTeam)}`:"",ad.ref&&ad.reactie?`🔁 ${esc(ad.reactie)}`:""].filter(Boolean);
+  const metaBits=[nieuw&&ad.doen?`Zo doe je het: ${esc(ad.doen)}`:"",ad.meet?`Volgende check: ${meetDatum(ad.meet.datum)}`:"",ad.ref&&ad.opmTeam?`📝 Jullie: ${esc(ad.opmTeam)}`:"",ad.ref&&ad.reactie?`🔁 AI: ${esc(ad.reactie)}`:""].filter(Boolean);   // DPAC-1050: geen onderbouwing/criterium/verwacht meer; Abel snapte het niet
   const panel=opn?`<div class="apanel"><p class="aunit">${unitLine}</p>${body}${metaBits.length?`<details class="ameta"><summary>Meer details</summary>${metaBits.map(b=>`<p class="amut">${b}</p>`).join("")}</details>`:""}</div>`:"";
   const naam=ad.adnaam||ad.sname||ad.cname;
   return `<div class="arow ${cls||""} ${S.grp}${opn?" open":""}">`
